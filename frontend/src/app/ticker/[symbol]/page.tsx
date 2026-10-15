@@ -5,7 +5,7 @@ import { use, useEffect, useState } from "react";
 
 import ArticleCard from "@/components/ArticleCard";
 import { api, type TickerDetail } from "@/lib/api";
-import { formatScore, sentimentClass } from "@/lib/format";
+import { formatMoney, formatScore, sentimentClass, SIZE_LABELS } from "@/lib/format";
 
 export default function TickerPage({ params }: { params: Promise<{ symbol: string }> }) {
   const { symbol } = use(params);
@@ -17,6 +17,12 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
     setError(null);
     api.ticker(symbol, days).then(setData).catch((e) => setError(String(e.message ?? e)));
   }, [symbol, days]);
+
+  const toggleWatch = async () => {
+    if (!data) return;
+    await api.watch(data.symbol, !data.on_watchlist);
+    setData({ ...data, on_watchlist: !data.on_watchlist });
+  };
 
   const maxMentions = Math.max(1, ...(data?.daily.map((d) => d.mentions) ?? [1]));
 
@@ -30,9 +36,22 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
         <>
           <div className="ticker-head">
             <div>
-              <h1>${data.symbol}</h1>
+              <h1>
+                ${data.symbol}{" "}
+                <button className={`star ${data.on_watchlist ? "on" : ""}`} onClick={toggleWatch} aria-pressed={data.on_watchlist}>
+                  {data.on_watchlist ? "★ Watching" : "☆ Watch"}
+                </button>
+              </h1>
               <p className="muted">
                 {data.name ?? "Unknown company"}
+                {data.size_bucket && (
+                  <>
+                    {" · "}
+                    <span title={`Public float ${formatMoney(data.public_float)} as of ${data.float_as_of}`}>
+                      {SIZE_LABELS[data.size_bucket]}, float {formatMoney(data.public_float)}
+                    </span>
+                  </>
+                )}
                 {data.cik && (
                   <>
                     {" · "}

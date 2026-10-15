@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import ArticleCard from "@/components/ArticleCard";
 import Sidebar from "@/components/Sidebar";
 import { api, type Article, type ArticleFilters } from "@/lib/api";
+import { SIZE_FILTERS } from "@/lib/format";
 
 const EVENT_TYPES = [
   "earnings", "guidance", "m&a", "deal", "analyst", "management", "legal", "regulatory",
@@ -50,7 +51,7 @@ export default function NewsFeed() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const unfiltered = !filters.q && !filters.ticker && !filters.source && !filters.sentiment && !filters.event_type;
+  const unfiltered = !filters.q && !filters.ticker && !filters.source && !filters.sentiment && !filters.event_type && !filters.size;
 
   // Live updates over server-sent events
   useEffect(() => {
@@ -104,6 +105,13 @@ export default function NewsFeed() {
             onChange={(e) => set({ ticker: e.target.value.toUpperCase() || undefined })}
             className="ticker-input"
           />
+          <select value={filters.size ?? ""} onChange={(e) => set({ size: e.target.value || undefined })} aria-label="Company size">
+            {SIZE_FILTERS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
           <select value={filters.source ?? ""} onChange={(e) => set({ source: e.target.value || undefined })}>
             <option value="">All sources</option>
             <option value="rss">News</option>

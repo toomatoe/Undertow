@@ -7,3 +7,4 @@ pydantic-settings==2.9.1
 httpx==0.28.1
 feedparser==6.0.11
 anthropic==1.14.0
+tzdata==2025.2

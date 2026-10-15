@@ -16,3 +16,4 @@ frontend/out/
 *.tsbuildinfo
 
 .DS_Store
+eventstudy-run.log
