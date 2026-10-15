@@ -25,6 +25,7 @@ export interface Evidence {
   horizon_days: number;
   mean_abnormal: number;
   mean_net: number;
+  excess_vs_baseline: number | null;
   t_stat: number;
   significant: boolean;
 }
@@ -37,6 +38,9 @@ export interface StudyResult extends Evidence {
   median_abnormal: number;
   hit_rate: number;
   cost: number;
+  borrow: number;
+  baseline_mean: number | null;
+  t_vs_baseline: number | null;
   nominal_significant: boolean;
 }
 
@@ -49,12 +53,13 @@ export interface EventStudy {
     horizons: number[];
     min_n: number;
     costs_round_trip: Record<string, number>;
+    borrow_apr_for_shorts?: Record<string, number>;
     benchmark: Record<string, string>;
     price_source: string;
   };
   coverage: Record<string, Record<string, number>>;
   measured_events: number;
-  testing: { n_tests: number; t_critical: number };
+  testing: { n_tests: number; t_critical: number; baseline: Record<string, Record<string, number>> };
   results: StudyResult[];
   caveats: string[];
 }

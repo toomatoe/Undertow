@@ -27,7 +27,8 @@ class Evidence(BaseModel):
     n: int
     horizon_days: int
     mean_abnormal: float  # after-event drift vs benchmark, gross
-    mean_net: float  # after assumed round-trip costs, in the expected direction
+    mean_net: float  # after assumed round-trip costs (and borrow for shorts), in the expected direction
+    excess_vs_baseline: float | None = None  # drift minus the same stocks' ordinary-day drift
     t_stat: float
     significant: bool  # survives the multiple-testing correction
 

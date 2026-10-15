@@ -7,7 +7,8 @@ function EvidenceLine({ ev }: { ev: Evidence }) {
   const verdict = ev.significant ? "edge after costs" : ev.mean_net > 0 ? "not significant" : "no edge after costs";
   return (
     <span className={`evidence ${ev.significant ? "sig" : ""}`} title={`t = ${ev.t_stat}, n = ${ev.n} past events`}>
-      Past {ev.bucket} caps: {pct(ev.mean_abnormal)} vs index over {ev.horizon_days}d (n={ev.n}) · {verdict}
+      Past {ev.bucket} caps: {pct(ev.mean_abnormal)} vs index over {ev.horizon_days}d
+      {ev.excess_vs_baseline !== null && ` (${pct(ev.excess_vs_baseline)} vs ordinary days)`}, n={ev.n} · {verdict}
     </span>
   );
 }

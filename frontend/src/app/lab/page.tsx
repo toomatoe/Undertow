@@ -3,18 +3,33 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { api, type EventStudy, type StudyResult } from "@/lib/api";
-import { pct, SIZE_LABELS } from "@/lib/format";
+import { pct, pctAbs, SIZE_LABELS } from "@/lib/format";
 
 const BUCKET_ORDER = ["nano", "micro", "small", "mid", "large"];
 
-function DivergingChart({ results, bucket, maxAbs }: { results: StudyResult[]; bucket: string; maxAbs: number }) {
+function DivergingChart({
+  results,
+  bucket,
+  maxAbs,
+  cost,
+  borrowApr,
+}: {
+  results: StudyResult[];
+  bucket: string;
+  maxAbs: number;
+  cost: number;
+  borrowApr: number;
+}) {
   const [hover, setHover] = useState<StudyResult | null>(null);
   const rows = [...results].sort((a, b) => b.mean_net - a.mean_net);
   return (
     <figure className="facet">
       <figcaption>
         <strong>{SIZE_LABELS[bucket] ?? bucket}</strong>
-        <span className="muted small"> · cost {pct(rows[0]?.cost ?? 0)} round trip</span>
+        <span className="muted small">
+          {" "}
+          · {pctAbs(cost)} round trip{borrowApr > 0 && `, shorts also pay ~${pctAbs(borrowApr, 0)}/yr borrow`}
+        </span>
       </figcaption>
       <div className="div-chart" onMouseLeave={() => setHover(null)}>
         {rows.map((r) => {
@@ -50,7 +65,13 @@ function DivergingChart({ results, bucket, maxAbs }: { results: StudyResult[]; b
               Trade: {hover.direction === "-" ? "short" : "long"} at day-0 close, hold {hover.horizon_days}d
             </span>
             <span>Gross drift vs index: {pct(hover.mean_abnormal, 2)} (median {pct(hover.median_abnormal, 2)})</span>
-            <span>Net of {pct(hover.cost)} costs: {pct(hover.mean_net, 2)}</span>
+            <span>
+              Same stocks on ordinary days: {hover.baseline_mean === null ? "—" : pct(hover.baseline_mean, 2)} → excess{" "}
+              {hover.excess_vs_baseline === null ? "—" : pct(hover.excess_vs_baseline, 2)} (t = {hover.t_vs_baseline ?? "—"})
+            </span>
+            <span>
+              Net of {pctAbs(hover.cost)} costs{hover.borrow > 0 ? ` incl. ${pctAbs(hover.borrow)} borrow` : ""}: {pct(hover.mean_net, 2)}
+            </span>
             <span>
               n = {hover.n} events · {hover.companies} companies · t = {hover.t_stat}
             </span>
@@ -135,7 +156,7 @@ export default function LabPage() {
         {significant.length === 0 ? (
           <p>
             Nothing. No signal produced drift that was both statistically significant after correcting for{" "}
-            {study.testing.n_tests} tests (|t| ≥ {study.testing.t_critical}) and profitable after assumed costs.
+            {study.testing.n_tests} tests (|t| ≥ {study.testing.t_critical}), different from the same stocks on ordinary days, and profitable after assumed costs.
             That is a useful answer: filing events alone are not a trading edge in this sample.
           </p>
         ) : (
@@ -143,7 +164,8 @@ export default function LabPage() {
             {significant.map((r) => (
               <li key={`${r.signal}-${r.bucket}-${r.horizon_days}`}>
                 <strong>{r.label}</strong> in {r.bucket} caps: {pct(r.mean_abnormal)} vs index over {r.horizon_days}{" "}
-                trading days (n={r.n}, t={r.t_stat}), {pct(r.mean_net)} after {pct(r.cost)} costs if{" "}
+                trading days (n={r.n}, t={r.t_stat}). Ordinary days for the same stocks: {r.baseline_mean === null ? "—" : pct(r.baseline_mean)}, so the filing adds{" "}
+                {r.excess_vs_baseline === null ? "—" : pct(r.excess_vs_baseline)} (t={r.t_vs_baseline}). {pct(r.mean_net)} after {pctAbs(r.cost)} costs and borrow if{" "}
                 {r.direction === "-" ? "shorted" : "bought"} at the day-0 close.
               </li>
             ))}
@@ -151,7 +173,7 @@ export default function LabPage() {
         )}
         <p className="muted small">
           Significance uses a Bonferroni correction across every signal × size × horizon tested (|t| ≥{" "}
-          {study.testing.t_critical}), and the drift must point the expected way and clear costs. Results with |t| ≥
+          {study.testing.t_critical}). The drift must also differ from the same stocks on ordinary days by the same margin, point the expected way, and clear costs plus estimated borrow for shorts. Results with |t| ≥
           1.96 that fail this are listed in the table as nominal only.
         </p>
       </section>
@@ -174,7 +196,14 @@ export default function LabPage() {
         </p>
         <div className="facets">
           {byBucket.map(([bucket, rs]) => (
-            <DivergingChart key={bucket} bucket={bucket} results={rs} maxAbs={maxAbs} />
+            <DivergingChart
+              key={bucket}
+              bucket={bucket}
+              results={rs}
+              maxAbs={maxAbs}
+              cost={study.config.costs_round_trip[bucket] ?? 0}
+              borrowApr={study.config.borrow_apr_for_shorts?.[bucket] ?? 0}
+            />
           ))}
         </div>
       </section>
@@ -190,6 +219,7 @@ export default function LabPage() {
               <th>No price data</th>
               <th>With prices</th>
               <th>Events measured</th>
+              <th>Ordinary-day drift (20d)</th>
             </tr>
           </thead>
           <tbody>
@@ -206,6 +236,7 @@ export default function LabPage() {
                   <td>{c.no_prices ?? 0}</td>
                   <td>{c.with_prices ?? 0}</td>
                   <td>{(c.measured_events ?? 0).toLocaleString()}</td>
+                  <td>{study.testing.baseline?.[b] ? pct(study.testing.baseline[b].mean_20) : "—"}</td>
                 </tr>
               );
             })}
@@ -213,7 +244,7 @@ export default function LabPage() {
         </table>
         <p className="muted small">
           &quot;No ticker now&quot; is mostly companies that delisted, went bankrupt or were acquired since 2023. They
-          are missing from the returns, so results lean optimistic, especially for small companies.
+          are missing from the returns, so results lean optimistic, especially for small companies. Ordinary-day drift is the average 20-day return vs the index for the same stocks on non-event days: the bar a signal has to beat.
         </p>
       </section>
 
@@ -229,6 +260,9 @@ export default function LabPage() {
                 <th>n</th>
                 <th>Day-0 reaction</th>
                 <th>Drift vs index</th>
+                <th>Ordinary days</th>
+                <th>Excess</th>
+                <th>t vs ordinary</th>
                 <th>Median</th>
                 <th>Net</th>
                 <th>Hit rate</th>
@@ -247,6 +281,9 @@ export default function LabPage() {
                   <td>{r.n}</td>
                   <td>{pct(r.mean_reaction)}</td>
                   <td>{pct(r.mean_abnormal)}</td>
+                  <td>{r.baseline_mean === null ? "—" : pct(r.baseline_mean)}</td>
+                  <td>{r.excess_vs_baseline === null ? "—" : pct(r.excess_vs_baseline)}</td>
+                  <td>{r.t_vs_baseline ?? "—"}</td>
                   <td>{pct(r.median_abnormal)}</td>
                   <td>{pct(r.mean_net)}</td>
                   <td>{Math.round(r.hit_rate * 100)}%</td>

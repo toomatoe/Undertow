@@ -45,6 +45,10 @@ export function pct(v: number, digits = 1): string {
   return `${v > 0 ? "+" : ""}${(v * 100).toFixed(digits)}%`;
 }
 
+export function pctAbs(v: number, digits = 1): string {
+  return `${(Math.abs(v) * 100).toFixed(digits)}%`;
+}
+
 export function humanize(code: string): string {
   return code.replace(/_/g, " ");
 }

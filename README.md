@@ -18,13 +18,32 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - Live SEC filings that carry a signal: 8-K items (restatement, auditor change, delisting notice, bankruptcy, debt default, unregistered share sale, executive change…), priced offerings (424B4/5), S-1/S-3 registrations, and Schedule 13D activist stakes.
 - Every ticker is sized by SEC public float: nano (<$50M), micro, small, mid, large. Defaults to companies under $2B.
 - Severity ranking, signal-type filter and a watchlist.
-- Each card shows the matching Edge Lab result, e.g. "past micro caps: −6.1% vs index over 20d (n=48)".
+- Each card shows the matching Edge Lab result, e.g. "Past nano caps: −15.6% vs index over 20d (−13.7% vs ordinary days), n=302".
 - With an API key, the filing's actual document is summarized, and red flags (going concern, reverse split, ATM program, dilutive financing…) are extracted.
 
 **Edge Lab tab**
 - Event study (`backend/app/research/eventstudy.py`): after each signal type, did the stock beat or lag the index over 5 and 20 trading days, by size bucket, after realistic trading costs?
 - The design is fixed up front: size measured before the window, timing by EDGAR acceptance time, market-adjusted returns, winsorized outliers, a Bonferroni correction across every test, and trade direction chosen before seeing results.
 - Reports survivorship coverage, meaning how many sampled companies have since delisted.
+
+### First results (Oct 2026 run)
+
+21,842 filing events from 747 randomly sampled companies, Oct 2023 to Aug 2026, 102 signal × size × horizon tests:
+
+- **One signal survives every check:** nano caps (public float under $50M) that price an offering (424B4/424B5).
+  - They lag the index by **15.6%** over the next 20 trading days (median −20.4%, n=302, t=−6.7).
+  - The same stocks on ordinary days lag by 2.0%, so the filing itself is worth **−13.7%** (t=−5.7).
+  - Shorting at the day-0 close nets about **+8.7%** after 3% trading costs and roughly 4% estimated borrow.
+  - This matches the long-standing literature on post-offering underperformance (Loughran & Ritter 1995) and is far larger at the nano end.
+- **Close, but not past the multiple-testing bar:** unregistered share sales (8-K item 3.02) in micro and nano caps, at about −5% to −7% vs ordinary days (t ≈ −3.0 to −3.4, cutoff 3.49).
+- **Large caps:** nothing. Every nominal effect disappears against the baseline.
+- **Lead for a separate test:** in nano caps, "material agreement" 8-Ks drift −5.5% vs ordinary days (t=−3.9). These are likely financing deals. The trade direction was fixed in advance as long, so this does not count as a finding yet.
+
+**Why this is a lead, not a strategy yet:**
+- The 302 events come from only 74 serial-diluting companies, so they are not independent.
+- About a quarter of sampled nano caps have since delisted and are missing from the data.
+- Nano caps right after an offering are often hard or impossible to borrow.
+- It is one sample from one period. The next step is an out-of-sample rerun (2020–2023, fresh companies) before anything goes near paper trading.
 
 **News tab**
 

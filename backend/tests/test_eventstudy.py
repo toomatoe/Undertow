@@ -36,15 +36,27 @@ def test_measure_is_market_adjusted(monkeypatch):
     assert round(m["drift_5"], 4) == -0.1
 
 
-def test_summarize_bonferroni_and_direction():
-    ms = [{"signal": "auditor_change", "bucket": "micro", "ticker": f"T{i}", "reaction": -0.05,
-           "drift_5": -0.08 + (i % 5) * 0.004, "drift_20": -0.10 + (i % 5) * 0.004} for i in range(40)]
-    results, testing = summarize(ms)
-    assert testing["n_tests"] == 2
+def _obs(signal, n, d5, d20):
+    return [{"signal": signal, "bucket": "micro", "ticker": f"T{i}", "reaction": -0.05,
+             "drift_5": d5 + (i % 5) * 0.004, "drift_20": d20 + (i % 5) * 0.004} for i in range(n)]
+
+
+def test_summarize_needs_to_beat_baseline():
+    events = _obs("auditor_change", 40, -0.08, -0.10)
+    ordinary = _obs("baseline", 200, 0.0, 0.0)
+    results, testing = summarize(events + ordinary)
+    assert testing["n_tests"] == 2  # baseline is not a test
     r20 = next(r for r in results if r["horizon_days"] == 20)
-    assert r20["n"] == 40 and r20["mean_net"] > 0 and r20["significant"]
+    assert r20["n"] == 40 and r20["borrow"] > 0 and r20["mean_net"] > 0
+    assert r20["excess_vs_baseline"] < 0 and r20["significant"]
+
+    # Same drift, but ordinary days drift just as much: the filing adds nothing
+    lagging = _obs("baseline", 200, -0.08, -0.10)
+    r20 = next(r for r in summarize(events + lagging)[0] if r["horizon_days"] == 20)
+    assert abs(r20["excess_vs_baseline"]) < 1e-9 and not r20["significant"]
+
     # Under MIN_N events: no result at all
-    assert summarize(ms[:5])[0] == []
+    assert summarize(events[:5] + ordinary)[0] == []
 
 
 def test_signals_for_filing():
