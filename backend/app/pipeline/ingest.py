@@ -2,6 +2,7 @@
 
 import logging
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
@@ -13,10 +14,11 @@ from app.models import Article, ArticleTicker, IngestRun
 from app.pipeline.dedupe import title_hash, url_hash
 from app.pipeline.enrich import Enricher
 from app.pipeline.events import broadcaster
+from app.pipeline.signals import ALL_SIGNALS, signals_for_filing
 from app.pipeline.tickers import TickerUniverse, tag_tickers
 from app.sources.alpaca import AlpacaNewsSource
 from app.sources.base import RawArticle, Source
-from app.sources.edgar import EdgarSource
+from app.sources.edgar import EdgarSource, fetch_filing_text, parse_items
 from app.sources.rss import RssSource
 
 log = logging.getLogger(__name__)
@@ -65,6 +67,10 @@ def store(session: Session, raw: RawArticle, universe: TickerUniverse) -> Articl
         author=(raw.author or None) and raw.author[:256],
         published_at=raw.published_at,
         event_type=raw.event_type,
+        form=raw.form,
+        cik=raw.cik,
+        signals=raw.signals or None,
+        severity=max((ALL_SIGNALS[c].severity for c in raw.signals), default=None),
         tickers=[ArticleTicker(symbol=s, method=m) for s, m in tickers.items()],
     )
     session.add(article)
@@ -72,19 +78,59 @@ def store(session: Session, raw: RawArticle, universe: TickerUniverse) -> Articl
     return article
 
 
-def enrich_pending(session: Session, enricher: Enricher, universe: TickerUniverse, limit: int) -> int:
+def backfill_signals(session: Session) -> int:
+    """Derive form/signals for filings stored before signals existed."""
+    rows = session.scalars(select(Article).where(Article.source == "edgar", Article.form.is_(None))).all()
+    for article in rows:
+        form = article.title.split(":", 1)[0].strip()
+        items = parse_items(article.snippet) if form == "8-K" else []
+        sigs = signals_for_filing(form, items)
+        article.form = form
+        article.signals = [s.code for s in sigs] or None
+        article.severity = max((s.severity for s in sigs), default=None)
+    session.commit()
+    return len(rows)
+
+
+def fetch_bodies(session: Session, user_agent: str, limit: int) -> int:
+    """Download the key document of new filings that carry a signal, most severe first."""
     pending = session.scalars(
-        select(Article).where(Article.enriched_at.is_(None)).order_by(Article.published_at.desc()).limit(limit)
+        select(Article)
+        .where(Article.source == "edgar", Article.body.is_(None), Article.severity.is_not(None))
+        .order_by(Article.severity.desc(), Article.published_at.desc())
+        .limit(limit)
     ).all()
     done = 0
     for article in pending:
-        result = enricher.enrich(article.title, article.snippet, article.source_name)
+        try:
+            article.body = fetch_filing_text(article.url, user_agent) or ""
+            done += 1
+        except Exception as exc:
+            log.info("Filing text unavailable for %s: %s", article.url, exc)
+            article.body = ""  # don't retry forever
+        session.commit()
+        time.sleep(0.25)  # two requests per filing; stay under SEC's 10 req/s
+    return done
+
+
+def enrich_pending(session: Session, enricher: Enricher, universe: TickerUniverse, limit: int) -> int:
+    # Signal-bearing filings first (most severe), then everything else newest first
+    pending = session.scalars(
+        select(Article)
+        .where(Article.enriched_at.is_(None))
+        .order_by(Article.severity.desc().nulls_last(), Article.published_at.desc())
+        .limit(limit)
+    ).all()
+    done = 0
+    for article in pending:
+        result = enricher.enrich(article.title, article.snippet, article.source_name, body=article.body)
         if result is None:
             continue
         article.ai_summary = result.summary
         article.sentiment = result.sentiment
         article.sentiment_label = result.sentiment_label
         article.relevance = result.relevance
+        article.ai_flags = result.flags or None
         # EDGAR item mapping is authoritative; otherwise take the model's category
         article.event_type = article.event_type or result.event_type
         article.enrich_model = enricher.model
@@ -125,6 +171,10 @@ def run_ingest(settings: Settings, universe: TickerUniverse, enricher: Enricher 
                 session.commit()
             stats["sources"][source.name] = {"fetched": run.fetched, "inserted": run.inserted, "error": run.error}
             stats["inserted"] += run.inserted
+
+        if settings.edgar_enabled:
+            with SessionLocal() as session:
+                stats["filing_texts"] = fetch_bodies(session, settings.sec_user_agent, settings.filing_text_max_per_cycle)
 
         if enricher:
             with SessionLocal() as session:

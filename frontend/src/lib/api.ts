@@ -2,9 +2,66 @@ export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:800
 
 export type Sentiment = "positive" | "negative" | "neutral";
 
+export type SizeBucket = "nano" | "micro" | "small" | "mid" | "large";
+
 export interface Ticker {
   symbol: string;
   method: string;
+  size_bucket: SizeBucket | null;
+}
+
+export interface Signal {
+  code: string;
+  label: string;
+  direction: "-" | "+" | "?";
+  severity: number;
+  why: string;
+}
+
+export interface Evidence {
+  signal: string;
+  bucket: SizeBucket;
+  n: number;
+  horizon_days: number;
+  mean_abnormal: number;
+  mean_net: number;
+  excess_vs_baseline: number | null;
+  t_stat: number;
+  significant: boolean;
+}
+
+export interface StudyResult extends Evidence {
+  label: string;
+  direction: "-" | "+" | "?";
+  companies: number;
+  mean_reaction: number;
+  median_abnormal: number;
+  hit_rate: number;
+  cost: number;
+  borrow: number;
+  baseline_mean: number | null;
+  t_vs_baseline: number | null;
+  nominal_significant: boolean;
+}
+
+export interface EventStudy {
+  generated_at: string;
+  config: {
+    window: [string, string];
+    size_measured: string;
+    sample_sizes: Record<string, number>;
+    horizons: number[];
+    min_n: number;
+    costs_round_trip: Record<string, number>;
+    borrow_apr_for_shorts?: Record<string, number>;
+    benchmark: Record<string, string>;
+    price_source: string;
+  };
+  coverage: Record<string, Record<string, number>>;
+  measured_events: number;
+  testing: { n_tests: number; t_critical: number; baseline: Record<string, Record<string, number>> };
+  results: StudyResult[];
+  caveats: string[];
 }
 
 export interface Article {
@@ -23,6 +80,11 @@ export interface Article {
   relevance: number | null;
   enrich_model: string | null;
   tickers: Ticker[];
+  form: string | null;
+  severity: number | null;
+  signals: Signal[];
+  ai_flags: string[] | null;
+  evidence: Evidence[];
 }
 
 export interface ArticlePage {
@@ -35,12 +97,17 @@ export interface TrendingTicker {
   name: string | null;
   mentions: number;
   avg_sentiment: number | null;
+  size_bucket: SizeBucket | null;
 }
 
 export interface TickerDetail {
   symbol: string;
   name: string | null;
   cik: number | null;
+  public_float: number | null;
+  float_as_of: string | null;
+  size_bucket: SizeBucket | null;
+  on_watchlist: boolean;
   mentions: number;
   avg_sentiment: number | null;
   daily: { day: string; mentions: number; avg_sentiment: number | null }[];
@@ -63,6 +130,10 @@ export interface ArticleFilters {
   source?: string;
   sentiment?: Sentiment | "";
   event_type?: string;
+  size?: string;
+  watchlist?: boolean;
+  signal?: string;
+  min_severity?: number;
   before?: string;
   limit?: number;
 }
@@ -85,7 +156,16 @@ function query(params: object): string {
 export const api = {
   articles: (f: ArticleFilters = {}) => get<ArticlePage>(`/api/articles${query(f)}`),
   article: (id: number) => get<Article>(`/api/articles/${id}`),
-  trending: (hours = 24) => get<TrendingTicker[]>(`/api/tickers/trending?hours=${hours}`),
+  signals: (f: ArticleFilters = {}) => get<ArticlePage>(`/api/signals${query(f)}`),
+  signalCatalog: () => get<Signal[]>("/api/signals/catalog"),
+  eventStudy: () => get<EventStudy>("/api/research/event-study"),
+  watchlist: () => get<TrendingTicker[]>("/api/watchlist"),
+  watch: (symbol: string, on: boolean) =>
+    fetch(`${API_BASE}/api/watchlist/${encodeURIComponent(symbol)}`, { method: on ? "PUT" : "DELETE" }).then((r) => {
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.json();
+    }),
+  trending: (hours = 24, size = "") => get<TrendingTicker[]>(`/api/tickers/trending${query({ hours, size })}`),
   ticker: (symbol: string, days = 30) => get<TickerDetail>(`/api/tickers/${encodeURIComponent(symbol)}?days=${days}`),
   status: () => get<Status>("/api/status"),
   ingest: () => fetch(`${API_BASE}/api/ingest`, { method: "POST" }).then((r) => r.json()),

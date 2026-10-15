@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     enrich_model: str = "claude-opus-5-5"
     enrich_max_per_cycle: int = 25
+    filing_text_max_per_cycle: int = 40
 
     ingest_interval_seconds: int = 300
     ingest_on_startup: bool = True

@@ -18,6 +18,41 @@ export function formatScore(score: number | null | undefined): string {
   return (score > 0 ? "+" : "") + score.toFixed(2);
 }
 
+export const SIZE_LABELS: Record<string, string> = {
+  nano: "Nano (<$50M)",
+  micro: "Micro ($50–300M)",
+  small: "Small ($300M–2B)",
+  mid: "Mid ($2–10B)",
+  large: "Large (>$10B)",
+};
+
+export const SIZE_FILTERS = [
+  { value: "", label: "All sizes" },
+  { value: "nano,micro,small", label: "Small caps (<$2B)" },
+  { value: "nano,micro", label: "Micro & nano (<$300M)" },
+  { value: "small", label: "Small ($300M–2B)" },
+  { value: "mid,large", label: "Mid & large (>$2B)" },
+];
+
+export function formatMoney(v: number | null | undefined): string {
+  if (v === null || v === undefined) return "—";
+  if (v >= 1e9) return `$${(v / 1e9).toFixed(1)}B`;
+  if (v >= 1e6) return `$${(v / 1e6).toFixed(0)}M`;
+  return `$${(v / 1e3).toFixed(0)}K`;
+}
+
+export function pct(v: number, digits = 1): string {
+  return `${v > 0 ? "+" : ""}${(v * 100).toFixed(digits)}%`;
+}
+
+export function pctAbs(v: number, digits = 1): string {
+  return `${(Math.abs(v) * 100).toFixed(digits)}%`;
+}
+
+export function humanize(code: string): string {
+  return code.replace(/_/g, " ");
+}
+
 export const SOURCE_LABELS: Record<string, string> = {
   rss: "News",
   edgar: "SEC filing",

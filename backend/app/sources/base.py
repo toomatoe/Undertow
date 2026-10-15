@@ -17,6 +17,10 @@ class RawArticle:
     # (symbol, method) pairs the source already knows about, e.g. Alpaca symbols or EDGAR CIK lookups
     tickers: set[tuple[str, str]] = field(default_factory=set)
     event_type: str | None = None
+    # SEC filings only
+    cik: int | None = None
+    form: str | None = None
+    signals: list[str] = field(default_factory=list)
 
 
 class Source(Protocol):

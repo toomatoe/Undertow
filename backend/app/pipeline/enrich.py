@@ -18,15 +18,25 @@ log = logging.getLogger(__name__)
 EVENT_TYPES = [
     "earnings", "guidance", "m&a", "deal", "analyst", "management", "legal",
     "regulatory", "product", "macro", "bankruptcy", "restructuring", "impairment",
-    "accounting", "listing", "disclosure", "other",
+    "accounting", "listing", "offering", "activist", "disclosure", "other",
 ]
+
+# Facts that matter disproportionately for small caps. Only set when the text states them.
+FLAGS = [
+    "going_concern", "reverse_split", "dilutive_financing", "atm_program", "warrants_issued",
+    "delisting_risk", "ceo_departure", "cfo_departure", "auditor_resigned", "restatement",
+    "guidance_raised", "guidance_cut", "layoffs", "fda_decision", "clinical_trial_result",
+    "major_contract", "buyback", "dividend_change", "insider_purchase", "acquisition_target",
+]
+BODY_CHARS = 8000  # enough for the substance of a press release or 8-K item
 
 # Server-side refusal fallback is supported on these models only.
 _FALLBACK_MODELS = ("claude-opus-5-5", "claude-opus-5", "claude-fable-5-1", "claude-sonnet-5-5")
 
-SYSTEM_PROMPT = """You annotate financial news for a market research dashboard.
-For each article, using only the headline and snippet provided:
-- summary: one neutral sentence (max 30 words) on what happened and why it matters to investors.
+SYSTEM_PROMPT = """You annotate financial news and SEC filings for a market research dashboard focused on small companies.
+For each item, using only the text provided:
+- summary: neutral and concrete, max 40 words: what happened, key numbers, and why it matters to shareholders. For filings, describe the substance, not the form.
+- flags: every listed fact the text explicitly states (e.g. going_concern only if substantial doubt about continuing as a going concern is disclosed). Empty if none.
 - sentiment: expected short-term price impact on the primary company (or the broad market for macro news), from -1 (very negative) to 1 (very positive). Use 0 when unclear.
 - sentiment_label: negative (< -0.15), positive (> 0.15), otherwise neutral.
 - event_type: the single best category.
@@ -41,19 +51,21 @@ class Enrichment(BaseModel):
     event_type: str
     relevance: float = Field(ge=0, le=1)
     tickers: list[str]
+    flags: list[str] = []
 
 
 OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
         "summary": {"type": "string"},
+        "flags": {"type": "array", "items": {"type": "string", "enum": FLAGS}},
         "sentiment": {"type": "number"},
         "sentiment_label": {"type": "string", "enum": ["negative", "neutral", "positive"]},
         "event_type": {"type": "string", "enum": EVENT_TYPES},
         "relevance": {"type": "number"},
         "tickers": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["summary", "sentiment", "sentiment_label", "event_type", "relevance", "tickers"],
+    "required": ["summary", "sentiment", "sentiment_label", "event_type", "relevance", "tickers", "flags"],
     "additionalProperties": False,
 }
 
@@ -63,8 +75,10 @@ class Enricher:
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
 
-    def enrich(self, title: str, snippet: str | None, source_name: str) -> Enrichment | None:
+    def enrich(self, title: str, snippet: str | None, source_name: str, body: str | None = None) -> Enrichment | None:
         content = f"Source: {source_name}\nHeadline: {title}\nSnippet: {snippet or '(none)'}"
+        if body:
+            content += f"\n\nDocument text (truncated):\n{body[:BODY_CHARS]}"
         kwargs = dict(
             model=self.model,
             max_tokens=2000,
