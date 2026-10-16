@@ -43,3 +43,16 @@ def test_vendor_tickers_take_precedence():
         a = store(s, raw("https://c.com/2", "Apple $AAPL news", tickers={("AAPL", "vendor")}), UNIVERSE)
         assert [(t.symbol, t.method) for t in a.tickers] == [("AAPL", "vendor")]
         s.rollback()
+
+
+def test_ticker_method_priority_is_explicit():
+    with SessionLocal() as s:
+        a = store(
+            s,
+            raw("https://d.com/3", "Apple (NASDAQ: AAPL) $AAPL", tickers={("AAPL", "edgar"), ("AAPL", "cashtag")}),
+            UNIVERSE,
+        )
+        assert [(t.symbol, t.method) for t in a.tickers] == [("AAPL", "edgar")]
+        b = store(s, raw("https://e.com/4", "Apple (NASDAQ: AAPL) and $AAPL rally"), UNIVERSE)
+        assert [(t.symbol, t.method) for t in b.tickers] == [("AAPL", "exchange")]
+        s.rollback()

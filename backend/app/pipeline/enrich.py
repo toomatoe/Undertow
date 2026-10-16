@@ -70,12 +70,22 @@ OUTPUT_SCHEMA = {
 }
 
 
+class EnrichmentFailed(Exception):
+    """Permanent failure (refusal, max_tokens, invalid output): retrying the same input won't help."""
+
+    def __init__(self, reason: str):
+        super().__init__(reason)
+        self.reason = reason
+
+
 class Enricher:
     def __init__(self, api_key: str, model: str):
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
 
     def enrich(self, title: str, snippet: str | None, source_name: str, body: str | None = None) -> Enrichment | None:
+        """None on transient errors (rate limit, connection, API status): retry later.
+        Raises EnrichmentFailed on permanent ones."""
         content = f"Source: {source_name}\nHeadline: {title}\nSnippet: {snippet or '(none)'}"
         if body:
             content += f"\n\nDocument text (truncated):\n{body[:BODY_CHARS]}"
@@ -105,14 +115,14 @@ class Enricher:
 
         if response.stop_reason in ("refusal", "max_tokens"):
             log.info("Enrichment skipped (%s): %s", response.stop_reason, title[:80])
-            return None
+            raise EnrichmentFailed(response.stop_reason)
         text = next((b.text for b in response.content if b.type == "text"), None)
         if not text:
-            return None
+            raise EnrichmentFailed("empty output")
         try:
             result = Enrichment.model_validate(json.loads(text))
         except ValueError as exc:
             log.warning("Enrichment output failed validation: %s", exc)
-            return None
+            raise EnrichmentFailed("invalid output") from exc
         result.tickers = [t.strip().upper().lstrip("$") for t in result.tickers if t.strip()]
         return result

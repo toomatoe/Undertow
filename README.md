@@ -8,7 +8,7 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - SEC filings are free and public domain, so a product built on them avoids most news-licensing costs.
 - Small-cap traders are badly served: Bloomberg is priced for institutions, and retail apps focus on large caps.
 
-**Status:** News, Signals and Edge Lab tabs work. Research (AI assistant) and Trading (paper trading) are planned.
+**Status:** News, Signals, Edge Lab and Backtest tabs work. Research (AI assistant) and Trading (paper trading) are planned.
 
 > Research and education only. Nothing here is financial advice.
 
@@ -44,6 +44,47 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - About a quarter of sampled nano caps have since delisted and are missing from the data.
 - Nano caps right after an offering are often hard or impossible to borrow.
 - It is one sample from one period. The next step is an out-of-sample rerun (2020–2023, fresh companies) before anything goes near paper trading.
+
+**Backtest tab** (`backend/app/backtest/`, see its [AGENTS.md](backend/app/backtest/AGENTS.md))
+- Simulates the nano-cap offering short as a real portfolio, day by day, over every 424B4/424B5 by a sub-$50M-float company:
+  - Rule 201 entry delay, $1 raw-price floor, $200k median-volume floor, 5%-of-volume sizing.
+  - 3% round-trip costs, 75%/yr borrow, 30% of names randomly unborrowable, 2%/day recalls.
+  - Squeeze stop with slippage, no credit for delistings, IWM hedge.
+- Two periods:
+  - **A** (Oct 2020–Aug 2023): out-of-sample, untouched by the signal's discovery.
+  - **B** (Oct 2023–Aug 2026): the discovery period.
+- Analysis on top of the base run:
+  - A friction waterfall showing where the edge goes.
+  - 14 stress tests and a 20-seed Monte Carlo of borrow luck.
+  - Bootstrap confidence intervals, and a Deflated Sharpe that counts every search attempt.
+  - Walk-forward selection, a capacity table and a borrow-fee sensitivity curve.
+- **Run log:** every simulation is appended to `data/backtests/runs.jsonl` and shown in the UI.
+- **Live-readiness log:** 13 gates (research + operational) and a verdict. No code path can say "ready for real money" while operational gates are pending.
+- **Borrow archiver:** saves IBKR's public shortable-stocks file daily, building the borrow history that doesn't exist for free.
+
+### Backtest results (Oct 2026 run)
+
+**Verdict: not ready for real money.** The strategy fails 8 of the 10 research gates.
+
+| | Period A (out-of-sample) | Period B (discovery) |
+|---|---|---|
+| Signals → trades | 812 → 231 | 1,699 → 412 |
+| Total return / CAGR | −33.4% / −12.8% | −11.5% / −4.0% |
+| Sharpe / max drawdown | −1.24 / 39% | −0.24 / 33% |
+| Gross edge per trade (no frictions) | +4.7% (median +8.7%) | +8.2% (median +14.3%) |
+| Break-even borrow fee | loses even at 0% | ~76%/yr |
+
+What the waterfall shows:
+- The post-offering drift is real.
+- Spread and borrow are the main costs. Borrow at 75%/yr costs about 5.8% per 20-day trade.
+- Today's IBKR snapshot shows recent nano-cap issuers are cheaper to borrow than assumed: median 7%/yr, 75th percentile 36%, 97% borrowable.
+- But out-of-sample, the strategy loses money even at zero borrow. Cheaper borrow alone would not rescue it.
+- The edge is concentrated in 2023–2026. That is either a regime change or luck, and only fresh data can separate them.
+
+Next steps:
+- Keep archiving borrow data.
+- Pre-register a fee-aware variant.
+- Paper-trade it forward before any money is involved.
 
 **News tab**
 
@@ -89,6 +130,13 @@ docker compose run --rm api python -m app.research.eventstudy
 docker compose restart api
 ```
 
+Run the backtest (first run about 20 min to download SEC histories and prices, then about 1 min):
+
+```bash
+docker compose run --rm api python -m app.backtest.warm
+docker compose run --rm api python -m app.backtest.report
+```
+
 Backend tests:
 
 ```bash
@@ -112,18 +160,43 @@ No Docker? The backend falls back to SQLite: `cd backend && pip install -r requi
 | `GET /api/signals/catalog` | Signal taxonomy |
 | `GET /api/research/event-study` | Latest event-study results |
 | `GET/PUT/DELETE /api/watchlist[/{symbol}]` | Watchlist |
+| `GET /api/backtest/report` | Latest backtest report (metrics, curves, trades, stress, readiness, verdict) |
+| `GET /api/backtest/runs?limit=` | Run log: every simulation, newest first |
+| `GET /api/backtest/borrow` | IBKR borrow archive status |
 
 ## Roadmap
 
-1. ~~News tab~~ ✅
-2. ~~Small-cap signals + Edge Lab~~ ✅
-3. Insider purchases (Form 4): the best-documented small-cap filing signal (Lakonishok & Lee 2001; Cohen, Malloy & Pomorski 2012). Needs per-filing XML parsing.
-4. Signal × AI flag studies: e.g. 8-K item 2.02 split by AI sentiment, or offerings split by "ATM program" vs "priced deal". This needs an API key and point-in-time scoring.
-5. Out-of-sample check: rerun the study on 2020–2023 and on a fresh company sample. Only signals that hold up go to paper trading.
-6. Research agent: Claude with read-only tools (news search, prices, filings, backtests). Writes reports, never trades.
-7. Data + backtest harness: Parquet/DuckDB history, walk-forward runs, cost model, log of every variant tested with deflated Sharpe.
-8. Trend-following strategy on Nautilus Trader, then Alpaca paper trading behind a hard risk gate and kill switch.
-9. News-sentiment overlay experiment, scored only on articles published after the model's training cutoff.
+Product priorities come from [docs/PRODUCT_RESEARCH.md](docs/PRODUCT_RESEARCH.md) (competitors, pricing, legal, distribution). Research priorities come from the backtest's readiness gates.
+
+**Done**
+1. ~~News tab~~
+2. ~~Small-cap signals + Edge Lab~~
+3. ~~Portfolio backtester with run log, stress tests, walk-forward and live-readiness gates~~ (Backtest tab)
+
+**Product: path to first paying users**
+
+DilutionTracker owns basic dilution alerts. The gap is *what happens next*: Edge Lab evidence on every alert, plus a public track record.
+
+| # | Item | Why |
+|---|---|---|
+| 1 | Sub-60-second alert pipeline (poll EDGAR every 15–30s) | Speed is table stakes; competitors claim 60s. |
+| 2 | Alert delivery: email, Discord webhook, Web Push | Nobody pays for a page they have to keep refreshing. |
+| 3 | Watchlist + float filters on alerts | Already partly built; make it the core loop. |
+| 4 | Ticker page: dilution history, cash runway, float, short interest (FINRA), halts (Nasdaq RSS) | The page traders keep open, and the SEO surface. |
+| 5 | Public, timestamped signal track record | Trust, and a differentiator no competitor has. |
+| 6 | Edge Lab stats on every alert | The unique angle. |
+| 7 | Accounts + Stripe (free tier with delayed alerts, Pro about $29–39/mo) | Retail tools cluster at $25–75/mo. |
+| 8 | Legal pack: impersonal-publisher posture, hypothetical-performance labels, lawyer review | FTC has fined trading-education firms; never personalize advice or trade for users. |
+| 9 | Distribution: delayed-alert X/Discord bot, SEO ticker pages, weekly newsletter | How Quiver and Stock Analysis grew. |
+| 10 | Monitoring, uptime alerts, licensed price data before showing prices publicly | Yahoo is personal-use only; licensed display data starts around $1.75k/mo. |
+
+**Research**
+- Out-of-sample rerun of the Edge Lab on 2020–2023 (the backtest's period A covers the offering signal).
+- Insider purchases (Form 4): the best-documented small-cap filing signal (Lakonishok & Lee 2001; Cohen, Malloy & Pomorski 2012).
+- Refit the borrow model from the IBKR archive after 90+ days of snapshots.
+- Paper-trading journal: track every live signal as a hypothetical trade, as a forward test.
+- Signal × AI-flag studies (e.g. offerings with "ATM program" vs priced deals). Needs an API key and point-in-time scoring.
+- Research agent: Claude with read-only tools over news, filings and backtests. It never trades.
 
 ## Notes
 

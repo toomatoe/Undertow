@@ -14,7 +14,6 @@ Design (fixed before looking at results; changing it after seeing them is data s
   Both are market-adjusted: stock return minus IWM (SPY for large caps).
 - Trade direction comes from the signal's prior: "-" short, "+" and "?" long.
   Net = direction x mean drift - round-trip cost for the bucket.
-  Short borrow fees, often high for small caps, are NOT modeled.
 - Short trades also pay an estimated borrow fee (BORROW_APR), since small caps
   are often hard to borrow. Real fees can be far higher, or shares unavailable.
 - Baseline: the same companies measured on ordinary days (every BASELINE_STEP
@@ -113,6 +112,7 @@ def filings_table(sub: dict, user_agent: str) -> list[dict]:
                     "accepted": block["acceptanceDateTime"][i],
                     "filing_date": block["filingDate"][i],
                     "items": block.get("items", [""] * len(block["form"]))[i] or "",
+                    "accession": block.get("accessionNumber", [""] * len(block["form"]))[i],
                 }
             )
 
