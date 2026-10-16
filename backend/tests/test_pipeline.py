@@ -52,3 +52,45 @@ def test_edgar_items_to_event():
 def test_universe_cik_lookup():
     assert UNIVERSE.tickers_for_cik(320193) == ["AAPL"]
     assert UNIVERSE.tickers_for_cik(1) == []
+
+
+def test_edgar_fetch_survives_one_failed_form(monkeypatch):
+    import httpx
+    import pytest
+
+    from app.sources import edgar
+
+    atom = b"""<?xml version="1.0" encoding="ISO-8859-1" ?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<entry>
+<title>8-K - Apple Inc. (0000320193) (Filer)</title>
+<link href="https://www.sec.gov/Archives/edgar/data/320193/000032019326000001/0000320193-26-000001-index.htm"/>
+<summary type="html">Item 2.02: Results of Operations</summary>
+<updated>2026-10-15T16:05:00-04:00</updated>
+</entry>
+</feed>"""
+    calls = []
+
+    def fake_get(url, params, headers, timeout):
+        calls.append(params["type"])
+        request = httpx.Request("GET", url)
+        if params["type"] == "S-1":
+            return httpx.Response(503, request=request)
+        return httpx.Response(200, content=atom, request=request)
+
+    monkeypatch.setattr(edgar.httpx, "get", fake_get)
+    monkeypatch.setattr(edgar.time, "sleep", lambda s: None)
+
+    articles = edgar.EdgarSource("test-agent", UNIVERSE, forms=["S-1", "8-K"]).fetch()
+    assert calls == ["S-1", "8-K"]
+    assert [a.title for a in articles] == ["8-K: Apple Inc. (items 2.02)"]
+    assert articles[0].tickers == {("AAPL", "edgar")}
+
+    with pytest.raises(RuntimeError, match="All EDGAR feeds failed"):
+        edgar.EdgarSource("test-agent", UNIVERSE, forms=["S-1"]).fetch()
+
+
+def test_edgar_sc_13d_maps_to_activist():
+    from app.sources.edgar import FORM_EVENTS
+
+    assert FORM_EVENTS["SC 13D"] == "activist"

@@ -13,6 +13,8 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.backtest import borrow
+from app.backtest.report import is_search, read_runs, trial_id
 from app.config import get_settings
 from app.db import SessionLocal, get_session, init_db
 from app.models import Article, ArticleTicker, Company, IngestRun, WatchlistItem
@@ -93,6 +95,10 @@ async def scheduler() -> None:
             await ingest_once()
         except Exception:
             log.exception("Ingest cycle crashed")
+        try:  # daily IBKR borrow snapshot: builds the borrow history the backtest lacks
+            await asyncio.to_thread(borrow.snapshot, settings.data_dir)
+        except Exception as exc:
+            log.warning("Borrow snapshot failed: %s", exc)
         await asyncio.sleep(settings.ingest_interval_seconds)
 
 
@@ -133,7 +139,7 @@ SentimentFilter = Literal["positive", "negative", "neutral"]
 
 
 def parse_sizes(size: str | None) -> list[str]:
-    if not size:
+    if not size or size == "all":
         return []
     sizes = [s.strip() for s in size.split(",") if s.strip()]
     bad = [s for s in sizes if s not in BUCKET_NAMES]
@@ -244,6 +250,33 @@ def event_study():
     if state.study is None:
         raise HTTPException(404, "No event study yet. Run: python -m app.research.eventstudy")
     return state.study
+
+
+@app.get("/api/backtest/report")
+def backtest_report():
+    path = os.path.join(settings.data_dir, "backtests", "report_latest.json")
+    if not os.path.exists(path):
+        raise HTTPException(404, "No backtest yet. Run: python -m app.backtest.report")
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+@app.get("/api/backtest/runs")
+def backtest_runs(limit: int = Query(200, ge=1, le=5000)):
+    """The run log: every simulation ever executed, newest first."""
+    runs = read_runs(settings.data_dir)
+    search = {trial_id(r) for r in runs if is_search(r)}
+    return {
+        "total": len(runs),
+        "distinct_configs": len({(r["period"], r["config_key"]) for r in runs}),
+        "search_trials": len(search),  # what the Deflated Sharpe counts
+        "runs": runs[::-1][:limit],
+    }
+
+
+@app.get("/api/backtest/borrow")
+def backtest_borrow():
+    return borrow.status(settings.data_dir)
 
 
 @app.get("/api/tickers/trending", response_model=list[TrendingTicker])

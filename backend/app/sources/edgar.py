@@ -1,5 +1,6 @@
 """SEC EDGAR "latest filings" Atom feeds for event-driven forms (8-K, offerings, 13D)."""
 
+import logging
 import re
 import time
 
@@ -10,6 +11,8 @@ from app.pipeline.signals import EVENT_FORMS, signals_for_filing
 from app.pipeline.tickers import TickerUniverse
 from app.sources.base import RawArticle
 from app.sources.rss import clean_html, entry_published
+
+log = logging.getLogger(__name__)
 
 FEED_URL = "https://www.sec.gov/cgi-bin/browse-edgar"
 
@@ -36,7 +39,7 @@ ITEM_EVENTS = {
     "7.01": "disclosure",
     "8.01": "other",
 }
-FORM_EVENTS = {"424B4": "offering", "424B5": "offering", "S-1": "offering", "S-3": "offering", "SCHEDULE 13D": "activist"}
+FORM_EVENTS = {"424B4": "offering", "424B5": "offering", "S-1": "offering", "S-3": "offering", "SCHEDULE 13D": "activist", "SC 13D": "activist"}
 
 
 def parse_items(summary: str | None) -> list[str]:
@@ -90,14 +93,22 @@ class EdgarSource:
     def fetch(self) -> list[RawArticle]:
         seen: set[str] = set()
         articles = []
-        for form in self.forms:
-            resp = httpx.get(
-                FEED_URL,
-                params={"action": "getcurrent", "type": form, "owner": "include", "count": 100, "output": "atom"},
-                headers={"User-Agent": self.user_agent},
-                timeout=20,
-            )
-            resp.raise_for_status()
+        errors: list[str] = []
+        for i, form in enumerate(self.forms):
+            if i:
+                time.sleep(0.2)  # SEC fair access: stay well under 10 req/s
+            try:
+                resp = httpx.get(
+                    FEED_URL,
+                    params={"action": "getcurrent", "type": form, "owner": "include", "count": 100, "output": "atom"},
+                    headers={"User-Agent": self.user_agent},
+                    timeout=20,
+                )
+                resp.raise_for_status()
+            except httpx.HTTPError as exc:  # one bad form shouldn't discard the others
+                log.warning("EDGAR %s feed failed: %s", form, exc)
+                errors.append(f"{form}: {exc}")
+                continue
             for entry in feedparser.parse(resp.content).entries:
                 raw = parse_entry(entry, self.universe)
                 if raw is None or raw.form != form:
@@ -108,7 +119,8 @@ class EdgarSource:
                     continue
                 seen.add(key)
                 articles.append(raw)
-            time.sleep(0.2)  # SEC fair access: stay well under 10 req/s
+        if errors and len(errors) == len(self.forms):
+            raise RuntimeError(f"All EDGAR feeds failed: {'; '.join(errors)}")
         return articles
 
 

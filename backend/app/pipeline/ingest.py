@@ -12,7 +12,7 @@ from app.config import Settings
 from app.db import SessionLocal
 from app.models import Article, ArticleTicker, IngestRun
 from app.pipeline.dedupe import title_hash, url_hash
-from app.pipeline.enrich import Enricher
+from app.pipeline.enrich import Enricher, EnrichmentFailed
 from app.pipeline.events import broadcaster
 from app.pipeline.signals import ALL_SIGNALS, signals_for_filing
 from app.pipeline.tickers import TickerUniverse, tag_tickers
@@ -25,6 +25,8 @@ log = logging.getLogger(__name__)
 
 TITLE_DEDUPE_WINDOW = timedelta(days=2)
 _lock = threading.Lock()  # one cycle at a time (scheduler + manual trigger)
+# When one symbol arrives with several tagging methods, keep the most reliable (lower wins)
+METHOD_PRIORITY = {"vendor": 0, "edgar": 1, "exchange": 2, "cashtag": 3, "llm": 4}
 
 
 def build_sources(settings: Settings, universe: TickerUniverse) -> list[Source]:
@@ -53,8 +55,9 @@ def store(session: Session, raw: RawArticle, universe: TickerUniverse) -> Articl
     uhash, thash = url_hash(raw.url), title_hash(raw.title)
     if is_duplicate(session, raw, uhash, thash):
         return None
-    tickers = dict(sorted(raw.tickers, key=lambda t: t[1]))  # symbol -> method
-    for sym, method in tag_tickers(f"{raw.title} {raw.snippet or ''}", universe):
+    tagged = tag_tickers(f"{raw.title} {raw.snippet or ''}", universe)
+    tickers: dict[str, str] = {}  # symbol -> method, best method wins
+    for sym, method in sorted({*raw.tickers, *tagged}, key=lambda t: (METHOD_PRIORITY.get(t[1], 99), t[0])):
         tickers.setdefault(sym, method)
     article = Article(
         url=raw.url,
@@ -123,9 +126,16 @@ def enrich_pending(session: Session, enricher: Enricher, universe: TickerUnivers
     ).all()
     done = 0
     for article in pending:
-        result = enricher.enrich(article.title, article.snippet, article.source_name, body=article.body)
-        if result is None:
+        try:
+            result = enricher.enrich(article.title, article.snippet, article.source_name, body=article.body)
+        except EnrichmentFailed as exc:
+            # Permanent: mark as attempted so it doesn't take budget every cycle; summary stays null
+            article.enrich_model = f"{enricher.model} (failed: {exc.reason})"
+            article.enriched_at = datetime.now(timezone.utc)
+            session.commit()
             continue
+        if result is None:
+            continue  # transient: stays pending for the next cycle
         article.ai_summary = result.summary
         article.sentiment = result.sentiment
         article.sentiment_label = result.sentiment_label

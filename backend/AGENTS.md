@@ -1,0 +1,92 @@
+# backend/: FastAPI app
+
+Python 3.12, FastAPI, SQLAlchemy 2.0, pydantic-settings, httpx, feedparser, anthropic SDK.
+Pinned versions in `requirements.txt`; `requirements-dev.txt` adds pytest.
+
+## Layout
+
+| File | Role |
+|---|---|
+| `app/main.py` | FastAPI app, `lifespan`, background `scheduler()`, every `/api/*` route, `AppState` (`state`) |
+| `app/config.py` | `Settings` + cached `get_settings()` |
+| `app/db.py` | `engine`, `SessionLocal`, `Base`, `init_db()`, `_add_missing_columns()`, `get_session()` dependency |
+| `app/models.py` | ORM tables |
+| `app/schemas.py` | Pydantic response models (mirrored by `frontend/src/lib/api.ts`) |
+| `app/sources/` | Source adapters ([AGENTS.md](app/sources/AGENTS.md)) |
+| `app/pipeline/` | Ingest cycle ([AGENTS.md](app/pipeline/AGENTS.md)) |
+| `app/research/` | Event study + prices ([AGENTS.md](app/research/AGENTS.md)) |
+| `app/backtest/` | Portfolio backtester (being added; see its own AGENTS.md) |
+| `tests/` | pytest; `pytest.ini` sets `pythonpath = .`, `testpaths = tests` |
+
+## Startup (`lifespan` in main.py)
+
+`init_db()` -> `broadcaster.bind_loop()` -> `TickerUniverse.load(data_dir, sec_user_agent)` ->
+`load_companies()` (public-float frames -> `sync_companies` -> `state.sizes`) -> `backfill_signals()` ->
+`load_study()` (reads `{data_dir}/event_study.json`, keeps 20-day rows as `state.evidence`) ->
+`Enricher` if `ANTHROPIC_API_KEY` set -> `scheduler()` task (calls `run_ingest` in a thread every
+`INGEST_INTERVAL_SECONDS`). `to_out()` attaches `size_bucket` to tickers and `Evidence` per (signal, bucket).
+
+## Config / env (`app/config.py`)
+
+pydantic-settings, case-insensitive env names, also reads `.env` from the cwd. All optional.
+
+| Env var | Default | Notes |
+|---|---|---|
+| `DATABASE_URL` | `sqlite:///./data/quantdesk.db` | compose sets Postgres (`postgresql+psycopg://...@db:5432/quantdesk`) |
+| `DATA_DIR` | `./data` | compose: `/app/data` (volume `apidata`). SEC caches, prices, `event_study.json` |
+| `SEC_USER_AGENT` | `quantdesk-dev contact@example.com` | used for every SEC request and RSS. Never hard-code one |
+| `RSS_FEEDS` | `DEFAULT_RSS_FEEDS` | JSON object name -> url |
+| `EDGAR_ENABLED` | `true` | |
+| `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY` | none | both set -> `alpaca_enabled`. Paper keys only |
+| `ANTHROPIC_API_KEY` | none | set -> `enrich_enabled` |
+| `ENRICH_MODEL` | `claude-opus-5-5` | |
+| `ENRICH_MAX_PER_CYCLE` / `FILING_TEXT_MAX_PER_CYCLE` | 25 / 40 | per-cycle caps |
+| `INGEST_INTERVAL_SECONDS` / `INGEST_ON_STARTUP` | 300 / true | |
+| `CORS_ORIGINS` | `["http://localhost:3000"]` | JSON list |
+
+`get_settings()` is `lru_cache`d and `db.engine` is built at import time, so env must be set before
+`app.*` is imported (that is why `tests/conftest.py` sets env at module top).
+
+## Database and models (`app/models.py`)
+
+- `Article`: one row per news item or filing. `url_hash` (unique) / `title_hash` for dedupe; `source`
+  (`rss|edgar|alpaca`); filing fields `form`, `cik`, `signals` (JSON list of codes, most severe first),
+  `severity` (max), `body` (filing text, `""` = tried and failed); enrichment fields `ai_summary`,
+  `sentiment` (-1..1), `sentiment_label`, `event_type`, `relevance`, `ai_flags`, `enrich_model`, `enriched_at`.
+- `ArticleTicker`: (article_id, symbol) PK, `method` in `vendor|cashtag|exchange|edgar|llm`. Loaded `selectin`.
+- `Company`: symbol -> cik, name, `public_float`, `float_as_of`, `size_bucket`. Fully replaced at startup.
+- `WatchlistItem`, `IngestRun` (per-source fetched/inserted/error, shown by `/api/status`).
+- Timestamps are UTC. SQLite drops tzinfo; `ArticleOut.assume_utc` re-adds it.
+- Signal filtering uses `cast(Article.signals, String).like('%"code"%')` to work on both SQLite and Postgres.
+
+## Stopgap migration (`db._add_missing_columns`)
+
+No Alembic yet. `init_db()` runs `create_all()` then, for each model column missing from an existing
+table, issues `ALTER TABLE ... ADD COLUMN` and creates its single-column index. It raises `RuntimeError`
+for a non-nullable column. So: **new columns must be nullable**; renames, type changes and drops are not
+migrated (do them by hand or introduce Alembic). Test against an existing Postgres volume, not just a fresh DB.
+
+## Testing patterns
+
+Run: `docker compose build api && docker compose run --rm api pytest -q` (no host Python; code is baked
+into the image, so rebuild after every edit).
+
+- `tests/conftest.py` sets `DATABASE_URL=sqlite:///:memory:` and removes `ANTHROPIC_API_KEY` before imports.
+  `_make_engine` uses `StaticPool` for `:memory:` so every session shares one DB.
+- Modules reset schema in `setup_module()` with `Base.metadata.drop_all/create_all(engine)`.
+- API tests use `client = TestClient(app)` **without** `with`, so `lifespan` (network SEC downloads,
+  scheduler) never runs. Seed DB rows directly and set `state.sizes` / `state.evidence` by hand.
+- Enrichment tests build `Enricher(api_key="test-key", ...)` then replace `e.client` with a
+  `SimpleNamespace` exposing `messages.create` and `beta.messages.create` that record kwargs and return a
+  fake response (`stop_reason`, `content=[SimpleNamespace(type="text", text=...)]`).
+- Source/research tests feed canned payloads to pure functions (`parse_entry`, `parse_items`,
+  `parse_frame`, `parse_chart`, `summarize`, `day0_index`, `measure`); use `monkeypatch` for constants
+  like `eventstudy.HORIZONS`. Tests must never hit the network or the LLM.
+
+## Docker
+
+- `Dockerfile`: `python:3.12-slim`, installs `requirements-dev.txt`, copies the code, runs
+  `uvicorn app.main:app --host 0.0.0.0 --port 8000`. `.dockerignore` excludes `data/` and `.env`.
+- Compose `api` gets `.env` via `env_file` (optional) and overrides `DATABASE_URL` and `DATA_DIR`.
+- No-Docker fallback (needs host Python): `pip install -r requirements.txt && uvicorn app.main:app --reload`
+  from `backend/`, using SQLite under `backend/data/` (git-ignored).
