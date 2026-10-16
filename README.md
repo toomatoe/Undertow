@@ -8,7 +8,7 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - SEC filings are free and public domain, so a product built on them avoids most news-licensing costs.
 - Small-cap traders are badly served: Bloomberg is priced for institutions, and retail apps focus on large caps.
 
-**Status:** News, Signals, Edge Lab and Backtest tabs work. Research (AI assistant) and Trading (paper trading) are planned.
+**Status:** News, Signals, Track record, Edge Lab and Backtest tabs work, with real-time Discord alerts and per-ticker dilution/runway. Research (AI assistant) and Trading (paper trading) are planned.
 
 > Research and education only. Nothing here is financial advice.
 
@@ -44,6 +44,24 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - About a quarter of sampled nano caps have since delisted and are missing from the data.
 - Nano caps right after an offering are often hard or impossible to borrow.
 - It is one sample from one period. The next step is an out-of-sample rerun (2020–2023, fresh companies) before anything goes near paper trading.
+
+**Real-time alerts** (`backend/app/alerts/`)
+- EDGAR is polled every 30 seconds on its own loop.
+- New signal filings go to a Discord webhook when they are severity 2+ and either from a nano/micro/small cap or on the watchlist.
+- Each alert carries the Edge Lab stat and its own detection latency.
+- Every decision is logged at `/api/alerts`.
+- Set `DISCORD_WEBHOOK_URL` in `.env` to turn it on, then call `POST /api/alerts/test` to check delivery.
+
+**Track record tab** (`backend/app/journal/`)
+- Every signal filing is recorded the moment it appears, append-only, priced at the same close the backtest would trade, and compared with IWM over 1/5/20 trading days.
+- Results sit next to what the Edge Lab expected.
+- The IBKR borrow fee at record time is captured, which is the data a fee-aware strategy needs.
+- It started on Oct 13, 2026, with 141 signals recorded on day one.
+
+**Dilution & runway on ticker pages** (`backend/app/fundamentals/`)
+- Cash, trailing-12-month operating burn and months of runway, from SEC XBRL.
+- Share-count change over 1 year.
+- Every offering-type filing in the last 3 years.
 
 **Backtest tab** (`backend/app/backtest/`, see its [AGENTS.md](backend/app/backtest/AGENTS.md))
 - Simulates the nano-cap offering short as a real portfolio, day by day, over every 424B4/424B5 by a sub-$50M-float company:
@@ -163,6 +181,9 @@ No Docker? The backend falls back to SQLite: `cd backend && pip install -r requi
 | `GET /api/backtest/report` | Latest backtest report (metrics, curves, trades, stress, readiness, verdict) |
 | `GET /api/backtest/runs?limit=` | Run log: every simulation, newest first |
 | `GET /api/backtest/borrow` | IBKR borrow archive status |
+| `GET /api/journal?signal=&size=&status=` · `GET /api/journal/summary` | Forward track record |
+| `GET /api/alerts` · `POST /api/alerts/test` | Alert config, latency, delivery log · test message |
+| `GET /api/tickers/{symbol}/fundamentals` | Cash runway, share dilution, offering history |
 
 ## Roadmap
 
@@ -172,6 +193,9 @@ Product priorities come from [docs/PRODUCT_RESEARCH.md](docs/PRODUCT_RESEARCH.md
 1. ~~News tab~~
 2. ~~Small-cap signals + Edge Lab~~
 3. ~~Portfolio backtester with run log, stress tests, walk-forward and live-readiness gates~~ (Backtest tab)
+4. ~~Forward signal journal / public track record~~ (Track record tab)
+5. ~~30-second EDGAR polling + Discord alerts~~ (roadmap item 1, and Discord from item 2)
+6. ~~Ticker page: dilution history and cash runway~~ (part of roadmap item 4; short interest and halts still to do)
 
 **Product: path to first paying users**
 
@@ -194,7 +218,6 @@ DilutionTracker owns basic dilution alerts. The gap is *what happens next*: Edge
 - Out-of-sample rerun of the Edge Lab on 2020–2023 (the backtest's period A covers the offering signal).
 - Insider purchases (Form 4): the best-documented small-cap filing signal (Lakonishok & Lee 2001; Cohen, Malloy & Pomorski 2012).
 - Refit the borrow model from the IBKR archive after 90+ days of snapshots.
-- Paper-trading journal: track every live signal as a hypothetical trade, as a forward test.
 - Signal × AI-flag studies (e.g. offerings with "ATM program" vs priced deals). Needs an API key and point-in-time scoring.
 - Research agent: Claude with read-only tools over news, filings and backtests. It never trades.
 

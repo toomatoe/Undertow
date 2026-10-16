@@ -15,7 +15,10 @@ Read this file, then only the AGENTS.md of the folder you are working in.
 | `backend/app/sources/` | One adapter per data source, each returns `RawArticle` | [sources/AGENTS.md](backend/app/sources/AGENTS.md) |
 | `backend/app/pipeline/` | Ingest cycle: dedupe, ticker tagging, company sizes, signal taxonomy, LLM enrichment, SSE | [pipeline/AGENTS.md](backend/app/pipeline/AGENTS.md) |
 | `backend/app/research/` | Event study (`eventstudy.py`) and Yahoo price loader (`prices.py`) | [research/AGENTS.md](backend/app/research/AGENTS.md) |
-| `backend/app/backtest/` | Portfolio backtester for filing-signal strategies (being added by another agent) | see its AGENTS.md |
+| `backend/app/backtest/` | Portfolio backtester, run log, readiness gates, IBKR borrow archiver | [backtest/AGENTS.md](backend/app/backtest/AGENTS.md) |
+| `backend/app/journal/` | Forward signal journal: live track record vs Edge Lab expectations | [journal/AGENTS.md](backend/app/journal/AGENTS.md) |
+| `backend/app/alerts/` | 30-second EDGAR polling + Discord alerts with latency log | [alerts/AGENTS.md](backend/app/alerts/AGENTS.md) |
+| `backend/app/fundamentals/` | Cash runway and dilution history from SEC XBRL + filings | [fundamentals/AGENTS.md](backend/app/fundamentals/AGENTS.md) |
 | `backend/tests/` | pytest suite (in-memory SQLite, no network) | covered in backend/AGENTS.md |
 | `frontend/` | Next.js 15 App Router UI | [frontend/AGENTS.md](frontend/AGENTS.md) |
 | `docs/` | Feasibility research, product research, published event-study results | [docs/AGENTS.md](docs/AGENTS.md) |

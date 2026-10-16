@@ -282,6 +282,95 @@ export interface BacktestRunLog {
   }[];
 }
 
+// --- Forward signal journal (mirrors /api/journal* in backend/app/main.py) ---
+
+export type JournalStatus = "waiting" | "open" | "complete" | "data_ended" | "no_data";
+
+/** One JournalEntry row (backend/app/models.py) plus the filing title, URL and signal label. */
+export interface JournalEntry {
+  id: number;
+  article_id: number;
+  ticker: string;
+  cik: number | null;
+  form: string | null;
+  signals: string[];
+  primary_signal: string;
+  direction: "-" | "+" | "?";
+  severity: number;
+  size_bucket: SizeBucket | null;
+  public_float: number | null;
+  filed_at: string;
+  created_at: string;
+  borrow_fee: number | null; // annual fraction (0.05 = 5%/yr)
+  borrow_available: number | null; // shares; -1 = plenty
+  borrow_snapshot: string | null;
+  status: JournalStatus;
+  entry_date: string | null;
+  entry_price: number | null;
+  raw_entry_price: number | null;
+  abn_1: number | null;
+  abn_5: number | null;
+  abn_20: number | null;
+  marked_at: string | null;
+  title: string;
+  filing_url: string;
+  signal_label: string;
+}
+
+export interface JournalPage {
+  total: number;
+  since: string | null;
+  entries: JournalEntry[];
+}
+
+export interface JournalFilters {
+  signal?: string;
+  size?: string;
+  status?: string;
+  limit?: number;
+}
+
+/** Live results per (primary signal, size bucket); h in 1, 5, 20. expected_h is the Edge Lab mean abnormal return. */
+export interface JournalSummaryRow {
+  signal: string;
+  label: string;
+  direction: "-" | "+" | "?";
+  bucket: string;
+  n: number;
+  n_1: number;
+  mean_1: number | null;
+  median_1: number | null;
+  hit_1: number | null;
+  expected_1: number | null;
+  n_5: number;
+  mean_5: number | null;
+  median_5: number | null;
+  hit_5: number | null;
+  expected_5: number | null;
+  n_20: number;
+  mean_20: number | null;
+  median_20: number | null;
+  hit_20: number | null;
+  expected_20: number | null;
+}
+
+export interface JournalSummary {
+  rows: JournalSummaryRow[];
+  marked: string | null;
+}
+
+export interface Fundamentals {
+  cik: number;
+  cash: { value: number; as_of: string; tag: string } | null;
+  operating_cash_flow: { value: number; period_end: string; method: string } | null;
+  runway: { status: "unknown" | "cash_flow_positive" | "burning"; monthly_burn?: number; months?: number | null; runs_out_around?: string | null };
+  shares_history: { date: string; shares: number }[];
+  share_change_1y: { from: string; to: string; change: number; days: number } | null;
+  dilution_filings: { form: string; filed: string; kind: string; url: string }[];
+  offerings_last_12m: number;
+  raises_since_cash_date: number;
+}
+
 export interface ArticleFilters {
   q?: string;
   ticker?: string;
@@ -324,10 +413,13 @@ export const api = {
       return r.json();
     }),
   trending: (hours = 24, size = "") => get<TrendingTicker[]>(`/api/tickers/trending${query({ hours, size })}`),
+  fundamentals: (symbol: string) => get<Fundamentals>(`/api/tickers/${encodeURIComponent(symbol)}/fundamentals`),
   ticker: (symbol: string, days = 30) => get<TickerDetail>(`/api/tickers/${encodeURIComponent(symbol)}?days=${days}`),
   status: () => get<Status>("/api/status"),
   backtestReport: () => get<BacktestReport>("/api/backtest/report"),
   backtestRuns: (limit = 200) => get<BacktestRunLog>(`/api/backtest/runs?limit=${limit}`),
+  journal: (f: JournalFilters = {}) => get<JournalPage>(`/api/journal${query(f)}`),
+  journalSummary: () => get<JournalSummary>("/api/journal/summary"),
   ingest: () => fetch(`${API_BASE}/api/ingest`, { method: "POST" }).then((r) => r.json()),
   streamUrl: `${API_BASE}/api/stream`,
 };
