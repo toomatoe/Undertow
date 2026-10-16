@@ -14,6 +14,8 @@ src/app/ticker/[symbol]/page.tsx  /ticker/X  ticker detail (params is a Promise,
 src/app/research/page.tsx   /research        static "planned" page (AI research assistant)
 src/app/track-record/page.tsx /track-record forward signal journal vs Edge Lab (components in src/components/track/)
 src/app/backtest/page.tsx   /backtest        backtest report + live-readiness log (components in src/components/backtest/)
+src/app/methodology/page.tsx /methodology  how every number is produced (keep in sync with backend logic)
+src/app/legal/{disclaimer,terms,privacy}/page.tsx  DRAFT legal pages (DraftNotice until lawyer review)
 src/app/trading/page.tsx    /trading         static "not built" page (paper trading plan)
 src/components/             shared client components
 src/lib/api.ts              the only API client
@@ -51,6 +53,10 @@ components fetching data and no API routes in Next.
 | `NewsFeed.tsx` | News tab body; owns the SSE subscription for `/`. Has its own `EVENT_TYPES` list for the filter |
 | `ArticleCard.tsx` | One article/filing: badges, sentiment, signals, AI flags, tickers with size, `EvidenceLine` |
 | `Sidebar.tsx` | Trending tickers (`api.trending(hours)`), `api.status()`, manual `api.ingest()` |
+| `Footer.tsx` | Site-wide footer with disclaimer line and legal/methodology links (in layout.tsx) |
+| `DraftNotice.tsx` | Banner on legal pages until a lawyer reviews them; remove only after review |
+| `HaltsPanel.tsx` | Trading halts (ticker-scoped or small caps today); refreshes every 60s |
+| `DilutionPanel.tsx` | Runway, cash, share change, short interest, offering history on ticker pages |
 | `WatchlistPanel.tsx` | List/add/remove watchlist symbols; `onChange` callback for the parent |
 
 ## API client (`src/lib/api.ts`)
@@ -96,3 +102,10 @@ npm --prefix frontend run build          # only when the dev server is NOT runni
 Do not run `next build` while `npm run dev` is running: both write `frontend/.next`, and the build clobbers
 the dev server's output (broken pages until restart). Stop the dev server first, or rely on `tsc` + lint.
 Visual check: dev server on :3000 (preview config `frontend` in `.claude/launch.json`) with the API on :8000.
+
+## Content rules (legal posture)
+
+All user-facing copy follows `docs/PRODUCT_RESEARCH.md` section 4 and `/legal/disclaimer`:
+- Impersonal facts and historical statistics only. No buy/sell language, price targets or "you should".
+- Label simulated results as hypothetical wherever they appear, show costs and losers, and never make earnings claims.
+- When the backend logic changes (signals, entry timing, costs), update `/methodology` in the same PR.

@@ -1539,3 +1539,58 @@ table.data td.tr-early {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* --- Legal / methodology / footer --- */
+.legal h2 {
+  font-size: 16px;
+  margin: 22px 0 6px;
+}
+
+.legal p,
+.legal li {
+  max-width: 760px;
+  line-height: 1.6;
+}
+
+.legal ul ul {
+  margin-top: 4px;
+}
+
+.legal a {
+  color: var(--accent);
+}
+
+.draft-notice {
+  border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent);
+  background: color-mix(in srgb, var(--warn) 8%, var(--panel));
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
+.site-footer {
+  max-width: 1280px;
+  margin: 32px auto 0;
+  padding: 16px 20px 28px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.site-footer p {
+  max-width: 640px;
+}
+
+.site-footer nav {
+  display: flex;
+  gap: 16px;
+}
+
+.site-footer a:hover {
+  color: var(--text);
+}

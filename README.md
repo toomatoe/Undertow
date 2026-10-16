@@ -200,6 +200,7 @@ Product priorities come from [docs/PRODUCT_RESEARCH.md](docs/PRODUCT_RESEARCH.md
 4. ~~Forward signal journal / public track record~~ (Track record tab)
 5. ~~30-second EDGAR polling + Discord alerts~~ (roadmap item 1, and Discord from item 2)
 6. ~~Ticker page: dilution history, cash runway, short interest, halts~~ (roadmap item 4)
+7. ~~Legal pack drafts + Methodology page + site footer~~ (roadmap item 8, pending lawyer review)
 
 **Product: path to first paying users**
 
