@@ -3,7 +3,14 @@
 import { useEffect, useState } from "react";
 
 import { api, type Fundamentals } from "@/lib/api";
-import { formatMoney, pct } from "@/lib/format";
+import { formatMoney, pct, pctAbs } from "@/lib/format";
+
+function formatShares(n: number): string {
+  if (n >= 1e9) return `${(n / 1e9).toFixed(2)}B`;
+  if (n >= 1e6) return `${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(0)}K`;
+  return String(n);
+}
 
 function runwayText(f: Fundamentals): { value: string; tone: string; note: string } {
   const r = f.runway;
@@ -46,6 +53,7 @@ export default function DilutionPanel({ symbol }: { symbol: string }) {
 
   const rw = runwayText(data);
   const change = data.share_change_1y;
+  const si = data.short_interest;
   return (
     <section className="panel">
       <h2>Dilution &amp; runway</h2>
@@ -58,12 +66,27 @@ export default function DilutionPanel({ symbol }: { symbol: string }) {
         <div className="tile">
           <span className="muted small">Cash</span>
           <strong>{data.cash ? formatMoney(data.cash.value) : "—"}</strong>
-          <span className="muted small">{data.cash ? `as of ${data.cash.as_of}` : "not reported"}</span>
+          <span className="muted small">
+            {data.cash
+              ? `as of ${data.cash.as_of}${data.cash.short_term_investments ? ` (incl. ${formatMoney(data.cash.short_term_investments)} short-term investments)` : ""}`
+              : "not reported"}
+          </span>
         </div>
         <div className="tile">
           <span className="muted small">Share count, 1 year</span>
           <strong className={change && change.change > 0.1 ? "sent-neg" : undefined}>{change ? pct(change.change) : "—"}</strong>
           <span className="muted small">{change ? `${change.from} → ${change.to}` : "not enough history"}</span>
+        </div>
+        <div className="tile">
+          <span className="muted small">Short interest</span>
+          <strong className={si && (si.pct_of_shares_outstanding ?? 0) > 0.2 ? "warn-text" : undefined}>
+            {si ? (si.pct_of_shares_outstanding != null ? pctAbs(si.pct_of_shares_outstanding) : formatShares(si.shares_short)) : "—"}
+          </strong>
+          <span className="muted small">
+            {si
+              ? `${formatShares(si.shares_short)} shares · ${si.days_to_cover ?? "?"} days to cover · FINRA ${si.date}`
+              : "not reported by FINRA"}
+          </span>
         </div>
         <div className="tile">
           <span className="muted small">Priced offerings, 12 months</span>
@@ -103,7 +126,7 @@ export default function DilutionPanel({ symbol }: { symbol: string }) {
       )}
       <p className="muted small">
         From SEC filings: cash and trailing-12-month operating cash flow (XBRL), shares outstanding (cover pages), and offering-type filings
-        over the last 3 years. Estimates are arithmetic on reported numbers, not forecasts.
+        over the last 3 years. Short interest from FINRA (twice monthly). Estimates are arithmetic on reported numbers, not forecasts.
       </p>
     </section>
   );

@@ -1496,3 +1496,46 @@ table.data td.tr-early {
 .ticker-head + .panel {
   margin-bottom: 16px;
 }
+
+/* --- Halts --- */
+.halts {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.halts li {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: baseline;
+  font-size: 12px;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.halts li:last-child {
+  border-bottom: none;
+}
+
+.halts li.serious .halt-reason {
+  color: var(--warn);
+  font-weight: 600;
+}
+
+.halt-time,
+.halt-sym {
+  font-family: var(--font-geist-mono), monospace;
+}
+
+.halt-sym {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.halt-reason {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -58,10 +58,13 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - The IBKR borrow fee at record time is captured, which is the data a fee-aware strategy needs.
 - It started on Oct 13, 2026, with 141 signals recorded on day one.
 
-**Dilution & runway on ticker pages** (`backend/app/fundamentals/`)
-- Cash, trailing-12-month operating burn and months of runway, from SEC XBRL.
-- Share-count change over 1 year.
-- Every offering-type filing in the last 3 years.
+**Dilution, runway, short interest and halts on ticker pages** (`backend/app/fundamentals/`, `backend/app/sources/halts.py`)
+- Cash (plus same-day short-term investments), trailing-12-month operating burn and months of runway, from SEC XBRL.
+- Share-count change over 1 year, and every offering-type filing in the last 3 years.
+- FINRA short interest (free, twice monthly): % of shares outstanding and days to cover.
+- Trading halts from the Nasdaq Trader feed, polled every 30s, with reasons in plain English.
+  - News and regulatory halts on small caps or watchlist names also alert on Discord. Constant volatility pauses alert only for watchlist names.
+  - The Signals page shows a "Halts today" panel.
 
 **Backtest tab** (`backend/app/backtest/`, see its [AGENTS.md](backend/app/backtest/AGENTS.md))
 - Simulates the nano-cap offering short as a real portfolio, day by day, over every 424B4/424B5 by a sub-$50M-float company:
@@ -183,7 +186,8 @@ No Docker? The backend falls back to SQLite: `cd backend && pip install -r requi
 | `GET /api/backtest/borrow` | IBKR borrow archive status |
 | `GET /api/journal?signal=&size=&status=` · `GET /api/journal/summary` | Forward track record |
 | `GET /api/alerts` · `POST /api/alerts/test` | Alert config, latency, delivery log · test message |
-| `GET /api/tickers/{symbol}/fundamentals` | Cash runway, share dilution, offering history |
+| `GET /api/tickers/{symbol}/fundamentals` | Cash runway, share dilution, offering history, short interest |
+| `GET /api/halts?symbol=&size=&hours=` | Trading halts with plain-English reasons |
 
 ## Roadmap
 
@@ -195,7 +199,7 @@ Product priorities come from [docs/PRODUCT_RESEARCH.md](docs/PRODUCT_RESEARCH.md
 3. ~~Portfolio backtester with run log, stress tests, walk-forward and live-readiness gates~~ (Backtest tab)
 4. ~~Forward signal journal / public track record~~ (Track record tab)
 5. ~~30-second EDGAR polling + Discord alerts~~ (roadmap item 1, and Discord from item 2)
-6. ~~Ticker page: dilution history and cash runway~~ (part of roadmap item 4; short interest and halts still to do)
+6. ~~Ticker page: dilution history, cash runway, short interest, halts~~ (roadmap item 4)
 
 **Product: path to first paying users**
 

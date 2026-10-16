@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -130,6 +130,22 @@ class AlertLog(Base):
     reason: Mapped[str | None] = mapped_column(String(64))
     detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
     latency_seconds: Mapped[float | None] = mapped_column(Float)  # EDGAR acceptance -> detected here
+
+
+class TradingHalt(Base):
+    """Trade halts from the Nasdaq Trader feed. One row per (symbol, halt time); resumption filled in later."""
+
+    __tablename__ = "trading_halts"
+    __table_args__ = (UniqueConstraint("symbol", "halted_at", name="uq_halt_symbol_time"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    symbol: Mapped[str] = mapped_column(String(12), index=True)
+    name: Mapped[str] = mapped_column(String(256))
+    market: Mapped[str] = mapped_column(String(32))
+    reason_code: Mapped[str] = mapped_column(String(16), index=True)
+    halted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    resumed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    first_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class IngestRun(Base):

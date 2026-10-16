@@ -22,7 +22,8 @@ from app.alerts import service as alerts
 from app.alerts.service import Alerter
 from app.fundamentals import service as fundamentals
 from app.journal import service as journal
-from app.models import AlertLog, Article, ArticleTicker, Company, IngestRun, JournalEntry, WatchlistItem
+from app.models import AlertLog, Article, ArticleTicker, Company, IngestRun, JournalEntry, TradingHalt, WatchlistItem
+from app.sources import halts as halts_source
 from app.pipeline.companies import BUCKET_NAMES, load_latest_floats, sync_companies
 from app.pipeline.enrich import Enricher
 from app.pipeline.events import broadcaster
@@ -121,7 +122,18 @@ async def edgar_poller() -> None:
             await asyncio.to_thread(poll_edgar, settings, state.universe)
         except Exception:
             log.exception("EDGAR poll crashed")
+        try:
+            await asyncio.to_thread(poll_halts)
+        except Exception as exc:
+            log.warning("Halt poll failed: %s", exc)
         await asyncio.sleep(settings.edgar_poll_seconds)
+
+
+def poll_halts() -> None:
+    with SessionLocal() as session:
+        res = alerts.store_halts(session, halts_source.fetch(), settings)
+        if res["new"]:
+            log.info("Halts: %s", res)
 
 
 def evidence_for(article: Article) -> list[dict]:
@@ -324,6 +336,31 @@ def alerts_test():
     return state.alerter.send_test()
 
 
+@app.get("/api/halts")
+def list_halts(
+    symbol: str | None = None,
+    size: str | None = None,
+    hours: int = Query(72, ge=1, le=24 * 365),
+    limit: int = Query(200, ge=1, le=2000),
+    session: Session = Depends(get_session),
+):
+    """Recent trading halts, newest first, with plain-English reasons and company size."""
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    stmt = select(TradingHalt).where(TradingHalt.halted_at >= since)
+    if symbol:
+        stmt = stmt.where(TradingHalt.symbol == symbol.upper())
+    if sizes := parse_sizes(size):
+        stmt = stmt.where(TradingHalt.symbol.in_(select(Company.symbol).where(Company.size_bucket.in_(sizes))))
+    rows = session.scalars(stmt.order_by(TradingHalt.halted_at.desc()).limit(limit)).all()
+    aware = lambda d: (d if d.tzinfo else d.replace(tzinfo=timezone.utc)).isoformat() if d else None  # noqa: E731
+    return [
+        {"symbol": h.symbol, "name": h.name, "market": h.market, "reason_code": h.reason_code,
+         "reason": halts_source.REASONS.get(h.reason_code, h.reason_code), "serious": h.reason_code in halts_source.SERIOUS,
+         "halted_at": aware(h.halted_at), "resumed_at": aware(h.resumed_at), "size_bucket": state.sizes.get(h.symbol)}
+        for h in rows
+    ]
+
+
 @app.get("/api/journal")
 def journal_entries(
     signal: str | None = None,
@@ -461,7 +498,7 @@ async def ticker_fundamentals(symbol: str, session: Session = Depends(get_sessio
     if company is None:
         raise HTTPException(404, f"Unknown ticker {symbol}")
     try:
-        return await asyncio.to_thread(fundamentals.company_profile, company.cik, settings.data_dir, settings.sec_user_agent)
+        return await asyncio.to_thread(fundamentals.company_profile, company.cik, settings.data_dir, settings.sec_user_agent, company.symbol)
     except httpx.HTTPError as exc:
         raise HTTPException(502, f"SEC data unavailable: {exc}") from exc
 

@@ -149,3 +149,65 @@ def stats(session: Session, limit: int = 100) -> dict:
         "latency_p90_s": round(lat[min(len(lat) - 1, int(0.9 * len(lat)))], 1) if lat else None,
         "counts": counts,
     }
+
+
+# --- Trading halts ----------------------------------------------------------------
+
+
+def format_halt(h, company: Company | None) -> dict:
+    size = f"{company.size_bucket} cap, {_money(company.public_float)}" if company and company.size_bucket else "size unknown"
+    return {
+        "username": "QuantDesk",
+        "embeds": [{
+            "title": f"⏸️ ${h.symbol} halted · {h.reason}"[:256],
+            "url": "https://www.nasdaqtrader.com/Trader.aspx?id=TradeHalts",
+            "description": f"{h.name}\nReason code **{h.reason_code}**: {h.reason}."
+                           + (" Usually company news or a regulatory issue." if h.serious else ""),
+            "color": 0xF59E0B,
+            "fields": [
+                {"name": "Size", "value": size, "inline": True},
+                {"name": "Halted (ET)", "value": h.halted_at.strftime("%H:%M:%S"), "inline": True},
+                {"name": "Market", "value": h.market or "?", "inline": True},
+            ],
+            "footer": {"text": DISCLAIMER},
+            "timestamp": h.halted_at.isoformat(),
+        }],
+    }
+
+
+def store_halts(session: Session, halts: list, settings: Settings, post=httpx.post, now: datetime | None = None) -> dict:
+    """Insert new halts, fill in resumption times, and alert on fresh small-cap or watchlist halts."""
+    from app.models import TradingHalt
+
+    now = now or datetime.now(timezone.utc)
+    watchlist = set(session.scalars(select(WatchlistItem.symbol)).all())
+    new = alerted = 0
+    seen: set[tuple[str, datetime]] = set()
+    for h in halts:
+        # Store UTC: SQLite drops tzinfo, and ET wall-clock times would be read back as UTC
+        halted_utc = h.halted_at.astimezone(timezone.utc)
+        resumed_utc = h.resumed_at.astimezone(timezone.utc) if h.resumed_at else None
+        if (h.symbol, halted_utc) in seen:
+            continue
+        seen.add((h.symbol, halted_utc))
+        row = session.scalar(select(TradingHalt).where(TradingHalt.symbol == h.symbol, TradingHalt.halted_at == halted_utc))
+        if row:
+            if resumed_utc and not row.resumed_at:
+                row.resumed_at = resumed_utc
+            continue
+        session.add(TradingHalt(symbol=h.symbol, name=h.name[:256], market=h.market[:32], reason_code=h.reason_code[:16],
+                                halted_at=halted_utc, resumed_at=resumed_utc, first_seen=now))
+        new += 1
+        company = session.get(Company, h.symbol)
+        fresh = now - h.halted_at <= timedelta(minutes=settings.alert_max_age_minutes)
+        wanted = h.symbol in watchlist or (company is not None and company.size_bucket in settings.alert_sizes)
+        # Volatility pauses on small caps are constant; only alert those for watchlist names
+        noisy = h.reason_code in {"LUDP", "LUDS", "M", "T5"} and h.symbol not in watchlist
+        if settings.discord_webhook_url and fresh and wanted and not noisy:
+            try:
+                post(settings.discord_webhook_url, json=format_halt(h, company), timeout=10).raise_for_status()
+                alerted += 1
+            except Exception as exc:
+                log.warning("Halt alert failed for %s: %s", h.symbol, exc)
+    session.commit()
+    return {"seen": len(halts), "new": new, "alerted": alerted}

@@ -361,7 +361,7 @@ export interface JournalSummary {
 
 export interface Fundamentals {
   cik: number;
-  cash: { value: number; as_of: string; tag: string } | null;
+  cash: { value: number; as_of: string; tag: string; short_term_investments?: number } | null;
   operating_cash_flow: { value: number; period_end: string; method: string } | null;
   runway: { status: "unknown" | "cash_flow_positive" | "burning"; monthly_burn?: number; months?: number | null; runs_out_around?: string | null };
   shares_history: { date: string; shares: number }[];
@@ -369,6 +369,26 @@ export interface Fundamentals {
   dilution_filings: { form: string; filed: string; kind: string; url: string }[];
   offerings_last_12m: number;
   raises_since_cash_date: number;
+  short_interest: {
+    date: string;
+    shares_short: number;
+    days_to_cover: number | null;
+    change_pct: number | null;
+    pct_of_shares_outstanding: number | null;
+    history: { date: string; shares_short: number; days_to_cover: number | null }[];
+  } | null;
+}
+
+export interface Halt {
+  symbol: string;
+  name: string;
+  market: string;
+  reason_code: string;
+  reason: string;
+  serious: boolean;
+  halted_at: string;
+  resumed_at: string | null;
+  size_bucket: SizeBucket | null;
 }
 
 export interface ArticleFilters {
@@ -413,6 +433,7 @@ export const api = {
       return r.json();
     }),
   trending: (hours = 24, size = "") => get<TrendingTicker[]>(`/api/tickers/trending${query({ hours, size })}`),
+  halts: (f: { symbol?: string; size?: string; hours?: number; limit?: number } = {}) => get<Halt[]>(`/api/halts${query(f)}`),
   fundamentals: (symbol: string) => get<Fundamentals>(`/api/tickers/${encodeURIComponent(symbol)}/fundamentals`),
   ticker: (symbol: string, days = 30) => get<TickerDetail>(`/api/tickers/${encodeURIComponent(symbol)}?days=${days}`),
   status: () => get<Status>("/api/status"),
