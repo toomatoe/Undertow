@@ -7,6 +7,12 @@ Research and education only; it does not trade.
 
 Read this file, then only the AGENTS.md of the folder you are working in.
 
+## Multi-agent process (read before orchestrating)
+
+- **Repo graph:** [docs/agent-graph.json](docs/agent-graph.json). Modules with their paths, AGENTS.md, dependencies, tests, hotspot files and shared resources.
+- **Process graph:** [docs/AGENT_PROCESS.md](docs/AGENT_PROCESS.md) and `.claude/workflows/feature-graph.js`. The steps are Plan, then ownership edges and waves, then Build, then 2-lens Review with a fix loop, then an exclusive Verify, then a Critic.
+- Builders run backend tests with `bash scripts/pytest.sh <tests>`, which is safe in parallel. Only the Verify step runs `docker compose build` or `next build`.
+
 ## Directory map
 
 | Path | Purpose | Guide |
@@ -19,11 +25,14 @@ Read this file, then only the AGENTS.md of the folder you are working in.
 | `backend/app/journal/` | Forward signal journal: live track record vs Edge Lab expectations | [journal/AGENTS.md](backend/app/journal/AGENTS.md) |
 | `backend/app/alerts/` | 30-second EDGAR polling + Discord alerts with latency log | [alerts/AGENTS.md](backend/app/alerts/AGENTS.md) |
 | `backend/app/fundamentals/` | Cash runway and dilution history from SEC XBRL + filings | [fundamentals/AGENTS.md](backend/app/fundamentals/AGENTS.md) |
+| `backend/app/newsletter/` | Weekly "Small-Cap Filing Radar": build, Markdown/HTML render, immutable archive, CLI | [newsletter/AGENTS.md](backend/app/newsletter/AGENTS.md) |
 | `backend/tests/` | pytest suite (in-memory SQLite, no network) | covered in backend/AGENTS.md |
-| `frontend/` | Next.js 15 App Router UI | [frontend/AGENTS.md](frontend/AGENTS.md) |
-| `docs/` | Feasibility research, product research, published event-study results | [docs/AGENTS.md](docs/AGENTS.md) |
+| `frontend/` | Next.js 15 App Router UI (server-rendered SEO pages for tickers and newsletter issues, sitemap, robots) | [frontend/AGENTS.md](frontend/AGENTS.md) |
+| `docs/` | Feasibility research, product research, published event-study results, agent graph + process | [docs/AGENTS.md](docs/AGENTS.md) |
+| `scripts/pytest.sh` | Backend tests against mounted source in the `quantdesk-api-test` image (no image rebuild, parallel-safe) | [docs/AGENT_PROCESS.md](docs/AGENT_PROCESS.md) |
+| `.claude/workflows/feature-graph.js` | Multi-agent Plan/Build/Review/Verify/Critic workflow | [docs/AGENT_PROCESS.md](docs/AGENT_PROCESS.md) |
 | `docker-compose.yml` | `db` (pgvector/pgvector:pg17) + `api` (built from `backend/`) | |
-| `.env.example` | Every optional env var with comments; copy to `.env` (git-ignored) | |
+| `.env.example` | Every optional env var with comments. Backend section: copy to `.env` (git-ignored), read by compose and the backend. Commented frontend section at the bottom: template for `frontend/.env.local` (Next never reads the root file) | |
 | `.claude/launch.json` | Preview config: frontend dev server on :3000 | |
 
 ## Run everything
@@ -33,16 +42,25 @@ cp .env.example .env                 # optional; app runs on free sources withou
 docker compose up -d --build         # Postgres :5432 + API :8000, ingests on startup
 npm --prefix frontend install        # first time only
 npm --prefix frontend run dev        # UI on :3000 (API base: NEXT_PUBLIC_API_URL, default http://localhost:8000)
+# frontend env (optional): copy the frontend section of .env.example into frontend/.env.local, uncommented
 ```
 
 Python is not installed on the host. Run all Python through the `api` container:
 
 ```bash
 docker compose build api                                       # code is COPYed into the image: rebuild after edits
-docker compose run --rm api pytest -q                          # backend tests
+docker compose run --rm api pytest -q                          # backend tests (agents: bash scripts/pytest.sh instead, no rebuild)
 docker compose run --rm api python -m app.research.eventstudy  # event study (~15 min first run, cached after)
 docker compose restart api                                     # API reloads event_study.json at startup
+docker compose run --rm api python -m app.newsletter.build     # newsletter: last completed week (--week-end, --force, --preview)
 ```
+
+## Env vars
+
+Backend settings live in `backend/app/config.py` (table in [backend/AGENTS.md](backend/AGENTS.md)), documented in `.env.example`.
+The frontend reads only `frontend/.env*` (table in [frontend/AGENTS.md](frontend/AGENTS.md)), documented in the commented frontend section of `.env.example` (template for `frontend/.env.local`).
+The public site origin is configured twice and the values must match: `PUBLIC_BASE_URL` (root `.env`, newsletter links)
+and `NEXT_PUBLIC_SITE_URL` (`frontend/.env.local`, canonical URLs, sitemap, robots; falls back to a `PUBLIC_BASE_URL` set there).
 
 ## Conventions (non-negotiable)
 
@@ -71,7 +89,8 @@ docker compose restart api                                     # API reloads eve
    changes the Bonferroni test count, so it is a design change: decide it, then rerun the study.
 
 **A page**
-1. `frontend/src/app/<route>/page.tsx` (`"use client"` if it uses hooks).
+1. `frontend/src/app/<route>/page.tsx` (`"use client"` if it uses hooks). A page that must be crawlable (SEO) is a server
+   component that fetches through `frontend/src/lib/server-api.ts` (pattern: `app/ticker/[symbol]/(view)/`), and gets an entry in `app/sitemap.ts`.
 2. Add a tab to `TABS` in `frontend/src/components/Nav.tsx`.
 3. New endpoint: route in `backend/app/main.py`, response model in `backend/app/schemas.py`, mirrored type +
    method in `frontend/src/lib/api.ts`.
@@ -93,4 +112,6 @@ docker compose restart api                                     # API reloads eve
 | Evidence line on signal cards | `load_study()` / `to_out()` in `main.py`, `ArticleCard.tsx` |
 | Edge Lab charts | `frontend/src/app/lab/page.tsx`, `--div-*` tokens in `globals.css` |
 | Strategy backtests | `backend/app/backtest/` (its own AGENTS.md) |
+| Weekly newsletter content or schedule | `backend/app/newsletter/service.py`, `newsletter_cycle()` in `main.py`, `frontend/src/components/newsletter/` |
+| SEO: ticker page text, metadata, sitemap, robots | `frontend/src/app/ticker/[symbol]/(view)/` (`summary.ts`), `app/sitemap.ts`, `app/robots.ts`, `/api/tickers/sitemap` in `main.py` |
 | Feasibility / product docs | `docs/` |

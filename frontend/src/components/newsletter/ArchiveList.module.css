@@ -1,0 +1,11 @@
+/* Archive entries are links; give them the same box as the global button style (globals.css `button`). */
+.item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  color: var(--text);
+}
+
+.item:hover {
+  border-color: var(--accent);
+}

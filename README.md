@@ -8,7 +8,7 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - SEC filings are free and public domain, so a product built on them avoids most news-licensing costs.
 - Small-cap traders are badly served: Bloomberg is priced for institutions, and retail apps focus on large caps.
 
-**Status:** News, Signals, Track record, Edge Lab and Backtest tabs work, with real-time Discord alerts and per-ticker dilution/runway. Research (AI assistant) and Trading (paper trading) are planned.
+**Status:** News, Signals, Track record, Newsletter, Edge Lab and Backtest tabs work, with real-time Discord alerts, server-rendered ticker pages (dilution/runway, SEO metadata, sitemap) and an automatic weekly newsletter. Research (AI assistant) and Trading (paper trading) are planned.
 
 > Research and education only. Nothing here is financial advice.
 
@@ -65,6 +65,21 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - Trading halts from the Nasdaq Trader feed, polled every 30s, with reasons in plain English.
   - News and regulatory halts on small caps or watchlist names also alert on Discord. Constant volatility pauses alert only for watchlist names.
   - The Signals page shows a "Halts today" panel.
+
+**Server-rendered ticker pages (SEO)** (`frontend/src/app/ticker/[symbol]/`)
+- `/ticker/{SYMBOL}` is rendered on the server and cached for 15 minutes, so the content is in the initial HTML.
+- A factual summary paragraph with explicit dates: size and public float, cash and runway, 1-year share change, priced offerings, short interest, latest filing signal, halts and mention count.
+- Title, meta description, canonical URL, Open Graph tags and JSON-LD per ticker. Unknown or malformed symbols return a real HTTP 404.
+- `/sitemap.xml` lists the static pages, every known company ticker with an article or filing in the last 180 days (`GET /api/tickers/sitemap`) and every archived newsletter issue. `/robots.txt` points at it and disallows `/api/`.
+- Set `NEXT_PUBLIC_SITE_URL` in `frontend/.env.local` to the public origin (template: the frontend section at the bottom of the root `.env.example`).
+
+**Newsletter tab: weekly "Small-Cap Filing Radar"** (`backend/app/newsletter/`, see its [AGENTS.md](backend/app/newsletter/AGENTS.md))
+- Built automatically after each slow ingest cycle once a week is complete (Monday-Sunday, US Eastern), from our own data only.
+- Sections: headline counts, top signal filings with the matching historical Edge Lab stat, dilution watch, serious halts, track-record progress, a research note from the latest backtest report, and the disclaimer.
+- Archived as JSON, Markdown and email-safe HTML under `{DATA_DIR}/newsletters/`. An issue is never overwritten unless rebuilt with `--force`.
+- `/newsletter` shows the archive and the latest issue; `/newsletter/{id}` (e.g. `2026-W41`) is a server-rendered issue page. Copy the Markdown or download the HTML to paste into Substack/Beehiiv; "Preview this week so far" builds the current week without saving it. No email sending yet.
+- Impersonal facts and historical statistics only; every Edge Lab, backtest and journal number is labelled historical or hypothetical, and the rendered text is checked for advice words.
+- Links in the issue use `PUBLIC_BASE_URL` (root `.env`).
 
 **Backtest tab** (`backend/app/backtest/`, see its [AGENTS.md](backend/app/backtest/AGENTS.md))
 - Simulates the nano-cap offering short as a real portfolio, day by day, over every 424B4/424B5 by a sub-$50M-float company:
@@ -130,8 +145,9 @@ sources (EDGAR, RSS, Alpaca) → dedupe → ticker tagging → Postgres → LLM 
 |---|---|
 | `backend/app/sources/` | One adapter per source, each returning `RawArticle` |
 | `backend/app/pipeline/` | `dedupe`, `tickers`, `enrich`, `ingest` (one cycle), `events` (SSE pub/sub) |
-| `backend/app/main.py` | API + background scheduler |
-| `frontend/src/` | Next.js App Router UI |
+| `backend/app/research/`, `backtest/`, `journal/`, `alerts/`, `fundamentals/`, `newsletter/` | Event study, backtester, track record, alerts, dilution/runway, weekly newsletter |
+| `backend/app/main.py` | API + background scheduler (ingest, borrow snapshot, journal, newsletter) and fast EDGAR/halts poller |
+| `frontend/src/` | Next.js App Router UI; ticker and newsletter pages are server-rendered for SEO |
 | `docs/FEASIBILITY.md` | Research: strategies, languages, system design, data APIs |
 
 ## Run it
@@ -143,6 +159,8 @@ cp .env.example .env          # optional: add keys
 docker compose up -d --build  # Postgres + API on :8000 (starts ingesting right away)
 cd frontend && npm install && npm run dev   # UI on :3000
 ```
+
+Frontend settings (optional) go in `frontend/.env.local`, not the root `.env`: copy the commented frontend section at the bottom of the root `.env.example` and uncomment the lines you need. For a public deployment set `NEXT_PUBLIC_SITE_URL` there and `PUBLIC_BASE_URL` in the root `.env` to the same origin.
 
 Run the event study (about 15 min, cached afterwards). The API picks up results on restart:
 
@@ -158,10 +176,19 @@ docker compose run --rm api python -m app.backtest.warm
 docker compose run --rm api python -m app.backtest.report
 ```
 
+Build a newsletter issue by hand (the scheduler does this automatically):
+
+```bash
+docker compose run --rm api python -m app.newsletter.build                       # last completed week
+docker compose run --rm api python -m app.newsletter.build --week-end 2026-10-11 # a specific week (add --force to overwrite)
+docker compose run --rm api python -m app.newsletter.build --preview             # current week so far, not saved
+```
+
 Backend tests:
 
 ```bash
 docker compose run --rm api pytest -q
+bash scripts/pytest.sh tests/test_api.py   # against the current source, no image rebuild
 ```
 
 No Docker? The backend falls back to SQLite: `cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload`.
@@ -174,6 +201,7 @@ No Docker? The backend falls back to SQLite: `cd backend && pip install -r requi
 | `GET /api/articles/{id}` | One article |
 | `GET /api/tickers/trending?hours=24` | Most-mentioned tickers with average sentiment |
 | `GET /api/tickers/{symbol}?days=30` | Ticker detail + daily coverage |
+| `GET /api/tickers/sitemap?days=180` | Tickers with a known company (SEC company list) and an article or filing in the window, most recent first (`symbol`, `last_activity`, `items`, `size_bucket`) |
 | `GET /api/status` | Counts, enabled features, last run per source |
 | `POST /api/ingest` | Run a cycle now |
 | `GET /api/stream` | SSE: `article`, `article_updated` |
@@ -188,6 +216,10 @@ No Docker? The backend falls back to SQLite: `cd backend && pip install -r requi
 | `GET /api/alerts` · `POST /api/alerts/test` | Alert config, latency, delivery log · test message |
 | `GET /api/tickers/{symbol}/fundamentals` | Cash runway, share dilution, offering history, short interest |
 | `GET /api/halts?symbol=&size=&hours=` | Trading halts with plain-English reasons |
+| `GET /api/newsletter/issues` | Newsletter archive, newest first (id, week, headline counts) |
+| `GET /api/newsletter/{id}` · `GET /api/newsletter/{id}.html` | One issue as JSON (+ `markdown`) · its email-safe HTML |
+| `POST /api/newsletter/preview` | Current week so far (+ `markdown`, `html`), never saved |
+| `GET /api/health` | Liveness check |
 
 ## Roadmap
 
@@ -201,6 +233,8 @@ Product priorities come from [docs/PRODUCT_RESEARCH.md](docs/PRODUCT_RESEARCH.md
 5. ~~30-second EDGAR polling + Discord alerts~~ (roadmap item 1, and Discord from item 2)
 6. ~~Ticker page: dilution history, cash runway, short interest, halts~~ (roadmap item 4)
 7. ~~Legal pack drafts + Methodology page + site footer~~ (roadmap item 8, pending lawyer review)
+8. ~~Server-rendered SEO ticker pages, sitemap.xml, robots.txt~~ (part of roadmap item 9)
+9. ~~Weekly newsletter: automatic build, archive, Markdown/HTML export, Newsletter tab~~ (part of roadmap item 9; email delivery not built)
 
 **Product: path to first paying users**
 

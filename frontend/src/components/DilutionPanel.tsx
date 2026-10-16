@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api, type Fundamentals } from "@/lib/api";
 import { formatMoney, pct, pctAbs } from "@/lib/format";
@@ -24,11 +24,15 @@ function runwayText(f: Fundamentals): { value: string; tone: string; note: strin
   };
 }
 
-export default function DilutionPanel({ symbol }: { symbol: string }) {
-  const [data, setData] = useState<Fundamentals | null>(null);
+/** `initialData` (fetched on the server) renders immediately and skips the client fetch for that symbol. */
+export default function DilutionPanel({ symbol, initialData }: { symbol: string; initialData?: Fundamentals }) {
+  const [data, setData] = useState<Fundamentals | null>(initialData ?? null);
   const [error, setError] = useState<string | null>(null);
+  const seeded = useRef<string | null>(initialData ? symbol : null);
 
   useEffect(() => {
+    if (seeded.current === symbol) return;
+    seeded.current = null;
     setData(null);
     setError(null);
     api.fundamentals(symbol).then(setData).catch((e) => setError(String(e.message ?? e)));

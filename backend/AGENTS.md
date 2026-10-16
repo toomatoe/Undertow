@@ -15,7 +15,11 @@ Pinned versions in `requirements.txt`; `requirements-dev.txt` adds pytest.
 | `app/sources/` | Source adapters ([AGENTS.md](app/sources/AGENTS.md)) |
 | `app/pipeline/` | Ingest cycle ([AGENTS.md](app/pipeline/AGENTS.md)) |
 | `app/research/` | Event study + prices ([AGENTS.md](app/research/AGENTS.md)) |
-| `app/backtest/` | Portfolio backtester (being added; see its own AGENTS.md) |
+| `app/backtest/` | Portfolio backtester, run log, readiness gates, borrow archiver ([AGENTS.md](app/backtest/AGENTS.md)) |
+| `app/journal/` | Forward signal journal ([AGENTS.md](app/journal/AGENTS.md)) |
+| `app/alerts/` | Discord alerts, halt storage, alert log ([AGENTS.md](app/alerts/AGENTS.md)) |
+| `app/fundamentals/` | Cash runway, dilution, short interest ([AGENTS.md](app/fundamentals/AGENTS.md)) |
+| `app/newsletter/` | Weekly newsletter: `service.py` (build, render, archive), `build.py` (CLI) ([AGENTS.md](app/newsletter/AGENTS.md)) |
 | `tests/` | pytest; `pytest.ini` sets `pythonpath = .`, `testpaths = tests` |
 
 ## Startup (`lifespan` in main.py)
@@ -23,8 +27,11 @@ Pinned versions in `requirements.txt`; `requirements-dev.txt` adds pytest.
 `init_db()` -> `broadcaster.bind_loop()` -> `TickerUniverse.load(data_dir, sec_user_agent)` ->
 `load_companies()` (public-float frames -> `sync_companies` -> `state.sizes`) -> `backfill_signals()` ->
 `load_study()` (reads `{data_dir}/event_study.json`, keeps 20-day rows as `state.evidence`) ->
-`Enricher` if `ANTHROPIC_API_KEY` set -> `scheduler()` task (calls `run_ingest` in a thread every
-`INGEST_INTERVAL_SECONDS`). `to_out()` attaches `size_bucket` to tickers and `Evidence` per (signal, bucket).
+`Enricher` if `ANTHROPIC_API_KEY` set -> `Alerter` hook -> `scheduler()` task (every `INGEST_INTERVAL_SECONDS`, each step
+in a thread with its own try/except: `run_ingest`, IBKR borrow snapshot, `journal_cycle()`, `newsletter_cycle()`) and,
+when `EDGAR_POLL_SECONDS` > 0, `edgar_poller()` (fast EDGAR poll + Nasdaq halts). `newsletter_cycle()` calls
+`newsletter.ensure_latest`, which builds the most recently completed week (ending Sunday, ET) once and is a no-op
+afterwards; issues are files under `{data_dir}/newsletters/`, not DB rows. `to_out()` attaches `size_bucket` to tickers and `Evidence` per (signal, bucket).
 
 ## Config / env (`app/config.py`)
 
@@ -42,7 +49,11 @@ pydantic-settings, case-insensitive env names, also reads `.env` from the cwd. A
 | `ENRICH_MODEL` | `claude-opus-5-5` | |
 | `ENRICH_MAX_PER_CYCLE` / `FILING_TEXT_MAX_PER_CYCLE` | 25 / 40 | per-cycle caps |
 | `INGEST_INTERVAL_SECONDS` / `INGEST_ON_STARTUP` | 300 / true | |
+| `EDGAR_POLL_SECONDS` | 30 | fast EDGAR + halts loop; 0 disables it (EDGAR joins the slow cycle) |
+| `DISCORD_WEBHOOK_URL` | none | set -> alerts go to Discord. Keep it in `.env` |
+| `ALERT_MIN_SEVERITY` / `ALERT_SIZES` / `ALERT_MAX_AGE_MINUTES` | 2 / `["nano","micro","small"]` / 15 | alert filters (see alerts/AGENTS.md) |
 | `CORS_ORIGINS` | `["http://localhost:3000"]` | JSON list |
+| `PUBLIC_BASE_URL` | `http://localhost:3000` | public site origin for newsletter links (ticker pages, methodology, track record, Edge Lab, disclaimer, archive). The frontend reads its own `NEXT_PUBLIC_SITE_URL` (frontend/AGENTS.md); keep them equal |
 
 `get_settings()` is `lru_cache`d and `db.engine` is built at import time, so env must be set before
 `app.*` is imported (that is why `tests/conftest.py` sets env at module top).
@@ -68,8 +79,14 @@ migrated (do them by hand or introduce Alembic). Test against an existing Postgr
 
 ## Testing patterns
 
-Run: `docker compose build api && docker compose run --rm api pytest -q` (no host Python; code is baked
-into the image, so rebuild after every edit).
+Run: `bash scripts/pytest.sh [tests/test_x.py ...]` from the repo root. It mounts `backend/` into the
+`quantdesk-api-test` dependency image, so it tests the current source without a rebuild and is safe to run in
+parallel. Rebuild that image only when requirements change (`docker build -q -t quantdesk-api-test backend`).
+The full path (`docker compose build api && docker compose run --rm api pytest -q`) bakes code into the image;
+in multi-agent runs only the Verify step uses it (docs/AGENT_PROCESS.md).
+
+- `tests/test_newsletter.py` covers the newsletter build, renderers, archive and the banned-word check;
+  `tests/test_api.py` covers `/api/tickers/sitemap` (routed before `/api/tickers/{symbol}`, Company filter, `days`).
 
 - `tests/conftest.py` sets `DATABASE_URL=sqlite:///:memory:` and removes `ANTHROPIC_API_KEY` before imports.
   `_make_engine` uses `StaticPool` for `:memory:` so every session shares one DB.

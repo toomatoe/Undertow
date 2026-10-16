@@ -1,31 +1,59 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { api, type Halt } from "@/lib/api";
 
+// Fixed locale and US Eastern time (the market's clock), so server-rendered and client-rendered text match.
+const TZ = "America/New_York";
+
 function time(iso: string): string {
-  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", timeZone: TZ });
 }
 
 function day(iso: string): string {
-  return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: TZ });
 }
 
-/** Trading halts from the Nasdaq Trader feed. `symbol` scopes it to one ticker; otherwise small caps today. */
-export default function HaltsPanel({ symbol, size = "nano,micro,small", hours = 24 }: { symbol?: string; size?: string; hours?: number }) {
-  const [halts, setHalts] = useState<Halt[] | null>(null);
+function full(iso: string): string {
+  return `${new Date(iso).toLocaleString("en-US", { timeZone: TZ })} ET`;
+}
+
+/**
+ * Trading halts from the Nasdaq Trader feed. `symbol` scopes it to one ticker; otherwise small caps today.
+ * `initialData` (fetched on the server) renders immediately; the 60 s refresh still runs.
+ */
+export default function HaltsPanel({
+  symbol,
+  size = "nano,micro,small",
+  hours = 24,
+  initialData,
+}: {
+  symbol?: string;
+  size?: string;
+  hours?: number;
+  initialData?: Halt[];
+}) {
+  const [halts, setHalts] = useState<Halt[] | null>(initialData ?? null);
   const [error, setError] = useState<string | null>(null);
   const [showPauses, setShowPauses] = useState(false);
+  // Skip the first fetch for the query the server already answered (also under React strict-mode re-runs).
+  const seeded = useRef<string | null>(initialData !== undefined ? `${symbol}|${size}|${hours}` : null);
 
   useEffect(() => {
     const load = () =>
       api
         .halts(symbol ? { symbol, hours: 24 * 365 } : { size, hours })
-        .then(setHalts)
+        .then((h) => {
+          setHalts(h);
+          setError(null);
+        })
         .catch((e) => setError(String(e.message ?? e)));
-    load();
+    if (seeded.current !== `${symbol}|${size}|${hours}`) {
+      seeded.current = null;
+      load();
+    }
     const t = setInterval(load, 60_000);
     return () => clearInterval(t);
   }, [symbol, size, hours]);
@@ -51,7 +79,7 @@ export default function HaltsPanel({ symbol, size = "nano,micro,small", hours = 
       <ul className="halts">
         {visible.slice(0, symbol ? 20 : 12).map((h) => (
           <li key={h.symbol + h.halted_at} className={h.serious ? "serious" : ""}>
-            <span className="halt-time" title={new Date(h.halted_at).toLocaleString()}>
+            <span className="halt-time" title={full(h.halted_at)}>
               {symbol ? `${day(h.halted_at)} ` : ""}
               {time(h.halted_at)}
             </span>
@@ -68,7 +96,7 @@ export default function HaltsPanel({ symbol, size = "nano,micro,small", hours = 
           </li>
         ))}
       </ul>
-      <p className="muted small">Source: Nasdaq Trader halt feed, checked every 30 seconds.</p>
+      <p className="muted small">Source: Nasdaq Trader halt feed, checked every 30 seconds. Times are US Eastern.</p>
     </section>
   );
 }
