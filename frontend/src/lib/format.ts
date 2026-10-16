@@ -81,3 +81,27 @@ export function pctOr(v: number | null | undefined, digits = 1, signed = true): 
   if (!finite(v)) return "—";
   return signed ? pct(v, digits) : pctAbs(v, digits);
 }
+
+/** IBKR borrow fee (annual fraction) as "% / yr": "0.3% / yr", "49.7% / yr", "393% / yr". */
+export function formatBorrowFee(v: number | null | undefined): string {
+  if (!finite(v)) return "—";
+  const p = v * 100;
+  return `${p >= 100 ? p.toFixed(0) : p.toFixed(1)}% / yr`;
+}
+
+/** Expected direction of a signal as a shape (never color alone): ▼ down, ▲ up, ◆ either way. */
+export function directionMark(d: string): string {
+  return d === "-" ? "▼" : d === "+" ? "▲" : "◆";
+}
+
+export const DIRECTION_WORDS: Record<string, string> = {
+  "-": "expected to fall",
+  "+": "expected to rise",
+  "?": "direction unclear",
+};
+
+/** A price with sensible decimals for penny stocks. */
+export function formatPrice(v: number | null | undefined): string {
+  if (!finite(v)) return "—";
+  return `$${v < 1 ? v.toFixed(3) : v.toFixed(2)}`;
+}

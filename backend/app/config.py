@@ -38,6 +38,14 @@ class Settings(BaseSettings):
     filing_text_max_per_cycle: int = 40
 
     ingest_interval_seconds: int = 300
+    # EDGAR gets its own fast loop for alerts (0 disables it and EDGAR joins the slow cycle)
+    edgar_poll_seconds: int = 30
+
+    # Alerts: Discord incoming-webhook URL (Server Settings > Integrations > Webhooks). Keep it in .env.
+    discord_webhook_url: str | None = None
+    alert_min_severity: int = 2
+    alert_sizes: list[str] = ["nano", "micro", "small"]
+    alert_max_age_minutes: int = 15  # never alert on old filings (e.g. backlog after a restart)
     ingest_on_startup: bool = True
     cors_origins: list[str] = ["http://localhost:3000"]
 

@@ -4,9 +4,10 @@ import logging
 import os
 from collections import defaultdict
 from contextlib import asynccontextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Literal
 
+import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -17,11 +18,15 @@ from app.backtest import borrow
 from app.backtest.report import is_search, read_runs, trial_id
 from app.config import get_settings
 from app.db import SessionLocal, get_session, init_db
-from app.models import Article, ArticleTicker, Company, IngestRun, WatchlistItem
+from app.alerts import service as alerts
+from app.alerts.service import Alerter
+from app.fundamentals import service as fundamentals
+from app.journal import service as journal
+from app.models import AlertLog, Article, ArticleTicker, Company, IngestRun, JournalEntry, WatchlistItem
 from app.pipeline.companies import BUCKET_NAMES, load_latest_floats, sync_companies
 from app.pipeline.enrich import Enricher
 from app.pipeline.events import broadcaster
-from app.pipeline.ingest import backfill_signals, build_sources, run_ingest
+from app.pipeline.ingest import NEW_ARTICLE_HOOKS, backfill_signals, build_sources, poll_edgar, run_ingest
 from app.pipeline.signals import ALL_SIGNALS, signal_dict
 from app.pipeline.tickers import TickerUniverse
 from app.research.eventstudy import RESULTS_FILE
@@ -50,6 +55,8 @@ class AppState:
     sizes: dict[str, str | None] = {}  # symbol -> size bucket
     study: dict | None = None
     evidence: dict[tuple[str, str], Evidence] = {}  # (signal, bucket) -> result
+    journal_marked: date | None = None
+    alerter: Alerter | None = None
 
 
 state = AppState()
@@ -99,7 +106,37 @@ async def scheduler() -> None:
             await asyncio.to_thread(borrow.snapshot, settings.data_dir)
         except Exception as exc:
             log.warning("Borrow snapshot failed: %s", exc)
+        try:
+            await asyncio.to_thread(journal_cycle)
+        except Exception:
+            log.exception("Journal cycle failed")
         await asyncio.sleep(settings.ingest_interval_seconds)
+
+
+async def edgar_poller() -> None:
+    """Fast loop: poll EDGAR every edgar_poll_seconds so alerts go out within seconds of a filing."""
+    await asyncio.sleep(5)
+    while True:
+        try:
+            await asyncio.to_thread(poll_edgar, settings, state.universe)
+        except Exception:
+            log.exception("EDGAR poll crashed")
+        await asyncio.sleep(settings.edgar_poll_seconds)
+
+
+def evidence_for(article: Article) -> list[dict]:
+    return [e.model_dump() for e in to_out(article).evidence]
+
+
+def journal_cycle() -> None:
+    """Record new signals every cycle; mark prices at most once per day."""
+    with SessionLocal() as session:
+        if n := journal.record_new(session, settings.data_dir):
+            log.info("Journal: recorded %d new signal(s)", n)
+        today = datetime.now(timezone.utc).date()
+        if state.journal_marked != today:
+            log.info("Journal marked: %s", journal.mark(session, settings.data_dir))
+            state.journal_marked = today
 
 
 def load_companies() -> None:
@@ -125,9 +162,16 @@ async def lifespan(app: FastAPI):
     if settings.enrich_enabled:
         state.enricher = Enricher(settings.anthropic_api_key, settings.enrich_model)
         log.info("LLM enrichment on (%s)", settings.enrich_model)
-    task = asyncio.create_task(scheduler())
+    state.alerter = Alerter(settings, evidence_for)
+    if state.alerter not in NEW_ARTICLE_HOOKS:
+        NEW_ARTICLE_HOOKS.append(state.alerter)
+    log.info("Alerts: channel=%s, min severity %d, sizes %s", state.alerter.channel, settings.alert_min_severity, settings.alert_sizes)
+    tasks = [asyncio.create_task(scheduler())]
+    if settings.edgar_poll_seconds > 0:
+        tasks.append(asyncio.create_task(edgar_poller()))
     yield
-    task.cancel()
+    for t in tasks:
+        t.cancel()
 
 
 app = FastAPI(title="QuantDesk API", version="0.2.0", lifespan=lifespan)
@@ -252,6 +296,71 @@ def event_study():
     return state.study
 
 
+@app.get("/api/alerts")
+def alerts_status(limit: int = Query(50, ge=1, le=500), session: Session = Depends(get_session)):
+    """Alert configuration, delivery log and detection latency (EDGAR acceptance -> detected)."""
+    rows = session.execute(
+        select(AlertLog, Article.title, Article.url).join(Article, Article.id == AlertLog.article_id)
+        .order_by(AlertLog.id.desc()).limit(limit)
+    ).all()
+    return {
+        "channel": state.alerter.channel if state.alerter else "none",
+        "min_severity": settings.alert_min_severity,
+        "sizes": settings.alert_sizes,
+        "poll_seconds": settings.edgar_poll_seconds,
+        **alerts.stats(session),
+        "log": [
+            {"article_id": a.article_id, "title": t, "url": u, "status": a.status, "reason": a.reason,
+             "detected_at": a.detected_at.isoformat(), "latency_seconds": a.latency_seconds}
+            for a, t, u in rows
+        ],
+    }
+
+
+@app.post("/api/alerts/test")
+def alerts_test():
+    if state.alerter is None:
+        raise HTTPException(503, "Alerter not started")
+    return state.alerter.send_test()
+
+
+@app.get("/api/journal")
+def journal_entries(
+    signal: str | None = None,
+    size: str | None = None,
+    status: str | None = None,
+    limit: int = Query(200, ge=1, le=2000),
+    session: Session = Depends(get_session),
+):
+    """Forward track record: every signal as recorded when it was filed, newest first."""
+    stmt = select(JournalEntry, Article.title, Article.url).join(Article, Article.id == JournalEntry.article_id)
+    if signal:
+        stmt = stmt.where(JournalEntry.primary_signal == signal)
+    if sizes := parse_sizes(size):
+        stmt = stmt.where(JournalEntry.size_bucket.in_(sizes))
+    if status:
+        stmt = stmt.where(JournalEntry.status == status)
+    rows = session.execute(stmt.order_by(JournalEntry.filed_at.desc()).limit(limit)).all()
+    out = []
+    for e, title, url in rows:
+        d = {c.name: getattr(e, c.name) for c in JournalEntry.__table__.columns}
+        d["filed_at"] = (e.filed_at if e.filed_at.tzinfo else e.filed_at.replace(tzinfo=timezone.utc)).isoformat()
+        d.update(title=title, filing_url=url, signal_label=ALL_SIGNALS[e.primary_signal].label if e.primary_signal in ALL_SIGNALS else e.primary_signal)
+        out.append(d)
+    total = session.scalar(select(func.count(JournalEntry.id))) or 0
+    first = session.scalar(select(func.min(JournalEntry.filed_at)))
+    return {"total": total, "since": first.isoformat() if first else None, "entries": out}
+
+
+@app.get("/api/journal/summary")
+def journal_summary(session: Session = Depends(get_session)):
+    expected = {}
+    if state.study:
+        for r in state.study["results"]:
+            expected[(r["signal"], r["bucket"], r["horizon_days"])] = r
+    return {"rows": journal.summary(session, expected), "marked": state.journal_marked.isoformat() if state.journal_marked else None}
+
+
 @app.get("/api/backtest/report")
 def backtest_report():
     path = os.path.join(settings.data_dir, "backtests", "report_latest.json")
@@ -343,6 +452,18 @@ def ticker_detail(symbol: str, days: int = Query(30, ge=1, le=365), session: Ses
         daily=daily,
         articles=[to_out(a) for a in articles[:50]],
     )
+
+
+@app.get("/api/tickers/{symbol}/fundamentals")
+async def ticker_fundamentals(symbol: str, session: Session = Depends(get_session)):
+    """Cash runway and dilution history from SEC company facts and filings (cached daily)."""
+    company = session.get(Company, symbol.upper())
+    if company is None:
+        raise HTTPException(404, f"Unknown ticker {symbol}")
+    try:
+        return await asyncio.to_thread(fundamentals.company_profile, company.cik, settings.data_dir, settings.sec_user_agent)
+    except httpx.HTTPError as exc:
+        raise HTTPException(502, f"SEC data unavailable: {exc}") from exc
 
 
 @app.get("/api/watchlist", response_model=list[TrendingTicker])

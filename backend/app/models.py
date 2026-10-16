@@ -1,6 +1,6 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, BigInteger, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -78,6 +78,58 @@ class WatchlistItem(Base):
 
     symbol: Mapped[str] = mapped_column(String(12), primary_key=True)
     added_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class JournalEntry(Base):
+    """Forward test: one row per signal-bearing filing, created when first seen, never rewritten.
+
+    Only the marking fields (prices, abnormal returns, status) are filled in later.
+    """
+
+    __tablename__ = "signal_journal"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    article_id: Mapped[int] = mapped_column(ForeignKey("articles.id"), unique=True)
+    ticker: Mapped[str] = mapped_column(String(12), index=True)
+    cik: Mapped[int | None] = mapped_column(Integer)
+    form: Mapped[str | None] = mapped_column(String(32))
+    signals: Mapped[list[str]] = mapped_column(JSON)
+    primary_signal: Mapped[str] = mapped_column(String(32), index=True)
+    direction: Mapped[str] = mapped_column(String(1))  # expected direction of the primary signal
+    severity: Mapped[int] = mapped_column(Integer)
+    size_bucket: Mapped[str | None] = mapped_column(String(8), index=True)
+    public_float: Mapped[int | None] = mapped_column(BigInteger)
+    filed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+    # Borrow at the time the signal was recorded (IBKR snapshot), if one was fresh
+    borrow_fee: Mapped[float | None] = mapped_column(Float)
+    borrow_available: Mapped[int | None] = mapped_column(BigInteger)  # shares; -1 = plenty (">")
+    borrow_snapshot: Mapped[str | None] = mapped_column(String(16))
+
+    # Marking: filled in by the daily job
+    status: Mapped[str] = mapped_column(String(16), default="waiting", index=True)  # waiting|open|complete|data_ended|no_data
+    entry_date: Mapped[date | None] = mapped_column(Date)
+    entry_price: Mapped[float | None] = mapped_column(Float)  # adjusted close, day 0 + 1
+    raw_entry_price: Mapped[float | None] = mapped_column(Float)
+    abn_1: Mapped[float | None] = mapped_column(Float)  # stock return minus IWM, from entry
+    abn_5: Mapped[float | None] = mapped_column(Float)
+    abn_20: Mapped[float | None] = mapped_column(Float)
+    marked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AlertLog(Base):
+    """One row per alert decision on a new signal filing: sent, skipped (and why), or failed."""
+
+    __tablename__ = "alert_log"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    article_id: Mapped[int] = mapped_column(ForeignKey("articles.id"), index=True)
+    channel: Mapped[str] = mapped_column(String(16))  # discord | none
+    status: Mapped[str] = mapped_column(String(16), index=True)  # sent | skipped | failed
+    reason: Mapped[str | None] = mapped_column(String(64))
+    detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    latency_seconds: Mapped[float | None] = mapped_column(Float)  # EDGAR acceptance -> detected here
 
 
 class IngestRun(Base):

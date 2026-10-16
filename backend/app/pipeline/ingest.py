@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from collections.abc import Callable
 import time
 from datetime import datetime, timedelta, timezone
 
@@ -25,15 +26,21 @@ log = logging.getLogger(__name__)
 
 TITLE_DEDUPE_WINDOW = timedelta(days=2)
 _lock = threading.Lock()  # one cycle at a time (scheduler + manual trigger)
+_edgar_lock = threading.Lock()  # one EDGAR poll at a time
 # When one symbol arrives with several tagging methods, keep the most reliable (lower wins)
 METHOD_PRIORITY = {"vendor": 0, "edgar": 1, "exchange": 2, "cashtag": 3, "llm": 4}
 
 
-def build_sources(settings: Settings, universe: TickerUniverse) -> list[Source]:
+# Called with each newly stored article id, after commit, from the ingest thread.
+# Hooks must be quick and must not raise (exceptions are logged and swallowed).
+NEW_ARTICLE_HOOKS: list[Callable[[int], None]] = []
+
+
+def build_sources(settings: Settings, universe: TickerUniverse, include_edgar: bool = True) -> list[Source]:
     sources: list[Source] = []
     if settings.alpaca_enabled:
         sources.append(AlpacaNewsSource(settings.alpaca_api_key_id, settings.alpaca_api_secret_key))
-    if settings.edgar_enabled:
+    if settings.edgar_enabled and include_edgar:
         sources.append(EdgarSource(settings.sec_user_agent, universe))
     for name, url in settings.rss_feeds.items():
         sources.append(RssSource(name, url, settings.sec_user_agent))
@@ -156,29 +163,55 @@ def enrich_pending(session: Session, enricher: Enricher, universe: TickerUnivers
     return done
 
 
+def _store_source(source: Source, universe: TickerUniverse) -> IngestRun:
+    run = IngestRun(source_name=source.name, fetched=0, inserted=0)
+    with SessionLocal() as session:
+        try:
+            raws = source.fetch()
+            run.fetched = len(raws)
+            new_ids = []
+            for raw in sorted(raws, key=lambda r: r.published_at):
+                article = store(session, raw, universe)
+                if article:
+                    run.inserted += 1
+                    session.commit()
+                    new_ids.append(article.id)
+                    broadcaster.publish("article", {"id": article.id})
+        except Exception as exc:
+            session.rollback()
+            run.error = f"{type(exc).__name__}: {exc}"[:1000]
+            log.warning("Source %s failed: %s", source.name, run.error)
+            new_ids = []
+        session.add(run)
+        session.commit()
+    for article_id in new_ids:
+        for hook in NEW_ARTICLE_HOOKS:
+            try:
+                hook(article_id)
+            except Exception:
+                log.exception("New-article hook failed for %s", article_id)
+    return run
+
+
+def poll_edgar(settings: Settings, universe: TickerUniverse) -> dict:
+    """Fast path: EDGAR feeds only, no filing text or enrichment, so alerts go out within seconds."""
+    if not settings.edgar_enabled or not _edgar_lock.acquire(blocking=False):
+        return {"status": "skipped"}
+    try:
+        run = _store_source(EdgarSource(settings.sec_user_agent, universe), universe)
+        return {"fetched": run.fetched, "inserted": run.inserted, "error": run.error}
+    finally:
+        _edgar_lock.release()
+
+
 def run_ingest(settings: Settings, universe: TickerUniverse, enricher: Enricher | None) -> dict:
     if not _lock.acquire(blocking=False):
         return {"status": "already_running"}
     try:
         stats = {"sources": {}, "inserted": 0, "enriched": 0}
-        for source in build_sources(settings, universe):
-            run = IngestRun(source_name=source.name, fetched=0, inserted=0)
-            with SessionLocal() as session:
-                try:
-                    raws = source.fetch()
-                    run.fetched = len(raws)
-                    for raw in sorted(raws, key=lambda r: r.published_at):
-                        article = store(session, raw, universe)
-                        if article:
-                            run.inserted += 1
-                            session.commit()
-                            broadcaster.publish("article", {"id": article.id})
-                except Exception as exc:
-                    session.rollback()
-                    run.error = f"{type(exc).__name__}: {exc}"[:1000]
-                    log.warning("Source %s failed: %s", source.name, run.error)
-                session.add(run)
-                session.commit()
+        # With fast polling on, EDGAR has its own loop (poll_edgar) and is left out here
+        for source in build_sources(settings, universe, include_edgar=settings.edgar_poll_seconds <= 0):
+            run = _store_source(source, universe)
             stats["sources"][source.name] = {"fetched": run.fetched, "inserted": run.inserted, "error": run.error}
             stats["inserted"] += run.inserted
 

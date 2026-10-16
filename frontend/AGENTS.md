@@ -12,6 +12,7 @@ src/app/signals/page.tsx    /signals         filing signals (default size "nano,
 src/app/lab/page.tsx        /lab             Edge Lab: event-study results
 src/app/ticker/[symbol]/page.tsx  /ticker/X  ticker detail (params is a Promise, unwrapped with use())
 src/app/research/page.tsx   /research        static "planned" page (AI research assistant)
+src/app/track-record/page.tsx /track-record forward signal journal vs Edge Lab (components in src/components/track/)
 src/app/backtest/page.tsx   /backtest        backtest report + live-readiness log (components in src/components/backtest/)
 src/app/trading/page.tsx    /trading         static "not built" page (paper trading plan)
 src/components/             shared client components
@@ -36,6 +37,10 @@ components fetching data and no API routes in Next.
   friction waterfall, borrow fees, equity/drawdown charts (inline SVG `TimeChart`), readiness checklist,
   real-money projection, stress, robustness, trade log (CSV export), run log, assumptions. Types `BacktestReport`
   etc. mirror the JSON from `backend/app/backtest/report.py`.
+- `/track-record`: `api.journal()` + `api.journalSummary()`; status tiles, live-vs-expected table ("too early" under
+  5 results), nano-offering spotlight with a running-mean chart, filterable journal table with CSV.
+- `/ticker/[symbol]` also renders `DilutionPanel` (`api.fundamentals()`): runway, cash, 1-year share change, offering history.
+- Charts measure their container width. In a hidden/zero-width browser pane they render no SVG; that is expected, not a bug.
 - `/research`, `/trading`: placeholders. Trading must stay paper-only; agents never place orders.
 
 ## Components
