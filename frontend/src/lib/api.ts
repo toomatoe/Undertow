@@ -391,6 +391,138 @@ export interface Halt {
   size_bucket: SizeBucket | null;
 }
 
+// --- Weekly newsletter (mirrors backend/app/newsletter/service.py build_issue) ---
+
+export type Direction = "-" | "+" | "?";
+
+export interface NewsletterSignal {
+  code: string;
+  label: string;
+  direction: Direction;
+  severity: number;
+}
+
+/**
+ * Edge Lab 20-day row for the filing's signal and size: historical, hypothetical.
+ * The backend copies these with `row.get(k)` from event_study.json, so every stat can be null
+ * (the newsletter renderers then omit the evidence line when `mean_abnormal` is null).
+ */
+export interface NewsletterEvidence {
+  signal: string;
+  label: string;
+  n: number | null;
+  horizon_days: number | null;
+  mean_abnormal: number | null;
+  median_abnormal: number | null;
+  excess_vs_baseline: number | null;
+  t_stat: number | null;
+  significant: boolean | null;
+}
+
+export interface NewsletterFiling {
+  article_id: number;
+  ticker: string;
+  company: string;
+  size: SizeBucket;
+  public_float: number | null;
+  form: string | null;
+  severity: number;
+  signals: NewsletterSignal[];
+  filed_at: string;
+  url: string;
+  evidence: NewsletterEvidence | null;
+}
+
+export interface NewsletterRunway {
+  status: "unknown" | "cash_flow_positive" | "burning";
+  months: number | null;
+  runs_out_around: string | null;
+  cash_as_of: string | null;
+  stale?: boolean;
+}
+
+export interface NewsletterDilution {
+  ticker: string;
+  company: string;
+  size: SizeBucket;
+  public_float: number | null;
+  offering_signals: number;
+  priced: boolean;
+  filings: { form: string | null; signals: string[]; filed_at: string; url: string }[];
+  runway: NewsletterRunway | null;
+  reasons: string[];
+}
+
+export interface NewsletterHalt {
+  symbol: string;
+  name: string;
+  market: string;
+  reason_code: string;
+  reason: string;
+  halted_at: string;
+  resumed_at: string | null;
+  size: SizeBucket | null;
+}
+
+export interface NewsletterTrackRow {
+  signal: string;
+  label: string;
+  direction: Direction;
+  bucket: string;
+  n: number;
+  n_20: number;
+  mean_20: number | null;
+  median_20: number | null;
+  hit_20: number | null;
+  expected_20: number | null;
+}
+
+export interface NewsletterHeadline {
+  signal_filings: number;
+  companies: number;
+  by_severity: Record<"1" | "2" | "3", number>;
+  by_size: Record<"nano" | "micro" | "small", number>;
+  dilution_watch: number;
+  serious_halts: number;
+}
+
+export interface NewsletterIssueSummary {
+  id: string;
+  title: string;
+  week_start: string;
+  week_end: string;
+  generated_at: string;
+  headline: NewsletterHeadline;
+}
+
+export interface NewsletterIssue extends NewsletterIssueSummary {
+  partial: boolean;
+  data_through: string;
+  base_url: string;
+  sources_note: string;
+  coverage_note: string | null;
+  top_filings: NewsletterFiling[];
+  top_filings_total: number;
+  dilution_watch: NewsletterDilution[];
+  runway_lookups: number;
+  serious_halts: NewsletterHalt[];
+  serious_halts_total: number;
+  track_record: {
+    recorded: number;
+    complete_20d: number;
+    min_n: number;
+    rows: NewsletterTrackRow[];
+    collecting: { recorded: number; first_due: string | null } | null;
+  };
+  research_note: { text: string; strategy: string | null; report_date: string | null } | null;
+  links: Record<"methodology" | "track_record" | "edge_lab" | "disclaimer" | "archive", string>;
+  disclaimer: string[];
+  /** Banned words found in our own prose (company names and tickers excluded); [] normally, absent on older issues. */
+  flagged_words?: string[];
+  markdown: string;
+  html?: string; // only on the preview response
+}
+
 export interface ArticleFilters {
   q?: string;
   ticker?: string;
@@ -441,6 +573,19 @@ export const api = {
   backtestRuns: (limit = 200) => get<BacktestRunLog>(`/api/backtest/runs?limit=${limit}`),
   journal: (f: JournalFilters = {}) => get<JournalPage>(`/api/journal${query(f)}`),
   journalSummary: () => get<JournalSummary>("/api/journal/summary"),
+  newsletterIssues: () => get<NewsletterIssueSummary[]>("/api/newsletter/issues"),
+  newsletterIssue: (id: string) => get<NewsletterIssue>(`/api/newsletter/${encodeURIComponent(id)}`),
+  newsletterHtmlUrl: (id: string) => `${API_BASE}/api/newsletter/${encodeURIComponent(id)}.html`,
+  newsletterHtml: (id: string) =>
+    fetch(`${API_BASE}/api/newsletter/${encodeURIComponent(id)}.html`, { cache: "no-store" }).then((r) => {
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.text();
+    }),
+  newsletterPreview: () =>
+    fetch(`${API_BASE}/api/newsletter/preview`, { method: "POST", cache: "no-store" }).then((r) => {
+      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+      return r.json() as Promise<NewsletterIssue>;
+    }),
   ingest: () => fetch(`${API_BASE}/api/ingest`, { method: "POST" }).then((r) => r.json()),
   streamUrl: `${API_BASE}/api/stream`,
 };

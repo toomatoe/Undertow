@@ -10,7 +10,7 @@ from typing import Literal
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -22,6 +22,7 @@ from app.alerts import service as alerts
 from app.alerts.service import Alerter
 from app.fundamentals import service as fundamentals
 from app.journal import service as journal
+from app.newsletter import service as newsletter
 from app.models import AlertLog, Article, ArticleTicker, Company, IngestRun, JournalEntry, TradingHalt, WatchlistItem
 from app.sources import halts as halts_source
 from app.pipeline.companies import BUCKET_NAMES, load_latest_floats, sync_companies
@@ -111,6 +112,10 @@ async def scheduler() -> None:
             await asyncio.to_thread(journal_cycle)
         except Exception:
             log.exception("Journal cycle failed")
+        try:  # weekly newsletter: build last week's issue once, after the week is complete
+            await asyncio.to_thread(newsletter_cycle)
+        except Exception:
+            log.exception("Newsletter build failed")
         await asyncio.sleep(settings.ingest_interval_seconds)
 
 
@@ -149,6 +154,17 @@ def journal_cycle() -> None:
         if state.journal_marked != today:
             log.info("Journal marked: %s", journal.mark(session, settings.data_dir))
             state.journal_marked = today
+
+
+def newsletter_kwargs() -> dict:
+    return {"user_agent": settings.sec_user_agent, "public_base_url": settings.public_base_url}
+
+
+def newsletter_cycle() -> None:
+    """Build the issue for the most recently completed week (ending Sunday) if it doesn't exist yet."""
+    with SessionLocal() as session:
+        if built := newsletter.ensure_latest(session, settings.data_dir, **newsletter_kwargs()):
+            log.info("Newsletter: built issue %s", built)
 
 
 def load_companies() -> None:
@@ -398,6 +414,36 @@ def journal_summary(session: Session = Depends(get_session)):
     return {"rows": journal.summary(session, expected), "marked": state.journal_marked.isoformat() if state.journal_marked else None}
 
 
+@app.get("/api/newsletter/issues")
+def newsletter_issues():
+    """Archive of saved issues, newest first: id, week range, headline counts."""
+    return newsletter.list_issues(settings.data_dir)
+
+
+@app.post("/api/newsletter/preview")
+def newsletter_preview(session: Session = Depends(get_session)):
+    """The current week so far, built on demand and never saved."""
+    issue = newsletter.preview(session, settings.data_dir, **newsletter_kwargs())
+    return {**issue, "markdown": newsletter.render_markdown(issue), "html": newsletter.render_html(issue)}
+
+
+@app.get("/api/newsletter/{issue_id}.html", response_class=HTMLResponse)
+def newsletter_html(issue_id: str):
+    page = newsletter.load_text(settings.data_dir, issue_id, "html")
+    if page is None:
+        raise HTTPException(404, f"No newsletter issue {issue_id}")
+    return HTMLResponse(page)
+
+
+@app.get("/api/newsletter/{issue_id}")
+def newsletter_issue(issue_id: str):
+    issue = newsletter.load_issue(settings.data_dir, issue_id)
+    if issue is None:
+        raise HTTPException(404, f"No newsletter issue {issue_id}")
+    md = newsletter.load_text(settings.data_dir, issue_id, "md") or newsletter.render_markdown(issue)
+    return {**issue, "markdown": md}
+
+
 @app.get("/api/backtest/report")
 def backtest_report():
     path = os.path.join(settings.data_dir, "backtests", "report_latest.json")
@@ -450,6 +496,25 @@ def trending(
             size_bucket=state.sizes.get(sym),
         )
         for sym, n, avg in rows
+    ]
+
+
+@app.get("/api/tickers/sitemap")
+def ticker_sitemap(days: int = Query(180, ge=1, le=3650), session: Session = Depends(get_session)):
+    """Tickers worth a public page: any company with a filing signal or article in the window, most recent first."""
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = session.execute(
+        select(ArticleTicker.symbol, func.max(Article.published_at), func.count())
+        .join(Article)
+        .where(Article.published_at >= since)
+        .group_by(ArticleTicker.symbol)
+        .order_by(func.max(Article.published_at).desc())
+    ).all()
+    return [
+        {"symbol": sym, "last_activity": (last if last.tzinfo else last.replace(tzinfo=timezone.utc)).isoformat(), "items": n,
+         "size_bucket": state.sizes.get(sym)}
+        for sym, last, n in rows
+        if sym in state.sizes
     ]
 
 

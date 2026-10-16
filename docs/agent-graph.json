@@ -1,0 +1,151 @@
+{
+  "$comment": "Machine-readable module graph for agents. Planners assign work items to modules so parallel builders never share files; reviewers use depends_on/used_by to find what a change can break; the verify step uses tests + shared_resources. Keep in sync when adding a module (see docs/AGENT_PROCESS.md). Every repo file matches exactly one module path (dirs end in /); a module owns its own test files, and tests lists what to run.",
+  "version": 1,
+  "shared_resources": {
+    "docker_api_image": "Building/running the api image (`docker compose build api`, `docker compose run --rm api ...`). One agent at a time: parallel builds collide.",
+    "next_dot_dir": "frontend/.next. `next build` clobbers the running dev server; only the serialized verify step may build, after stopping the dev server.",
+    "postgres_db": "The live dev database (docker volume pgdata). Schema changes go through db._add_missing_columns (nullable columns only).",
+    "shared_hotspots": "Files many features touch: backend/app/main.py, backend/app/models.py, backend/app/config.py, frontend/src/lib/api.ts, frontend/src/components/Nav.tsx, frontend/src/app/globals.css. At most one builder per wave may edit each; globals.css may be appended by several only under their own /* --- Section --- */ header."
+  },
+  "modules": [
+    {
+      "id": "api",
+      "paths": ["backend/app/main.py", "backend/app/schemas.py", "backend/tests/test_api.py"],
+      "agents_md": "backend/AGENTS.md",
+      "summary": "FastAPI routes (incl. /api/newsletter/*, /api/tickers/sitemap), lifespan, scheduler loops (slow: ingest, borrow snapshot, journal, newsletter_cycle; fast: EDGAR+halts poller), AppState.",
+      "depends_on": ["config_db", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter"],
+      "tests": ["backend/tests/test_api.py"],
+      "hotspot": true
+    },
+    {
+      "id": "config_db",
+      "paths": ["backend/app/config.py", "backend/app/db.py", "backend/app/models.py", "backend/app/__init__.py"],
+      "agents_md": "backend/AGENTS.md",
+      "summary": "Settings (env), engine/session, stopgap column migration, all ORM tables.",
+      "depends_on": [],
+      "tests": ["backend/tests"],
+      "hotspot": true
+    },
+    {
+      "id": "sources",
+      "paths": ["backend/app/sources/", "backend/tests/test_halts.py"],
+      "agents_md": "backend/app/sources/AGENTS.md",
+      "summary": "RSS, EDGAR multi-form feeds + filing text, Alpaca news, Nasdaq halts.",
+      "depends_on": ["pipeline"],
+      "tests": ["backend/tests/test_pipeline.py", "backend/tests/test_halts.py"]
+    },
+    {
+      "id": "pipeline",
+      "paths": ["backend/app/pipeline/", "backend/tests/test_pipeline.py", "backend/tests/test_ingest.py", "backend/tests/test_enrich.py"],
+      "agents_md": "backend/app/pipeline/AGENTS.md",
+      "summary": "Ingest cycle, fast EDGAR poll, NEW_ARTICLE_HOOKS, dedupe, ticker tagging, company sizes, signal taxonomy, LLM enrichment, SSE.",
+      "depends_on": ["config_db", "sources"],
+      "tests": ["backend/tests/test_pipeline.py", "backend/tests/test_ingest.py", "backend/tests/test_enrich.py"]
+    },
+    {
+      "id": "research",
+      "paths": ["backend/app/research/", "backend/tests/test_eventstudy.py"],
+      "agents_md": "backend/app/research/AGENTS.md",
+      "summary": "Edge Lab event study and Yahoo price loader (raw/adjusted prices, split unadjusting).",
+      "depends_on": ["pipeline"],
+      "tests": ["backend/tests/test_eventstudy.py"]
+    },
+    {
+      "id": "backtest",
+      "paths": ["backend/app/backtest/", "backend/tests/test_backtest.py"],
+      "agents_md": "backend/app/backtest/AGENTS.md",
+      "summary": "Portfolio backtester, run log, readiness gates, IBKR borrow archiver.",
+      "depends_on": ["research", "pipeline"],
+      "tests": ["backend/tests/test_backtest.py"]
+    },
+    {
+      "id": "journal",
+      "paths": ["backend/app/journal/", "backend/tests/test_journal.py"],
+      "agents_md": "backend/app/journal/AGENTS.md",
+      "summary": "Forward signal journal (track record), daily marking, live-vs-expected summary.",
+      "depends_on": ["config_db", "research", "backtest"],
+      "tests": ["backend/tests/test_journal.py"]
+    },
+    {
+      "id": "alerts",
+      "paths": ["backend/app/alerts/", "backend/tests/test_alerts.py"],
+      "agents_md": "backend/app/alerts/AGENTS.md",
+      "summary": "Discord alerts for signal filings and halts, alert log with detection latency.",
+      "depends_on": ["config_db", "pipeline", "sources"],
+      "tests": ["backend/tests/test_alerts.py", "backend/tests/test_halts.py"]
+    },
+    {
+      "id": "fundamentals",
+      "paths": ["backend/app/fundamentals/", "backend/tests/test_fundamentals.py"],
+      "agents_md": "backend/app/fundamentals/AGENTS.md",
+      "summary": "Cash runway, share dilution, offering history (SEC XBRL), FINRA short interest.",
+      "depends_on": [],
+      "tests": ["backend/tests/test_fundamentals.py", "backend/tests/test_halts.py"]
+    },
+    {
+      "id": "newsletter",
+      "paths": ["backend/app/newsletter/", "backend/tests/test_newsletter.py"],
+      "agents_md": "backend/app/newsletter/AGENTS.md",
+      "summary": "Weekly Small-Cap Filing Radar: build, render Markdown/HTML, immutable file archive ({data_dir}/newsletters/), CLI (python -m app.newsletter.build).",
+      "depends_on": ["config_db", "journal", "fundamentals", "alerts", "research", "backtest"],
+      "tests": ["backend/tests/test_newsletter.py"]
+    },
+    {
+      "id": "fe_core",
+      "paths": ["frontend/src/lib/api.ts", "frontend/src/lib/format.ts", "frontend/src/components/Nav.tsx", "frontend/src/components/Footer.tsx", "frontend/src/app/layout.tsx", "frontend/src/app/globals.css", "frontend/src/app/favicon.ico", "frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig.json", "frontend/next.config.ts", "frontend/eslint.config.mjs", "frontend/.gitignore"],
+      "agents_md": "frontend/AGENTS.md",
+      "summary": "Browser API client + types (mirror backend), formatting helpers, nav, layout, global styles/tokens. server-api.ts belongs to fe_ticker.",
+      "depends_on": ["api"],
+      "tests": ["frontend: npx tsc --noEmit"],
+      "hotspot": true
+    },
+    {
+      "id": "fe_news_signals",
+      "paths": ["frontend/src/app/page.tsx", "frontend/src/app/signals/", "frontend/src/components/NewsFeed.tsx", "frontend/src/components/Sidebar.tsx", "frontend/src/components/ArticleCard.tsx", "frontend/src/components/WatchlistPanel.tsx", "frontend/src/components/HaltsPanel.tsx"],
+      "agents_md": "frontend/AGENTS.md",
+      "summary": "News feed and Signals pages.",
+      "depends_on": ["fe_core"],
+      "tests": ["frontend: npx tsc --noEmit"]
+    },
+    {
+      "id": "fe_ticker",
+      "paths": ["frontend/src/app/ticker/", "frontend/src/components/DilutionPanel.tsx", "frontend/src/lib/server-api.ts", "frontend/src/app/sitemap.ts", "frontend/src/app/robots.ts"],
+      "agents_md": "frontend/AGENTS.md",
+      "summary": "Server-rendered SEO ticker pages ((view)/ route group, 404 gate, summary.ts), server-side fetch helpers + SITE_URL (server-api.ts, also used by the newsletter pages), sitemap.xml, robots.txt.",
+      "depends_on": ["fe_core", "fe_content", "api"],
+      "tests": ["frontend: npx tsc --noEmit", "curl raw HTML of /ticker/OCGN", "curl /ticker/NOPE123 -> 404", "curl /sitemap.xml and /robots.txt"]
+    },
+    {
+      "id": "fe_research",
+      "paths": ["frontend/src/app/lab/", "frontend/src/app/backtest/", "frontend/src/components/backtest/", "frontend/src/app/track-record/", "frontend/src/components/track/"],
+      "agents_md": "frontend/AGENTS.md",
+      "summary": "Edge Lab, Backtest and Track record pages and their charts.",
+      "depends_on": ["fe_core"],
+      "tests": ["frontend: npx tsc --noEmit"]
+    },
+    {
+      "id": "fe_content",
+      "paths": ["frontend/src/app/methodology/", "frontend/src/app/legal/", "frontend/src/components/DraftNotice.tsx", "frontend/src/app/newsletter/", "frontend/src/components/newsletter/", "frontend/src/app/research/", "frontend/src/app/trading/"],
+      "agents_md": "frontend/AGENTS.md",
+      "summary": "Methodology, legal drafts, server-rendered newsletter archive and issue pages (/newsletter, /newsletter/[issue]), placeholder pages.",
+      "depends_on": ["fe_core", "fe_ticker"],
+      "tests": ["frontend: npx tsc --noEmit"]
+    },
+    {
+      "id": "docs",
+      "paths": ["docs/", "README.md", "AGENTS.md", "CLAUDE.md", ".env.example", "frontend/AGENTS.md", "backend/AGENTS.md"],
+      "agents_md": "docs/AGENTS.md",
+      "summary": "Research docs, results, product research, this graph, process doc, README, and the shared guides/env examples owned by the workflow's final docs node (SHARED_DOCS in feature-graph.js).",
+      "depends_on": [],
+      "tests": []
+    },
+    {
+      "id": "tooling",
+      "paths": ["scripts/", ".claude/workflows/", ".claude/launch.json", "docker-compose.yml", ".gitignore", "backend/Dockerfile", "backend/.dockerignore", "backend/requirements.txt", "backend/requirements-dev.txt", "backend/pytest.ini", "backend/tests/conftest.py"],
+      "agents_md": "docs/AGENT_PROCESS.md",
+      "summary": "Agent tooling and dev infra: scripts/pytest.sh (parallel-safe tests on mounted source), feature-graph workflow, preview config, compose file, ignore rules, api Dockerfile/requirements, pytest config and conftest.",
+      "depends_on": [],
+      "tests": ["bash scripts/pytest.sh tests/test_api.py"]
+    }
+  ]
+}

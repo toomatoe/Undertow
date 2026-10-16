@@ -10,6 +10,9 @@ dated and sourced. Research and education only; nothing here is financial advice
 | `FEASIBILITY.md` | Original feasibility report: what successful players exploit, strategies with evidence ranked for a solo builder, US rules (2026), free data/broker/news stack, v1 architecture, build order, sources | Stable background. Edit only to correct facts; add new findings elsewhere |
 | `PRODUCT_RESEARCH.md` | Product research (market, users, positioning) | Being written by another agent now. Don't edit it concurrently |
 | `results/event_study_YYYY-MM-DD.json` | Frozen copies of event-study runs, one file per run date. First: `event_study_2026-10-15.json` | Append-only; never edit a published file |
+| `results/backtest_YYYY-MM-DD.json` | Frozen copies of backtest reports (`report_latest.json`). First: `backtest_2026-10-16.json` | Append-only |
+| `agent-graph.json` | Machine-readable module graph: paths (every repo file in exactly one module), AGENTS.md, depends_on, tests, hotspots, shared resources | Update when a module or top-level file is added |
+| `AGENT_PROCESS.md` | Multi-agent process: Plan, ownership waves, Build, 2-lens Review, exclusive Verify, final Docs item, Critic | Update when `.claude/workflows/feature-graph.js` changes |
 | `AGENTS.md` | This guide | |
 
 The root `README.md` carries the human-readable summary of the latest results ("First results" section)

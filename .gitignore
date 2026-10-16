@@ -18,3 +18,4 @@ frontend/out/
 .DS_Store
 eventstudy-run.log
 backtest-*.log
+.claude/worktrees/

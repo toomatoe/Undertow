@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi.testclient import TestClient
 
@@ -68,3 +68,40 @@ def test_watchlist_roundtrip():
     assert [a["title"] for a in items] == ["Filing 1"]
     client.delete("/api/watchlist/BIG")
     assert client.get("/api/watchlist").json() == []
+
+
+def test_ticker_sitemap_routed_before_symbol_detail():
+    paths = [getattr(r, "path", None) for r in app.routes]
+    assert paths.index("/api/tickers/sitemap") < paths.index("/api/tickers/{symbol}")
+    r = client.get("/api/tickers/sitemap")
+    assert r.status_code == 200 and isinstance(r.json(), list)  # not ticker_detail("SITEMAP")
+
+
+def test_ticker_sitemap_fields_company_filter_and_days():
+    now = datetime.now(timezone.utc)
+    sizes = dict(state.sizes)
+    with SessionLocal() as s:
+        s.add(Company(symbol="OLDS", cik=3, name="Old Small Co", public_float=900_000_000, size_bucket="small"))
+        for i, (sym, age) in enumerate([("OLDS", 40), ("ORPH", 1)]):  # ORPH has no Company row
+            s.add(Article(url=f"https://news/sm{i}", url_hash=f"sm{i}", title_hash=f"sm{i}", title=f"Sitemap {i}", source="rss",
+                          source_name="X", published_at=now - timedelta(days=age), tickers=[ArticleTicker(symbol=sym, method="cashtag")]))
+        s.commit()
+    state.sizes = {**sizes, "OLDS": "small"}
+    try:
+        rows = client.get("/api/tickers/sitemap").json()
+        by = {r["symbol"]: r for r in rows}
+        assert set(by) == {"TINY", "BIG", "OLDS"}  # ORPH excluded: no Company
+        assert set(by["TINY"]) == {"symbol", "last_activity", "items", "size_bucket"}
+        assert by["TINY"]["items"] == 2 and by["TINY"]["size_bucket"] == "nano" and by["BIG"]["items"] == 1
+        last = datetime.fromisoformat(by["TINY"]["last_activity"])
+        assert last.utcoffset() == timedelta(0) and abs((last - now).total_seconds()) < 3600
+        assert rows[-1]["symbol"] == "OLDS"  # most recent activity first
+        assert {r["symbol"] for r in client.get("/api/tickers/sitemap?days=30").json()} == {"TINY", "BIG"}
+        assert client.get("/api/tickers/sitemap?days=0").status_code == 422
+    finally:
+        state.sizes = sizes
+        with SessionLocal() as s:
+            for a in s.query(Article).filter(Article.url_hash.in_(["sm0", "sm1"])).all():
+                s.delete(a)
+            s.query(Company).filter(Company.symbol == "OLDS").delete()
+            s.commit()

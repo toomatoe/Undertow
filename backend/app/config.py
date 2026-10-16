@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     alert_max_age_minutes: int = 15  # never alert on old filings (e.g. backlog after a restart)
     ingest_on_startup: bool = True
     cors_origins: list[str] = ["http://localhost:3000"]
+    # Public site URL used for links in the newsletter (ticker pages, methodology, track record)
+    public_base_url: str = "http://localhost:3000"
 
     @property
     def alpaca_enabled(self) -> bool:
