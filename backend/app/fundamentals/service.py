@@ -26,6 +26,7 @@ COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik:010d}.jso
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 CACHE_MAX_AGE = 24 * 3600
 CASH_TAGS = ["CashAndCashEquivalentsAtCarryingValue", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"]
+INVESTMENT_TAGS = ["ShortTermInvestments", "MarketableSecuritiesCurrent", "AvailableForSaleSecuritiesDebtSecuritiesCurrent"]
 OCF_TAG = "NetCashProvidedByUsedInOperatingActivities"
 DILUTION_FORMS = {"424B1", "424B2", "424B3", "424B4", "424B5", "S-1", "S-3", "F-1", "F-3"}
 
@@ -55,11 +56,22 @@ def _days(row: dict) -> int | None:
 
 
 def latest_cash(facts: dict) -> dict | None:
+    """Cash and equivalents, plus short-term investments reported for the same date.
+
+    Many small biotechs hold most of their money in T-bills or marketable securities,
+    which "cash and equivalents" excludes; leaving them out would understate runway.
+    """
     for tag in CASH_TAGS:
         rows = _units(facts, "us-gaap", tag, "USD")
         if rows:
             r = max(rows, key=lambda x: (x["end"], x.get("filed", "")))
-            return {"value": r["val"], "as_of": r["end"], "tag": tag}
+            investments = 0
+            for inv_tag in INVESTMENT_TAGS:
+                same_day = [x for x in _units(facts, "us-gaap", inv_tag, "USD") if x["end"] == r["end"]]
+                if same_day:
+                    investments = max(same_day, key=lambda x: x.get("filed", ""))["val"]
+                    break
+            return {"value": r["val"] + investments, "as_of": r["end"], "tag": tag, "short_term_investments": investments}
     return None
 
 
@@ -138,7 +150,7 @@ def dilution_filings(sub: dict, since: date) -> list[dict]:
     return out
 
 
-def company_profile(cik: int, data_dir: str, user_agent: str) -> dict:
+def company_profile(cik: int, data_dir: str, user_agent: str, symbol: str | None = None) -> dict:
     facts = _cached_json(COMPANYFACTS_URL.format(cik=cik), os.path.join(data_dir, "companyfacts", f"{cik}.json"), user_agent) or {}
     sub = _cached_json(SUBMISSIONS_URL.format(cik=cik), os.path.join(data_dir, "submissions_live", f"{cik}.json"), user_agent) or {}
     cash = latest_cash(facts)
@@ -146,6 +158,12 @@ def company_profile(cik: int, data_dir: str, user_agent: str) -> dict:
     hist, change = share_history(facts)
     filings = dilution_filings(sub, date.today() - timedelta(days=3 * 365)) if sub else []
     raises_since_cash = [f for f in filings if cash and f["filed"] > cash["as_of"] and f["form"].startswith("424B")]
+    si = None
+    if symbol:
+        try:
+            si = short_summary(short_interest(symbol, data_dir), hist[-1]["shares"] if hist else None)
+        except httpx.HTTPError:
+            si = None  # FINRA down: the rest of the profile is still useful
     return {
         "cik": cik,
         "cash": cash,
@@ -156,4 +174,54 @@ def company_profile(cik: int, data_dir: str, user_agent: str) -> dict:
         "dilution_filings": filings,
         "offerings_last_12m": sum(1 for f in filings if f["form"].startswith("424B") and f["filed"] >= (date.today() - timedelta(days=365)).isoformat()),
         "raises_since_cash_date": len(raises_since_cash),
+        "short_interest": si,
+    }
+
+
+# --- Short interest (FINRA, free, twice monthly) -----------------------------------
+
+FINRA_SI_URL = "https://api.finra.org/data/group/otcMarket/name/consolidatedShortInterest"
+
+
+def short_interest(symbol: str, data_dir: str, days: int = 200) -> list[dict]:
+    """Recent FINRA short-interest settlements for a symbol, oldest first. Cached for a day."""
+    path = os.path.join(data_dir, "short_interest", f"{symbol}.json")
+    if os.path.exists(path) and time.time() - os.path.getmtime(path) < CACHE_MAX_AGE:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    today = date.today()
+    body = {
+        "limit": 50,
+        "compareFilters": [{"compareType": "equal", "fieldName": "symbolCode", "fieldValue": symbol}],
+        "dateRangeFilters": [{"fieldName": "settlementDate", "startDate": (today - timedelta(days=days)).isoformat(), "endDate": today.isoformat()}],
+    }
+    resp = httpx.post(FINRA_SI_URL, json=body, headers={"Accept": "application/json"}, timeout=30)
+    if resp.status_code == 204:
+        rows = []
+    else:
+        resp.raise_for_status()
+        rows = resp.json() if resp.content else []
+    out = sorted(
+        (
+            {"date": r["settlementDate"], "shares_short": r["currentShortPositionQuantity"],
+             "days_to_cover": r.get("daysToCoverQuantity"), "change_pct": r.get("changePercent"),
+             "avg_daily_volume": r.get("averageDailyVolumeQuantity")}
+            for r in rows
+        ),
+        key=lambda x: x["date"],
+    )
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(out, f)
+    return out
+
+
+def short_summary(series: list[dict], shares_outstanding: int | None) -> dict | None:
+    if not series:
+        return None
+    last = series[-1]
+    return {
+        **last,
+        "pct_of_shares_outstanding": round(last["shares_short"] / shares_outstanding, 4) if shares_outstanding else None,
+        "history": series[-8:],
     }

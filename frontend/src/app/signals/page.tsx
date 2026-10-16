@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import ArticleCard from "@/components/ArticleCard";
+import HaltsPanel from "@/components/HaltsPanel";
 import WatchlistPanel from "@/components/WatchlistPanel";
 import { api, type Article, type ArticleFilters, type Signal } from "@/lib/api";
 import { SIZE_FILTERS } from "@/lib/format";
@@ -120,6 +121,7 @@ export default function SignalsPage() {
       </main>
       <aside className="sidebar">
         <WatchlistPanel onChange={() => filters.watchlist && load(filters)} />
+        <HaltsPanel />
         <section className="panel">
           <h2>Legend</h2>
           <p className="small">

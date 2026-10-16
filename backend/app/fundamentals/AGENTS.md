@@ -13,6 +13,7 @@ cached for 24 h under `data/companyfacts/` and `data/submissions_live/`.
 | `share_change_1y` | dei `EntityCommonStockSharesOutstanding` (10-K/10-Q cover pages) | Latest value vs the one closest to 365 days earlier; needs ≥ 180 days apart |
 | `dilution_filings` | submissions JSON | 424B1–5, S-1, S-3, F-1, F-3, and 8-K with item 3.02 (unregistered sale), last 3 years, no amendments |
 | `raises_since_cash_date` | the same list | 424Bs filed after the cash date, which extend the runway |
+| `short_interest` | FINRA consolidated short interest API (free, no key, twice monthly) | Latest settlement + up to 8 prior; % of shares outstanding uses the latest cover-page share count. `short_interest()` filters by a date range, because FINRA only allows sorting when every partition key is fixed. `None` if FINRA is down. |
 
 All functions except `company_profile` are pure and tested in `tests/test_fundamentals.py`.
 
@@ -27,8 +28,9 @@ All functions except `company_profile` are pure and tested in `tests/test_fundam
 - `GET /api/tickers/{symbol}/fundamentals`: 404 for an unknown ticker, 502 if SEC is unreachable.
 - `frontend/src/components/DilutionPanel.tsx`, on `/ticker/[symbol]`.
 
+Trading halts live in `app/sources/halts.py` (feed parser, reason codes) and `alerts.service.store_halts`
+(storage + alerts). They're served by `GET /api/halts?symbol=&size=&hours=`.
+
 ## Next
 
-- Short interest: FINRA twice-monthly files.
-- Halts: Nasdaq trade-halt RSS.
 - Reverse-split history: 8-K item 5.03 plus Yahoo split events.

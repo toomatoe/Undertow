@@ -5,6 +5,7 @@ import { use, useEffect, useState } from "react";
 
 import ArticleCard from "@/components/ArticleCard";
 import DilutionPanel from "@/components/DilutionPanel";
+import HaltsPanel from "@/components/HaltsPanel";
 import { api, type TickerDetail } from "@/lib/api";
 import { formatMoney, formatScore, sentimentClass, SIZE_LABELS } from "@/lib/format";
 
@@ -85,6 +86,7 @@ export default function TickerPage({ params }: { params: Promise<{ symbol: strin
           </div>
 
           {data.cik && <DilutionPanel symbol={data.symbol} />}
+          <HaltsPanel symbol={data.symbol} />
 
           {data.daily.length > 0 && (
             <section className="panel">

@@ -41,6 +41,16 @@ def test_runway_math():
     assert runway(None, None) == {"status": "unknown"}
 
 
+def test_cash_includes_same_day_short_term_investments():
+    f = facts(cash=[{"end": "2026-06-30", "val": 4e6, "filed": "x"}])
+    f["facts"]["us-gaap"]["ShortTermInvestments"] = {"units": {"USD": [
+        {"end": "2026-03-31", "val": 99e6, "filed": "a"},  # different date: ignored
+        {"end": "2026-06-30", "val": 20e6, "filed": "b"},
+    ]}}
+    c = latest_cash(f)
+    assert c["value"] == 24e6 and c["short_term_investments"] == 20e6
+
+
 def test_share_change_over_a_year():
     rows = [{"end": "2025-07-31", "val": 100, "filed": "a"}, {"end": "2026-01-31", "val": 150, "filed": "b"},
             {"end": "2026-07-31", "val": 300, "filed": "c"}]
