@@ -40,9 +40,9 @@ STRATEGY = {
     "id": "nano_offering_short",
     "name": "Short nano caps after a priced offering",
     "summary": (
-        "When a company with under $50M public float files a final prospectus (424B4/424B5), short it at the "
-        "first close after the filing, hedge with an equal long position in IWM, and cover after 20 trading days "
-        "or if the price doubles."
+        "When a company with under $50M public float files a final prospectus (424B4/424B5), short it at the close "
+        "one trading day after the first close a trader could act on, hedge with an equal long position in IWM, and "
+        "cover after 20 trading days, or early if the close rises 40% above entry."
     ),
     "hypothesis": (
         "Priced offerings in the smallest companies are followed by continued selling: new shares and warrants hit "
@@ -123,6 +123,12 @@ def is_search(run: dict) -> bool:
     if "kind" in run:
         return run["kind"] == "search"
     return run["label"] == "base" or run["label"].startswith("walk-forward")
+
+
+def trial_id(run: dict) -> str:
+    """Period + strategy variant, ignoring the random seed (legacy entries lack trial_key)."""
+    key = run.get("trial_key") or re.sub(r"seed=\d+", "seed=0", run["config_key"])
+    return f"{run['period']}|{key}"
 
 
 def read_runs(data_dir: str) -> list[dict]:
@@ -382,11 +388,7 @@ def build_report() -> dict:
 
     # Overfitting: deflate against every distinct configuration tried, this run and before
     history = read_runs(s.data_dir)
-    trials = {
-        f"{r['period']}|{r.get('trial_key') or re.sub(r'seed=\d+', 'seed=0', r['config_key'])}": r["metrics"]["sharpe"]
-        for r in history
-        if r["strategy"] == STRATEGY["id"] and is_search(r)
-    }
+    trials = {trial_id(r): r["metrics"]["sharpe"] for r in history if r["strategy"] == STRATEGY["id"] and is_search(r)}
     trials.update(runner.trial_sharpes)
     overfit = {"trials": len(trials)}
     for key in PERIODS:

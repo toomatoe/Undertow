@@ -27,7 +27,7 @@ export const SIZE_LABELS: Record<string, string> = {
 };
 
 export const SIZE_FILTERS = [
-  { value: "", label: "All sizes" },
+  { value: "all", label: "All sizes" },
   { value: "nano,micro,small", label: "Small caps (<$2B)" },
   { value: "nano,micro", label: "Micro & nano (<$300M)" },
   { value: "small", label: "Small ($300M–2B)" },
@@ -58,3 +58,26 @@ export const SOURCE_LABELS: Record<string, string> = {
   edgar: "SEC filing",
   alpaca: "Benzinga",
 };
+
+function finite(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+/** Whole dollars with thousands separators: "$112,340", "-$4,210"; `signed` adds "+" to gains. */
+export function formatUsd(v: number | null | undefined, signed = false): string {
+  if (!finite(v)) return "—";
+  const s = `$${Math.abs(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  if (v < 0 && Math.round(Math.abs(v)) > 0) return `-${s}`;
+  return signed && v > 0 ? `+${s}` : s;
+}
+
+/** Plain number with fixed decimals, or "—" when missing. */
+export function fmtNum(v: number | null | undefined, digits = 2): string {
+  return finite(v) ? v.toFixed(digits) : "—";
+}
+
+/** `pct` (signed) or `pctAbs` that tolerates missing values. */
+export function pctOr(v: number | null | undefined, digits = 1, signed = true): string {
+  if (!finite(v)) return "—";
+  return signed ? pct(v, digits) : pctAbs(v, digits);
+}

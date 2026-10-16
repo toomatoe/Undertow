@@ -9,7 +9,8 @@ import { SIZE_FILTERS } from "@/lib/format";
 
 const EVENT_TYPES = [
   "earnings", "guidance", "m&a", "deal", "analyst", "management", "legal", "regulatory",
-  "product", "macro", "bankruptcy", "restructuring", "accounting", "other",
+  "product", "macro", "bankruptcy", "restructuring", "impairment", "accounting", "listing",
+  "offering", "activist", "disclosure", "other",
 ];
 
 export default function NewsFeed() {

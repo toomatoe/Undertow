@@ -14,7 +14,7 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.backtest import borrow
-from app.backtest.report import read_runs
+from app.backtest.report import is_search, read_runs, trial_id
 from app.config import get_settings
 from app.db import SessionLocal, get_session, init_db
 from app.models import Article, ArticleTicker, Company, IngestRun, WatchlistItem
@@ -265,7 +265,13 @@ def backtest_report():
 def backtest_runs(limit: int = Query(200, ge=1, le=5000)):
     """The run log: every simulation ever executed, newest first."""
     runs = read_runs(settings.data_dir)
-    return {"total": len(runs), "distinct_configs": len({(r["period"], r["config_key"]) for r in runs}), "runs": runs[::-1][:limit]}
+    search = {trial_id(r) for r in runs if is_search(r)}
+    return {
+        "total": len(runs),
+        "distinct_configs": len({(r["period"], r["config_key"]) for r in runs}),
+        "search_trials": len(search),  # what the Deflated Sharpe counts
+        "runs": runs[::-1][:limit],
+    }
 
 
 @app.get("/api/backtest/borrow")
