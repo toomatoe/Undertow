@@ -1,0 +1,10 @@
+.panel { margin-block: 1rem; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.row h2 { margin: 0 0 .5rem; }
+.row p, .status p { margin: .35rem 0; }
+.run { flex-shrink: 0; padding: .65rem 1rem; border: 1px solid var(--accent); border-radius: var(--radius); color: var(--text); background: var(--panel-2); cursor: pointer; }
+.run:disabled { opacity: .55; cursor: not-allowed; }
+.run:focus-visible, .error button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.status { color: var(--muted); font-size: .875rem; }
+.error { color: var(--neg); overflow-wrap: anywhere; }
+@media (max-width: 600px) { .row { align-items: stretch; flex-direction: column; } }

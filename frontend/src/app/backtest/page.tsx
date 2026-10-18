@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import ResearchRunPanel from "@/components/ResearchRunPanel";
 
 import BorrowFees from "@/components/backtest/BorrowFees";
 import EquityCharts from "@/components/backtest/EquityCharts";
@@ -9,8 +10,6 @@ import TradeLog from "@/components/backtest/TradeLog";
 import Waterfall from "@/components/backtest/Waterfall";
 import { api, type BacktestMetrics, type BacktestPeriod, type BacktestReport, type BacktestRunLog } from "@/lib/api";
 import { fmtNum, formatMoney, formatUsd, pct, pctAbs, pctOr } from "@/lib/format";
-
-const REPORT_CMD = "docker compose run --rm api python -m app.backtest.report";
 
 const sharpeFmt = (v: number) => v.toFixed(2);
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -142,46 +141,39 @@ function SkippedList({ m }: { m: BacktestMetrics }) {
   );
 }
 
-function NoReport() {
-  return (
-    <main className="page prose">
-      <h1>Backtest</h1>
-      <section className="panel">
-        <h2>No backtest yet</h2>
-        <p>The backtest report hasn&apos;t been generated. Run it in the API container (about 5–10 minutes once the price cache is warm):</p>
-        <pre className="bt-cmd">
-          <code>{REPORT_CMD}</code>
-        </pre>
-        <p className="muted small">
-          First time? Warm the caches with <code>docker compose run --rm api python -m app.backtest.warm</code> (around 20
-          minutes). If the API was built before the backtester existed, rebuild it with <code>docker compose up -d --build api</code>. Then reload this page.
-        </p>
-      </section>
-    </main>
-  );
-}
-
 export default function BacktestPage() {
   const [report, setReport] = useState<BacktestReport | null>(null);
   const [runs, setRuns] = useState<BacktestRunLog | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [runsError, setRunsError] = useState<string | null>(null);
 
-  useEffect(() => {
-    api.backtestReport().then(setReport).catch((e) => setError(String(e.message ?? e)));
-    api.backtestRuns(50).then(setRuns).catch((e) => setRunsError(String(e.message ?? e)));
+  const loadVersion = useRef(0);
+  const reload = useCallback(() => {
+    const version = ++loadVersion.current;
+    api.backtestReport().then((next) => {
+      if (version !== loadVersion.current) return;
+      setReport(next); setError(null);
+    }).catch((e) => { if (version === loadVersion.current) setError(String(e.message ?? e)); });
+    api.backtestRuns(50).then((next) => {
+      if (version !== loadVersion.current) return;
+      setRuns(next); setRunsError(null);
+    }).catch((e) => { if (version === loadVersion.current) setRunsError(String(e.message ?? e)); });
   }, []);
+  useEffect(() => {
+    const version = loadVersion;
+    reload();
+    return () => { ++version.current; };
+  }, [reload]);
 
-  if (error) {
-    if (error.startsWith("404")) return <NoReport />;
+  if (!report) {
     return (
       <main className="page">
         <h1>Backtest</h1>
-        <p className="error">Couldn&apos;t load the backtest: {error}</p>
+        <ResearchRunPanel kind="backtest" hasReport={false} onComplete={reload} />
+        {error?.startsWith("404") ? <p>No backtest yet. Start a run above to generate the report.</p> : error ? <div role="alert"><p className="error">Couldn&apos;t load the backtest. Check the backend connection. {error}</p><button onClick={reload}>Retry loading report</button></div> : <p role="status">Loading report…</p>}
       </main>
     );
   }
-  if (!report) return <main className="page muted">Loading…</main>;
 
   const periods = Object.entries(report.periods).sort(([a], [b]) => a.localeCompare(b));
   const A = report.periods.A;
@@ -200,6 +192,9 @@ export default function BacktestPage() {
           {report.strategy.name} · generated {new Date(report.generated_at).toLocaleString()}
         </p>
       </div>
+
+      <ResearchRunPanel kind="backtest" hasReport onComplete={reload} />
+      {error && <div role="alert"><p className="error">Couldn&apos;t refresh the report; showing the previous result. {error}</p><button onClick={reload}>Retry loading report</button></div>}
 
       {/* 1. Verdict */}
       <section className={`panel bt-verdict bt-${report.verdict.level}`} aria-live="polite">

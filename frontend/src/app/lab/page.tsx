@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import ResearchRunPanel from "@/components/ResearchRunPanel";
 
 import { api, type EventStudy, type StudyResult } from "@/lib/api";
 import { pct, pctAbs, SIZE_LABELS } from "@/lib/format";
@@ -89,9 +90,19 @@ export default function LabPage() {
   const [error, setError] = useState<string | null>(null);
   const [horizon, setHorizon] = useState(20);
 
-  useEffect(() => {
-    api.eventStudy().then(setStudy).catch((e) => setError(String(e.message ?? e)));
+  const loadVersion = useRef(0);
+  const reload = useCallback(() => {
+    const version = ++loadVersion.current;
+    api.eventStudy().then((next) => {
+      if (version !== loadVersion.current) return;
+      setStudy(next); setError(null);
+    }).catch((e) => { if (version === loadVersion.current) setError(String(e.message ?? e)); });
   }, []);
+  useEffect(() => {
+    const version = loadVersion;
+    reload();
+    return () => { ++version.current; };
+  }, [reload]);
 
   const byBucket = useMemo(() => {
     const m = new Map<string, StudyResult[]>();
@@ -107,15 +118,15 @@ export default function LabPage() {
     [byBucket],
   );
 
-  if (error) {
+  if (!study) {
     return (
       <main className="page">
         <h1>Edge Lab</h1>
-        <p className="error">{error.startsWith("404") ? "No study yet. Run python -m app.research.eventstudy in the API container." : error}</p>
+        <ResearchRunPanel kind="event_study" hasReport={false} onComplete={reload} />
+        {error?.startsWith("404") ? <p>No study yet. Start a run above to generate the results.</p> : error ? <div role="alert"><p className="error">Couldn&apos;t load the study. Check the backend connection. {error}</p><button onClick={reload}>Retry loading study</button></div> : <p role="status">Loading study…</p>}
       </main>
     );
   }
-  if (!study) return <main className="page muted">Loading…</main>;
 
   const significant = study.results.filter((r) => r.significant);
   const totalCompanies = Object.values(study.coverage).reduce((s, c) => s + (c.companies ?? 0), 0);
@@ -124,6 +135,8 @@ export default function LabPage() {
   return (
     <main className="page wide">
       <h1>Edge Lab</h1>
+      <ResearchRunPanel kind="event_study" hasReport onComplete={reload} />
+      {error && <div role="alert"><p className="error">Couldn&apos;t refresh the study; showing the previous result. {error}</p><button onClick={reload}>Retry loading study</button></div>}
       <p className="muted lede">
         Do SEC filing events predict how a stock moves next, after trading costs? An event study over{" "}
         {study.config.window[0]} to {study.config.window[1]}, with companies sorted by size at the start of the

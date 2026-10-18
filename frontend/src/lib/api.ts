@@ -552,7 +552,32 @@ function query(params: object): string {
   return s ? `?${s}` : "";
 }
 
+export type ResearchJobKind = "backtest" | "event_study";
+export interface ResearchJob {
+  id: string;
+  kind: ResearchJobKind;
+  status: "running" | "succeeded" | "failed" | "interrupted";
+  started_at: string;
+  finished_at: string | null;
+  message: string;
+}
+export interface ResearchJobs {
+  active: ResearchJob | null;
+  latest: Record<ResearchJobKind, ResearchJob | null>;
+}
+
+async function researchRequest<T>(path: string, method = "GET"): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, { method, cache: "no-store", signal: AbortSignal.timeout(15000) });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(`${res.status} ${typeof body?.detail === "string" ? body.detail : res.statusText}`);
+  }
+  return res.json();
+}
+
 export const api = {
+  researchJobs: () => researchRequest<ResearchJobs>("/api/research/jobs"),
+  startResearch: (kind: ResearchJobKind) => researchRequest<ResearchJob>(`/api/research/jobs/${kind}`, "POST"),
   articles: (f: ArticleFilters = {}) => get<ArticlePage>(`/api/articles${query(f)}`),
   article: (id: number) => get<Article>(`/api/articles/${id}`),
   signals: (f: ArticleFilters = {}) => get<ArticlePage>(`/api/signals${query(f)}`),

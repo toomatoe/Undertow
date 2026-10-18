@@ -137,6 +137,11 @@ copy it into `frontend/.env.local` and uncomment what you need. All optional. (T
 
 ## SSE
 
+`ResearchRunPanel` provides the launch/rerun controls on Backtest and Edge Lab, including empty states.
+It polls `api.researchJobs()` for the shared job slot, prevents duplicate launches, and refreshes page
+results after completion. Job state belongs to the backend so navigation does not stop work.
+Failures leave prior results visible and expose a retry action. Research settings remain fixed.
+
 `new EventSource(api.streamUrl)`; events `article` (new row) and `article_updated` (enriched row), payload
 `{"id": number}`. Refetch with `api.article(id)`. Always `es.close()` in the effect cleanup. The server
 sends `retry: 5000` and keepalives; `onopen`/`onerror` drive the LIVE/OFFLINE badge in `NewsFeed`.

@@ -528,8 +528,8 @@ def save(report: dict) -> str:
     out_dir = os.path.join(s.data_dir, "backtests")
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "report_latest.json")
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(report, f, default=str)
+    from app.research_jobs import atomic_json
+    atomic_json(path, report)
     return path
 
 

@@ -405,8 +405,8 @@ def main() -> None:
     sizes = {b: getattr(args, b) for b in ["nano", "micro", "small", "large"] if getattr(args, b) > 0}
     study = run(sizes)
     path = os.path.join(get_settings().data_dir, RESULTS_FILE)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(study, f, indent=1)
+    from app.research_jobs import atomic_json
+    atomic_json(path, study)
     log.info("Wrote %s: %d events, %d results", path, study["measured_events"], len(study["results"]))
     for r in study["results"]:
         if r["significant"] or r["nominal_significant"]:

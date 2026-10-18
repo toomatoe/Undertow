@@ -22,6 +22,7 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - With an API key, the filing's actual document is summarized, and red flags (going concern, reverse split, ATM program, dilutive financing…) are extracted.
 
 **Edge Lab tab**
+- Start or rerun the study from the page. The backend runs it in the background, and the page refreshes the results when it finishes.
 - Event study (`backend/app/research/eventstudy.py`): after each signal type, did the stock beat or lag the index over 5 and 20 trading days, by size bucket, after realistic trading costs?
 - The design is fixed up front: size measured before the window, timing by EDGAR acceptance time, market-adjusted returns, winsorized outliers, a Bonferroni correction across every test, and trade direction chosen before seeing results.
 - Reports survivorship coverage, meaning how many sampled companies have since delisted.
@@ -82,6 +83,8 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - Links in the issue use `PUBLIC_BASE_URL` (root `.env`).
 
 **Backtest tab** (`backend/app/backtest/`, see its [AGENTS.md](backend/app/backtest/AGENTS.md))
+- Launch or rerun the fixed strategy from the page without a terminal command. Cached data is reused automatically; first runs take longer.
+- Backtest and Edge Lab share one background-job slot. Status survives navigation and refresh; failed or interrupted jobs can be retried. Keep the backend running. Previous results remain available during a run.
 - Simulates the nano-cap offering short as a real portfolio, day by day, over every 424B4/424B5 by a sub-$50M-float company:
   - Rule 201 entry delay, $1 raw-price floor, $200k median-volume floor, 5%-of-volume sizing.
   - 3% round-trip costs, 75%/yr borrow, 30% of names randomly unborrowable, 2%/day recalls.
@@ -162,14 +165,21 @@ cd frontend && npm install && npm run dev   # UI on :3000
 
 Frontend settings (optional) go in `frontend/.env.local`, not the root `.env`: copy the commented frontend section at the bottom of the root `.env.example` and uncomment the lines you need. For a public deployment set `NEXT_PUBLIC_SITE_URL` there and `PUBLIC_BASE_URL` in the root `.env` to the same origin.
 
-Run the event study (about 15 min, cached afterwards). The API picks up results on restart:
+Open **Edge Lab** or **Backtest** and use the Run button. Status updates while the backend works;
+you can navigate away and return. Results refresh automatically, including filing-card evidence
+after an Edge Lab run. Only one research job runs at a time. Rerunning uses cached inputs and the
+same fixed research design; it does not extend the historical date range or tune the strategy.
+
+The following terminal commands remain available for maintenance. Do not run them concurrently
+with a run launched from the UI. For a CLI event study (about 15 minutes initially), restart the
+API afterwards to reload its evidence:
 
 ```bash
 docker compose run --rm api python -m app.research.eventstudy
 docker compose restart api
 ```
 
-Run the backtest (first run about 20 min to download SEC histories and prices, then about 1 min):
+For a CLI backtest, prewarming the data is optional (the report also downloads missing data):
 
 ```bash
 docker compose run --rm api python -m app.backtest.warm

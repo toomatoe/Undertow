@@ -1,6 +1,21 @@
 from datetime import datetime, timezone
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
+
+
+class ResearchJob(BaseModel):
+    id: str
+    kind: Literal["backtest", "event_study"]
+    status: Literal["running", "succeeded", "failed", "interrupted"]
+    started_at: datetime
+    finished_at: datetime | None
+    message: str
+
+
+class ResearchJobsOut(BaseModel):
+    active: ResearchJob | None
+    latest: dict[str, ResearchJob | None]
 
 
 class TickerOut(BaseModel):

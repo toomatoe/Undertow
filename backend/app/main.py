@@ -32,11 +32,14 @@ from app.pipeline.ingest import NEW_ARTICLE_HOOKS, backfill_signals, build_sourc
 from app.pipeline.signals import ALL_SIGNALS, signal_dict
 from app.pipeline.tickers import TickerUniverse
 from app.research.eventstudy import RESULTS_FILE
+from app.research_jobs import JobBusy, ResearchJobs
 from app.schemas import (
     ArticleOut,
     ArticlePage,
     DailySentiment,
     Evidence,
+    ResearchJob,
+    ResearchJobsOut,
     SignalOut,
     SourceStatus,
     Status,
@@ -62,6 +65,14 @@ class AppState:
 
 
 state = AppState()
+research_jobs: ResearchJobs | None = None
+
+
+def get_research_jobs() -> ResearchJobs:
+    global research_jobs
+    if research_jobs is None:
+        research_jobs = ResearchJobs(settings.data_dir, on_study_success=load_study)
+    return research_jobs
 
 
 def load_study() -> None:
@@ -69,12 +80,13 @@ def load_study() -> None:
     if not os.path.exists(path):
         return
     with open(path, encoding="utf-8") as f:
-        state.study = json.load(f)
-    state.evidence = {
+        study = json.load(f)
+    evidence = {
         (r["signal"], r["bucket"]): Evidence(**{k: r[k] for k in Evidence.model_fields})
-        for r in state.study["results"]
+        for r in study["results"]
         if r["horizon_days"] == EVIDENCE_HORIZON
     }
+    state.study, state.evidence = study, evidence
     log.info("Loaded event study: %d results", len(state.study["results"]))
 
 
@@ -178,6 +190,7 @@ def load_companies() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    get_research_jobs()
     init_db()
     broadcaster.bind_loop(asyncio.get_running_loop())
     state.universe = await asyncio.to_thread(TickerUniverse.load, settings.data_dir, settings.sec_user_agent)
@@ -197,9 +210,12 @@ async def lifespan(app: FastAPI):
     tasks = [asyncio.create_task(scheduler())]
     if settings.edgar_poll_seconds > 0:
         tasks.append(asyncio.create_task(edgar_poller()))
-    yield
-    for t in tasks:
-        t.cancel()
+    try:
+        yield
+    finally:
+        for t in tasks:
+            t.cancel()
+        await asyncio.to_thread(get_research_jobs().shutdown)
 
 
 app = FastAPI(title="QuantDesk API", version="0.2.0", lifespan=lifespan)
@@ -208,6 +224,19 @@ app.add_middleware(
 )
 
 SentimentFilter = Literal["positive", "negative", "neutral"]
+
+
+@app.get("/api/research/jobs", response_model=ResearchJobsOut)
+async def research_job_status():
+    return get_research_jobs().snapshot()
+
+
+@app.post("/api/research/jobs/{kind}", response_model=ResearchJob, status_code=202)
+async def start_research_job(kind: Literal["backtest", "event_study"]):
+    try:
+        return get_research_jobs().start(kind)
+    except JobBusy as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 def parse_sizes(size: str | None) -> list[str]:

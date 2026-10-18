@@ -10,11 +10,11 @@
   "modules": [
     {
       "id": "api",
-      "paths": ["backend/app/main.py", "backend/app/schemas.py", "backend/tests/test_api.py"],
+      "paths": ["backend/app/main.py", "backend/app/schemas.py", "backend/app/research_jobs.py", "backend/tests/test_api.py", "backend/tests/test_research_jobs.py"],
       "agents_md": "backend/AGENTS.md",
       "summary": "FastAPI routes (incl. /api/newsletter/*, /api/tickers/sitemap), lifespan, scheduler loops (slow: ingest, borrow snapshot, journal, newsletter_cycle; fast: EDGAR+halts poller), AppState.",
       "depends_on": ["config_db", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter"],
-      "tests": ["backend/tests/test_api.py"],
+      "tests": ["backend/tests/test_api.py", "backend/tests/test_research_jobs.py"],
       "hotspot": true
     },
     {
@@ -117,7 +117,7 @@
     },
     {
       "id": "fe_research",
-      "paths": ["frontend/src/app/lab/", "frontend/src/app/backtest/", "frontend/src/components/backtest/", "frontend/src/app/track-record/", "frontend/src/components/track/"],
+      "paths": ["frontend/src/app/lab/", "frontend/src/app/backtest/", "frontend/src/components/backtest/", "frontend/src/app/track-record/", "frontend/src/components/track/", "frontend/src/components/ResearchRunPanel.tsx", "frontend/src/components/ResearchRunPanel.module.css"],
       "agents_md": "frontend/AGENTS.md",
       "summary": "Edge Lab, Backtest and Track record pages and their charts.",
       "depends_on": ["fe_core"],

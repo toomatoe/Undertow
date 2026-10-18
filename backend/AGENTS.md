@@ -79,6 +79,13 @@ migrated (do them by hand or introduce Alembic). Test against an existing Postgr
 
 ## Testing patterns
 
+Research launches: `GET /api/research/jobs` returns the active job and latest job per kind;
+`POST /api/research/jobs/{kind}` starts `backtest` or `event_study` (202; 409 while busy).
+`app/research_jobs.py` manages fixed subprocess workloads and persisted job status under `DATA_DIR`.
+The local development API uses one worker. These controls inherit the API's trusted-local-use model;
+they do not add authentication. Study completion refreshes in-memory evidence without an API restart.
+Tests in `tests/test_research_jobs.py` use offline substitute workers.
+
 Run: `bash scripts/pytest.sh [tests/test_x.py ...]` from the repo root. It mounts `backend/` into the
 `quantdesk-api-test` dependency image, so it tests the current source without a rebuild and is safe to run in
 parallel. Rebuild that image only when requirements change (`docker build -q -t quantdesk-api-test backend`).
