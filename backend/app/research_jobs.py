@@ -1,7 +1,11 @@
 """One research subprocess at a time, with durable, bounded public status.
 
 Designed for the application's single API process. CLI output stays in server
-logs; commands and arguments cannot be supplied by clients.
+logs; commands and arguments cannot be supplied by clients. Saved status is
+validated on load: an unreadable or corrupt state file is moved aside
+(research_jobs.json.corrupt-<timestamp>) and the API starts with empty status.
+Who may start a run is decided by the API layer (see research_launch_policy in
+app/main.py).
 """
 
 import copy
@@ -16,8 +20,14 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from app.schemas import ResearchJob
+
 log = logging.getLogger(__name__)
 MODULES = {"backtest": "app.backtest.report", "event_study": "app.research.eventstudy"}
+JOB_FIELDS = ("id", "kind", "status", "started_at", "finished_at", "message")
+MAX_MESSAGE = 500
 
 
 def atomic_json(path, value):
@@ -55,18 +65,67 @@ class ResearchJobs:
         self.thread = None
         self.closing = False
         self.latest = dict.fromkeys(MODULES)
-        if self.path.exists():
-            with self.path.open(encoding="utf-8") as f:
-                saved = json.load(f)
-            self.latest.update({k: saved.get(k) for k in MODULES})
-        interrupted = False
+        dirty = self._load()
         for job in self.latest.values():
             if job and job["status"] == "running":
                 job.update(status="interrupted", finished_at=now(),
                            message="The API restarted before this run finished. You can retry.")
-                interrupted = True
-        if interrupted:
-            self._save()
+                dirty = True
+        if dirty:
+            try:
+                self._save()
+            except (OSError, ValueError):
+                log.exception("Could not persist research status at startup")
+
+    def _load(self):
+        """Fill self.latest from disk. Returns True when the file should be rewritten."""
+        try:
+            with self.path.open(encoding="utf-8") as f:
+                saved = json.load(f)
+        except FileNotFoundError:
+            return False
+        except (OSError, ValueError) as exc:  # ValueError covers JSON and Unicode decode errors
+            log.warning("Ignoring unreadable research status file %s: %s", self.path, exc)
+            self._quarantine()
+            return False
+        if not isinstance(saved, dict):
+            log.warning("Ignoring research status file %s: expected a JSON object", self.path)
+            self._quarantine()
+            return False
+        dirty = False
+        for kind in MODULES:
+            raw = saved.get(kind)
+            if raw is None:
+                continue
+            job = self._clean(kind, raw)
+            if job is None:
+                log.warning("Dropping invalid saved %s research status", kind)
+                dirty = True
+            else:
+                self.latest[kind] = job
+        return dirty
+
+    @staticmethod
+    def _clean(kind, raw):
+        """Return a bounded copy of a saved job, or None when it is not a valid job of this kind."""
+        if not isinstance(raw, dict) or raw.get("kind") != kind:
+            return None
+        try:
+            ResearchJob.model_validate(raw)
+        except ValidationError:
+            return None
+        job = {k: raw.get(k) for k in JOB_FIELDS}
+        job["message"] = job["message"][:MAX_MESSAGE]
+        return job
+
+    def _quarantine(self):
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+        target = self.path.with_name(f"{self.path.name}.corrupt-{stamp}")
+        try:
+            os.replace(self.path, target)
+            log.warning("Moved unreadable research status file to %s", target)
+        except OSError:
+            log.exception("Could not move unreadable research status file aside")
 
     def _save(self):
         atomic_json(self.path, self.latest)

@@ -170,6 +170,12 @@ you can navigate away and return. Results refresh automatically, including filin
 after an Edge Lab run. Only one research job runs at a time. Rerunning uses cached inputs and the
 same fixed research design; it does not extend the historical date range or tune the strategy.
 
+**Research launch security.** Run buttons start backend subprocesses, so they are gated:
+- By default, runs are allowed only while `PUBLIC_BASE_URL` is a localhost origin. Compose also binds the API and Postgres to `127.0.0.1`, so nothing on your network can reach them.
+- On a public server, set `RESEARCH_ADMIN_TOKEN` in the root `.env`. The UI then asks for it and sends it as a Bearer header.
+- Or set `RESEARCH_JOBS_ENABLED=false` to turn runs off.
+- **Don't deploy publicly with `PUBLIC_BASE_URL` left at its localhost default.**
+
 The following terminal commands remain available for maintenance. Do not run them concurrently
 with a run launched from the UI. For a CLI event study (about 15 minutes initially), restart the
 API afterwards to reload its evidence:
@@ -218,6 +224,8 @@ No Docker? The backend falls back to SQLite: `cd backend && pip install -r requi
 | `GET /api/signals?size=nano,micro,small&min_severity=&signal=&watchlist=` | Filing signals with historical evidence |
 | `GET /api/signals/catalog` | Signal taxonomy |
 | `GET /api/research/event-study` | Latest event-study results |
+| `GET /api/research/jobs` | Active + latest research job per kind, plus `enabled` / `requires_token` |
+| `POST /api/research/jobs/{kind}` | Start `backtest` or `event_study` (202; 409 busy; 401/403 per launch gate) |
 | `GET/PUT/DELETE /api/watchlist[/{symbol}]` | Watchlist |
 | `GET /api/backtest/report` | Latest backtest report (metrics, curves, trades, stress, readiness, verdict) |
 | `GET /api/backtest/runs?limit=` | Run log: every simulation, newest first |

@@ -139,12 +139,15 @@ def test_spawn_failure_is_safe_and_retryable(tmp_path, monkeypatch, worker):
 
 
 def test_api_start_poll_conflict_and_invalid_kind(tmp_path, worker, monkeypatch):
+    launch_settings(monkeypatch)
     manager = ResearchJobs(tmp_path)
     monkeypatch.setattr(main, "research_jobs", manager)
     client = TestClient(main.app)
     response = client.post("/api/research/jobs/backtest")
     assert response.status_code == 202
-    assert client.get("/api/research/jobs").json()["active"]["id"] == response.json()["id"]
+    status = client.get("/api/research/jobs").json()
+    assert status["active"]["id"] == response.json()["id"]
+    assert status["enabled"] is True and status["requires_token"] is False
     assert client.post("/api/research/jobs/event_study").status_code == 409
     assert client.post("/api/research/jobs/arbitrary-command").status_code == 422
     finish(manager, worker)
@@ -229,3 +232,105 @@ def test_shutdown_reaps_child_even_when_status_write_fails(tmp_path, worker, mon
     manager.shutdown()
     assert worker.terminated
     assert manager.snapshot()["active"] is None
+
+
+def launch_settings(monkeypatch, token=None, enabled=None, public="http://localhost:3000"):
+    monkeypatch.setattr(main, "research_launch", main.ResearchLaunchSettings(
+        _env_file=None, research_admin_token=token, research_jobs_enabled=enabled))
+    monkeypatch.setattr(main.settings, "public_base_url", public)
+
+
+@pytest.mark.parametrize("content", [
+    b"\xff\xfe\x00garbage{{",          # undecodable bytes
+    b'{"backtest": {"id": "x", "st',     # truncated JSON
+    b"[1, 2, 3]",                       # wrong top-level shape
+    b'"just a string"',
+])
+def test_corrupt_state_file_does_not_crash_startup(tmp_path, content):
+    path = tmp_path / "research_jobs.json"
+    path.write_bytes(content)
+    manager = ResearchJobs(tmp_path)
+    assert manager.snapshot() == {"active": None, "latest": {"backtest": None, "event_study": None}}
+    assert not path.exists()
+    assert len(list(tmp_path.glob("research_jobs.json.corrupt-*"))) == 1
+
+
+def test_unreadable_state_path_does_not_crash_startup(tmp_path):
+    (tmp_path / "research_jobs.json").mkdir()  # reading a directory raises OSError
+    manager = ResearchJobs(tmp_path)
+    assert manager.snapshot()["latest"] == {"backtest": None, "event_study": None}
+
+
+def test_invalid_saved_jobs_are_dropped_and_valid_ones_kept(tmp_path):
+    good = dict(id="ok", kind="event_study", status="succeeded", started_at="2026-01-01T00:00:00Z",
+                finished_at="2026-01-01T00:20:00Z", message="x" * 5000, extra="ignored")
+    (tmp_path / "research_jobs.json").write_text(json.dumps({
+        "backtest": {"id": "no-status", "kind": "backtest"}, "event_study": good, "rm -rf": {"status": "running"},
+    }))
+    manager = ResearchJobs(tmp_path)
+    latest = manager.snapshot()["latest"]
+    assert latest["backtest"] is None
+    assert set(latest) == {"backtest", "event_study"}
+    assert latest["event_study"]["id"] == "ok" and "extra" not in latest["event_study"]
+    assert len(latest["event_study"]["message"]) == 500
+    assert json.loads((tmp_path / "research_jobs.json").read_text())["backtest"] is None
+
+
+@pytest.mark.parametrize("job", [
+    "not a dict",
+    {"id": "a", "kind": "event_study", "status": "running", "started_at": "2026-01-01T00:00:00Z",
+     "finished_at": None, "message": "kind mismatch"},
+    {"id": "a", "kind": "backtest", "status": "exploded", "started_at": "2026-01-01T00:00:00Z",
+     "finished_at": None, "message": "bad status"},
+    {"id": "a", "kind": "backtest", "status": "failed", "started_at": "not a date",
+     "finished_at": None, "message": "bad date"},
+])
+def test_wrong_shape_jobs_are_dropped(tmp_path, job):
+    (tmp_path / "research_jobs.json").write_text(json.dumps({"backtest": job}))
+    assert ResearchJobs(tmp_path).snapshot()["latest"]["backtest"] is None
+
+
+def test_api_launch_disabled_on_public_deployment_without_token(tmp_path, worker, monkeypatch):
+    launch_settings(monkeypatch, public="https://quantdesk.example.com")
+    monkeypatch.setattr(main, "research_jobs", ResearchJobs(tmp_path))
+    client = TestClient(main.app)
+    status = client.get("/api/research/jobs").json()
+    assert status["enabled"] is False and status["requires_token"] is False
+    assert client.post("/api/research/jobs/backtest").status_code == 403
+    assert worker.calls == []
+
+
+def test_api_explicit_disable_wins_on_local_deployment(tmp_path, worker, monkeypatch):
+    launch_settings(monkeypatch, enabled=False)
+    monkeypatch.setattr(main, "research_jobs", ResearchJobs(tmp_path))
+    assert TestClient(main.app).post("/api/research/jobs/backtest").status_code == 403
+
+
+def test_api_admin_token_required_when_configured(tmp_path, worker, monkeypatch):
+    launch_settings(monkeypatch, token="s3cret-token", public="https://quantdesk.example.com")
+    manager = ResearchJobs(tmp_path)
+    monkeypatch.setattr(main, "research_jobs", manager)
+    client = TestClient(main.app)
+    status = client.get("/api/research/jobs").json()
+    assert status["enabled"] is True and status["requires_token"] is True
+    assert "s3cret" not in json.dumps(status)
+    assert client.post("/api/research/jobs/backtest").status_code == 401
+    assert client.post("/api/research/jobs/backtest", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    assert client.post("/api/research/jobs/backtest", headers={"Authorization": "s3cret-token"}).status_code == 401
+    assert worker.calls == []
+    ok = client.post("/api/research/jobs/backtest", headers={"Authorization": "Bearer s3cret-token"})
+    assert ok.status_code == 202
+    finish(manager, worker)
+
+
+def test_launch_settings_read_environment(monkeypatch):
+    monkeypatch.setenv("RESEARCH_JOBS_ENABLED", "")
+    monkeypatch.setenv("RESEARCH_ADMIN_TOKEN", "")
+    blank = main.ResearchLaunchSettings(_env_file=None)
+    assert blank.research_jobs_enabled is None
+    monkeypatch.setenv("RESEARCH_JOBS_ENABLED", "true")
+    monkeypatch.setenv("RESEARCH_ADMIN_TOKEN", "abc")
+    loaded = main.ResearchLaunchSettings(_env_file=None)
+    assert loaded.research_jobs_enabled is True
+    assert loaded.research_admin_token.get_secret_value() == "abc"
+    assert "abc" not in repr(loaded)

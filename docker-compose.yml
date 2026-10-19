@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: quantdesk
       POSTGRES_DB: quantdesk
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"  # local only: never expose the dev database
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
       DATABASE_URL: postgresql+psycopg://quantdesk:quantdesk@db:5432/quantdesk
       DATA_DIR: /app/data
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"  # local only; put a reverse proxy in front for public deploys
     volumes:
       - apidata:/app/data
     depends_on:
