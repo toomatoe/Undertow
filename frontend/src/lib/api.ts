@@ -42,6 +42,34 @@ export interface StudyResult extends Evidence {
   baseline_mean: number | null;
   t_vs_baseline: number | null;
   nominal_significant: boolean;
+  /** Firm-clustered (CR1) t-stats, clusters = companies. Reporting only in the main study. Absent on older files. */
+  t_stat_clustered?: number | null;
+  t_vs_baseline_clustered?: number | null;
+  clusters?: number;
+}
+
+export type StudyName = "main" | "oos" | "insider_purchases";
+
+/** One pre-registered out-of-sample hypothesis (backend/app/research/oos.py `confirmatory`). Historical, hypothetical. */
+export interface ConfirmatoryResult {
+  hypothesis: string;
+  signal: string;
+  label: string;
+  buckets: string[];
+  cells: string[];
+  horizon_days: number;
+  direction: "-" | "+" | "?";
+  n: number;
+  companies: number;
+  mean_abnormal: number | null;
+  baseline_mean: number | null;
+  excess_vs_baseline: number | null;
+  t_clustered: number | null;
+  t_vs_baseline_clustered: number | null;
+  mean_net: number | null;
+  t_critical: number;
+  checks: Record<string, boolean>;
+  verdict: "replicated" | "not replicated" | "underpowered";
 }
 
 export interface EventStudy {
@@ -56,12 +84,29 @@ export interface EventStudy {
     borrow_apr_for_shorts?: Record<string, number>;
     benchmark: Record<string, string>;
     price_source: string;
+    /** StudyDesign name: "in_sample", "oos", "insider_purchases". Absent on older files. */
+    study?: string;
+    design?: Record<string, unknown>;
   };
   coverage: Record<string, Record<string, number>>;
   measured_events: number;
-  testing: { n_tests: number; t_critical: number; baseline: Record<string, Record<string, number>> };
+  testing: { n_tests: number; t_critical: number; baseline: Record<string, Record<string, number>>; role?: string };
   results: StudyResult[];
   caveats: string[];
+  /** OOS study only: the pre-registered confirmatory tests (results[] there is exploratory). */
+  confirmatory?: ConfirmatoryResult[];
+  confirmatory_testing?: { family_size: number; alpha_two_sided: number; t_critical: number; min_n: number; min_companies: number; statistic: string };
+  preregistration?: string;
+  preregistered_on?: string;
+}
+
+/** GET /api/research/studies (schemas.StudyInfo). */
+export interface StudyInfo {
+  study: StudyName;
+  available: boolean;
+  generated_at: string | null;
+  n_tests: number | null;
+  design: string | null;
 }
 
 export interface Article {
@@ -122,6 +167,94 @@ export interface Status {
   enrich_enabled: boolean;
   enrich_model: string | null;
   sources: { name: string; last_run: string | null; fetched: number | null; inserted: number | null; error: string | null }[];
+  /** Mutation protection (schemas.AdminStatus). Never includes the token. */
+  admin: AdminStatus;
+}
+
+export interface AdminStatus {
+  /** An admin token is configured: mutations need it. */
+  protected: boolean;
+  /** Ingest, alerts/test and watchlist changes are possible at all on this server. */
+  mutations_enabled: boolean;
+}
+
+// --- Health (mirrors schemas.HealthDetails / HealthHistory, backend/app/health.py) ---
+
+export type HealthState = "ok" | "degraded" | "down" | "disabled" | "unknown";
+
+export interface HealthComponent {
+  status: HealthState;
+  detail: string | null;
+  age_seconds?: number | null;
+  last_mark?: string | null;
+  latest_issue?: string | null;
+  week_end?: string | null;
+  enabled?: boolean;
+  channel?: string;
+  last?: { status: string; reason: string | null; at: string } | null;
+  active?: string | null;
+}
+
+export interface HealthDetails {
+  status: "ok" | "degraded" | "down";
+  checked_at: string;
+  components: Record<string, HealthComponent>;
+  thresholds: { ingest_stale_seconds: number; edgar_stale_seconds: number; edgar_hours_et: string; critical: string[] };
+}
+
+export interface HealthIncident {
+  at: string;
+  component: string;
+  from: string;
+  to: string;
+}
+
+export interface HealthHistory {
+  days: number;
+  from: string;
+  to: string;
+  samples: number;
+  uptime_pct: number | null;
+  components: Record<string, { uptime_pct: number | null; samples: number }>;
+  daily: { day: string; uptime_pct: number | null; samples: number }[];
+  incidents: HealthIncident[];
+}
+
+// --- Journal hash chain (mirrors schemas.JournalChain / ChainDay / ChainVerify, backend/app/journal/digest.py) ---
+
+export interface ChainLine {
+  day: string;
+  prev_hash: string;
+  hash: string;
+  count: number | null;
+  sealed_at: string | null;
+  sealed_late: boolean;
+}
+
+export interface JournalChain {
+  head: { head_hash: string; head_day: string; days: number } | null;
+  /** Last 30 sealed days, oldest first. */
+  lines: ChainLine[];
+  error: string | null;
+}
+
+export interface ChainDay {
+  day: string;
+  prev_hash: string;
+  hash: string;
+  entries: Record<string, unknown>[];
+}
+
+export interface ChainVerify {
+  ok: boolean;
+  days: number;
+  head_hash: string | null;
+  head_day: string | null;
+  first_mismatch: { day: string; expected: string; actual: string } | null;
+  broken_link: { day: string | null; expected_prev: string | null; actual_prev: string | null; reason: string } | null;
+  late_days: string[];
+  /** verify_chain is cached server-side for up to 10 minutes. */
+  checked_at: string;
 }
 
 // --- Backtest (mirrors backend/app/backtest/report.py) ---
@@ -246,7 +379,11 @@ export interface BacktestReport {
     chosen: Record<string, unknown>;
     test: Record<string, number>;
   };
-  overfitting: Record<string, number>;
+  /**
+   * trials, dsr_<period>, luck_sharpe_<period>; newer reports also n_returns_<period> (daily returns the DSR used)
+   * and trial_sharpe_std (sd of the trial Sharpes, annual). Older reports lack the last two.
+   */
+  overfitting: Record<string, number> & { trials?: number; trial_sharpe_std?: number };
   borrow_check: Record<string, unknown>;
   readiness: ReadinessGate[];
   verdict: { level: "not_ready" | "paper_next"; headline: string; detail: string };
@@ -513,6 +650,8 @@ export interface NewsletterIssue extends NewsletterIssueSummary {
     min_n: number;
     rows: NewsletterTrackRow[];
     collecting: { recorded: number; first_due: string | null } | null;
+    /** Journal hash-chain head at build time; null without a chain, absent on issues archived before the seal existed. */
+    seal?: { head_hash: string; head_day: string; days: number } | null;
   };
   research_note: { text: string; strategy: string | null; report_date: string | null } | null;
   links: Record<"methodology" | "track_record" | "edge_lab" | "disclaimer" | "archive", string>;
@@ -537,9 +676,82 @@ export interface ArticleFilters {
   limit?: number;
 }
 
+/** Non-2xx response. `message` starts with the status ("404 ...") so callers can keep checking `startsWith("404")`. */
+export class ApiError extends Error {
+  /** `admin`: raised by an admin-protected call (send with admin: true). */
+  constructor(public status: number, message: string, public detail?: string, public admin = false) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+/** An ApiError from an admin-protected call that the user can act on: 401 (token), 403 (disabled), 429 (rate limit). */
+export function isAdminApiError(e: unknown): e is ApiError {
+  return e instanceof ApiError && e.admin && (e.status === 401 || e.status === 403 || e.status === 429);
+}
+
+// --- Admin token (this browser tab only) ---
+// Sent as a Bearer header on every admin-protected call. sessionStorage can be unavailable (privacy modes, SSR):
+// these helpers never throw.
+const ADMIN_TOKEN_KEY = "quantdesk.researchAdminToken";
+
+export function getAdminToken(): string {
+  try {
+    return typeof window === "undefined" ? "" : (window.sessionStorage.getItem(ADMIN_TOKEN_KEY) ?? "");
+  } catch {
+    return "";
+  }
+}
+
+export function setAdminToken(token: string): void {
+  try {
+    if (typeof window === "undefined") return;
+    if (token.trim()) window.sessionStorage.setItem(ADMIN_TOKEN_KEY, token.trim());
+    else window.sessionStorage.removeItem(ADMIN_TOKEN_KEY);
+  } catch {
+    /* storage unavailable: the token just isn't kept */
+  }
+}
+
+export const ADMIN_TOKEN_REQUIRED = "Admin token required. Enter it on the Status page (kept for this browser tab only).";
+export const CHANGES_DISABLED = "Changes are turned off on this server.";
+
+async function errorFor(res: Response, admin: boolean): Promise<ApiError> {
+  const body = await res.json().catch(() => null);
+  const detail = typeof body?.detail === "string" ? body.detail : undefined;
+  if (admin && res.status === 401) return new ApiError(401, `401 ${ADMIN_TOKEN_REQUIRED}`, detail, admin);
+  if (admin && res.status === 403) return new ApiError(403, `403 ${CHANGES_DISABLED} ${detail ?? ""}`.trim(), detail, admin);
+  if (res.status === 429) return new ApiError(429, `429 Too many requests. Try again in ${res.headers.get("Retry-After") ?? "a few"} seconds.`, detail, admin);
+  return new ApiError(res.status, `${res.status} ${detail ?? res.statusText}`, detail, admin);
+}
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  if (!res.ok) throw new ApiError(res.status, `${res.status} ${res.statusText}`);
+  return res.json();
+}
+
+/**
+ * Mutating request. `admin`: attach the tab's admin token (if any) and turn 401/403 into a clear message.
+ * Public writes (subscribe, newsletter preview) send no token.
+ */
+async function send<T>(
+  path: string,
+  method: "POST" | "PUT" | "DELETE",
+  opts: { admin?: boolean; body?: unknown; timeoutMs?: number } = {},
+): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = opts.admin ? getAdminToken() : "";
+  if (token) headers.Authorization = `Bearer ${token}`;
+  if (opts.body !== undefined) headers["Content-Type"] = "application/json";
+  const res = await fetch(`${API_BASE}${path}`, {
+    method,
+    headers,
+    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    cache: "no-store",
+    signal: opts.timeoutMs ? AbortSignal.timeout(opts.timeoutMs) : undefined,
+  });
+  if (!res.ok) throw await errorFor(res, !!opts.admin);
   return res.json();
 }
 
@@ -552,7 +764,8 @@ function query(params: object): string {
   return s ? `?${s}` : "";
 }
 
-export type ResearchJobKind = "backtest" | "event_study";
+/** backend/app/research_jobs.py MODULES. */
+export type ResearchJobKind = "backtest" | "event_study" | "event_study_oos" | "insider_study";
 export interface ResearchJob {
   id: string;
   kind: ResearchJobKind;
@@ -563,44 +776,34 @@ export interface ResearchJob {
 }
 export interface ResearchJobs {
   active: ResearchJob | null;
-  latest: Record<ResearchJobKind, ResearchJob | null>;
+  latest: Partial<Record<ResearchJobKind, ResearchJob | null>>;
   /** False when this server does not accept launches from the UI (e.g. a public deployment without an admin token). */
   enabled: boolean;
-  /** True when launches need the operator's admin token (RESEARCH_ADMIN_TOKEN on the API). */
+  /** True when launches need the operator's admin token (ADMIN_TOKEN, or the older RESEARCH_ADMIN_TOKEN, on the API). */
   requires_token: boolean;
 }
 
-export class ResearchRequestError extends Error {
-  constructor(public status: number, message: string) {
-    super(message);
-  }
-}
-
-async function researchRequest<T>(path: string, method = "GET", token?: string): Promise<T> {
-  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-  const res = await fetch(`${API_BASE}${path}`, { method, headers, cache: "no-store", signal: AbortSignal.timeout(15000) });
-  if (!res.ok) {
-    const body = await res.json().catch(() => null);
-    throw new ResearchRequestError(res.status, `${res.status} ${typeof body?.detail === "string" ? body.detail : res.statusText}`);
-  }
-  return res.json();
-}
-
 export const api = {
-  researchJobs: () => researchRequest<ResearchJobs>("/api/research/jobs"),
-  startResearch: (kind: ResearchJobKind, token?: string) =>
-    researchRequest<ResearchJob>(`/api/research/jobs/${kind}`, "POST", token),
+  researchJobs: async () => {
+    const res = await fetch(`${API_BASE}/api/research/jobs`, { cache: "no-store", signal: AbortSignal.timeout(15000) });
+    if (!res.ok) throw await errorFor(res, false);
+    return (await res.json()) as ResearchJobs;
+  },
+  /** Uses the tab's admin token (setAdminToken). ApiError 401: token missing/wrong; 403: runs disabled on this server. */
+  startResearch: (kind: ResearchJobKind) =>
+    send<ResearchJob>(`/api/research/jobs/${kind}`, "POST", { admin: true, timeoutMs: 15000 }),
   articles: (f: ArticleFilters = {}) => get<ArticlePage>(`/api/articles${query(f)}`),
   article: (id: number) => get<Article>(`/api/articles/${id}`),
   signals: (f: ArticleFilters = {}) => get<ArticlePage>(`/api/signals${query(f)}`),
   signalCatalog: () => get<Signal[]>("/api/signals/catalog"),
-  eventStudy: () => get<EventStudy>("/api/research/event-study"),
+  /** study defaults to "main" (the live evidence). 404 when that study has not been run. */
+  eventStudy: (study: StudyName = "main") =>
+    get<EventStudy>(study === "main" ? "/api/research/event-study" : `/api/research/event-study?study=${study}`),
+  studies: () => get<StudyInfo[]>("/api/research/studies"),
   watchlist: () => get<TrendingTicker[]>("/api/watchlist"),
+  /** Admin-protected. Throws ApiError: 401 -> ADMIN_TOKEN_REQUIRED, 403 -> CHANGES_DISABLED, 404 unknown ticker. */
   watch: (symbol: string, on: boolean) =>
-    fetch(`${API_BASE}/api/watchlist/${encodeURIComponent(symbol)}`, { method: on ? "PUT" : "DELETE" }).then((r) => {
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.json();
-    }),
+    send<{ symbol: string; on_watchlist: boolean }>(`/api/watchlist/${encodeURIComponent(symbol)}`, on ? "PUT" : "DELETE", { admin: true }),
   trending: (hours = 24, size = "") => get<TrendingTicker[]>(`/api/tickers/trending${query({ hours, size })}`),
   halts: (f: { symbol?: string; size?: string; hours?: number; limit?: number } = {}) => get<Halt[]>(`/api/halts${query(f)}`),
   fundamentals: (symbol: string) => get<Fundamentals>(`/api/tickers/${encodeURIComponent(symbol)}/fundamentals`),
@@ -610,6 +813,13 @@ export const api = {
   backtestRuns: (limit = 200) => get<BacktestRunLog>(`/api/backtest/runs?limit=${limit}`),
   journal: (f: JournalFilters = {}) => get<JournalPage>(`/api/journal${query(f)}`),
   journalSummary: () => get<JournalSummary>("/api/journal/summary"),
+  journalChain: () => get<JournalChain>("/api/journal/chain"),
+  journalChainDay: (day: string) => get<ChainDay>(`/api/journal/chain/${encodeURIComponent(day)}`),
+  journalVerify: () => get<ChainVerify>("/api/journal/verify"),
+  healthDetails: () => get<HealthDetails>("/api/health/details"),
+  healthHistory: (days = 7) => get<HealthHistory>(`/api/health/history?days=${days}`),
+  /** 202 with a generic message (no enumeration); ApiError 503 when email delivery is not configured. */
+  subscribe: (email: string, daily = false) => send<{ message: string }>("/api/subscribe", "POST", { body: { email, daily } }),
   newsletterIssues: () => get<NewsletterIssueSummary[]>("/api/newsletter/issues"),
   newsletterIssue: (id: string) => get<NewsletterIssue>(`/api/newsletter/${encodeURIComponent(id)}`),
   newsletterHtmlUrl: (id: string) => `${API_BASE}/api/newsletter/${encodeURIComponent(id)}.html`,
@@ -618,11 +828,8 @@ export const api = {
       if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
       return r.text();
     }),
-  newsletterPreview: () =>
-    fetch(`${API_BASE}/api/newsletter/preview`, { method: "POST", cache: "no-store" }).then((r) => {
-      if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-      return r.json() as Promise<NewsletterIssue>;
-    }),
-  ingest: () => fetch(`${API_BASE}/api/ingest`, { method: "POST" }).then((r) => r.json()),
+  newsletterPreview: () => send<NewsletterIssue>("/api/newsletter/preview", "POST"),
+  /** Admin-protected. Throws ApiError (401 -> ADMIN_TOKEN_REQUIRED, 403 -> CHANGES_DISABLED). */
+  ingest: () => send<Record<string, unknown>>("/api/ingest", "POST", { admin: true }),
   streamUrl: `${API_BASE}/api/stream`,
 };

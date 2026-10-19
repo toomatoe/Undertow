@@ -1,0 +1,108 @@
+# Production stack: Postgres + API + Next.js frontend.
+#
+# Use it with an env file that lives OUTSIDE git and is never committed (it holds the admin token and passwords):
+#   docker compose -f docker-compose.prod.yml --env-file /etc/quantdesk/prod.env up -d --build
+#
+# Required (compose refuses to start without them): POSTGRES_PASSWORD, ADMIN_TOKEN.
+# Set for any real deployment (the defaults are local-only): PUBLIC_BASE_URL (public site origin, also the
+# frontend canonical URL), CORS_ORIGINS (JSON list, e.g. ["https://example.com"]), NEXT_PUBLIC_API_URL (API origin as
+# browsers see it; baked into the web image at build time).
+# Optional: every other backend setting in .env.example is passed through below (app/config.py, app/security.py flags
+# RESEARCH_JOBS_ENABLED / MUTATIONS_ENABLED, SMTP_* / EMAIL_* email delivery: see backend/app/delivery/AGENTS.md).
+#
+# The API (8000) and web (3000) ports bind to 127.0.0.1: put a TLS reverse proxy (Caddy, nginx) in front and set
+# TRUST_PROXY_HEADERS=true so rate limits see real client IPs. The database is never published.
+
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: quantdesk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}
+      POSTGRES_DB: quantdesk
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quantdesk"]
+      interval: 5s
+      retries: 20
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://quantdesk:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}@db:5432/quantdesk
+      DATA_DIR: /app/data
+      ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in the env file}
+      # Blank values are ignored by the backend (env_ignore_empty), so `:-` falls back to the code default.
+      RESEARCH_JOBS_ENABLED: ${RESEARCH_JOBS_ENABLED:-}
+      MUTATIONS_ENABLED: ${MUTATIONS_ENABLED:-}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+      CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
+      SEC_USER_AGENT: ${SEC_USER_AGENT:-}
+      RSS_FEEDS: ${RSS_FEEDS:-}
+      EDGAR_ENABLED: ${EDGAR_ENABLED:-true}
+      ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
+      ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ENRICH_MODEL: ${ENRICH_MODEL:-}
+      ENRICH_MAX_PER_CYCLE: ${ENRICH_MAX_PER_CYCLE:-25}
+      FILING_TEXT_MAX_PER_CYCLE: ${FILING_TEXT_MAX_PER_CYCLE:-40}
+      INGEST_INTERVAL_SECONDS: ${INGEST_INTERVAL_SECONDS:-300}
+      INGEST_ON_STARTUP: ${INGEST_ON_STARTUP:-true}
+      EDGAR_POLL_SECONDS: ${EDGAR_POLL_SECONDS:-30}
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      ALERT_MIN_SEVERITY: ${ALERT_MIN_SEVERITY:-2}
+      ALERT_SIZES: ${ALERT_SIZES:-}
+      ALERT_MAX_AGE_MINUTES: ${ALERT_MAX_AGE_MINUTES:-15}
+      RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
+      RATE_LIMIT_WRITE_PER_MINUTE: ${RATE_LIMIT_WRITE_PER_MINUTE:-10}
+      TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-20}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
+      EMAIL_POSTAL_ADDRESS: ${EMAIL_POSTAL_ADDRESS:-}
+      EMAIL_DAILY_DIGEST_HOUR_ET: ${EMAIL_DAILY_DIGEST_HOUR_ET:-7}
+      EMAIL_MAX_PER_RUN: ${EMAIL_MAX_PER_RUN:-500}
+      EMAIL_LINK_BASE_URL: ${EMAIL_LINK_BASE_URL:-}
+      EMAIL_TOKEN_SECRET: ${EMAIL_TOKEN_SECRET:-}
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - apidata:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+        NEXT_PUBLIC_SITE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+    restart: unless-stopped
+    environment:
+      API_URL_INTERNAL: http://api:8000
+      NEXT_PUBLIC_SITE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  apidata:

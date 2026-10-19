@@ -18,6 +18,8 @@ from datetime import date, datetime, timezone
 
 import httpx
 
+from app.research import snapshot
+
 log = logging.getLogger(__name__)
 
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
@@ -83,14 +85,24 @@ def parse_chart(symbol: str, payload: dict) -> PriceSeries | None:
     return PriceSeries(symbol, dates, closes, raw, dvol) if dates else None
 
 
-def load_prices(ticker: str, start: date, end: date, cache_dir: str, _attempt: int = 0) -> PriceSeries | None:
+def load_prices(
+    ticker: str, start: date, end: date, cache_dir: str, _attempt: int = 0, *, offline: bool = False
+) -> PriceSeries | None:
     """Adjusted daily closes, from cache when present. None if the symbol has no data
-    (or Yahoo still rate-limits after len(_RETRY_BACKOFF) retries)."""
+    (or Yahoo still rate-limits after len(_RETRY_BACKOFF) retries).
+
+    offline=True never touches the network: a cache miss returns None and is recorded with
+    snapshot.record_miss so the study can fail loudly. Cache files read or written are
+    recorded with snapshot.record_read (only while a study run is tracking)."""
     os.makedirs(cache_dir, exist_ok=True)
     path = os.path.join(cache_dir, f"{ticker}_{start}_{end}.json")
     if os.path.exists(path):
         with open(path, encoding="utf-8") as f:
             payload = json.load(f)
+        snapshot.record_read(path)
+    elif offline:
+        snapshot.record_miss(path)
+        return None
     else:
         _throttle()
         params = {
@@ -122,4 +134,5 @@ def load_prices(ticker: str, start: date, end: date, cache_dir: str, _attempt: i
         if resp.status_code in (200, 404):  # cache misses too, so reruns don't re-ask
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(payload, f)
+            snapshot.record_read(path)
     return parse_chart(ticker, payload)

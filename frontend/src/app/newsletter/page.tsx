@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 
+import SubscribeForm from "@/components/SubscribeForm";
 import NewsletterWorkspace from "@/components/newsletter/NewsletterWorkspace";
 import { getNewsletterIssue, getNewsletterIssues, SITE_URL } from "@/lib/server-api";
 
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
  * If the API is down the page still renders and the client workspace retries.
  * Keep this a server component that fetches via lib/server-api.ts. A "use client" page fetching in
  * useEffect (the older pattern for data pages) would hide the issue links from crawlers.
+ * SubscribeForm is a client island ("use client" in its own file); this page stays a server component.
  */
 export default async function NewsletterPage() {
   const list = await getNewsletterIssues();
@@ -38,6 +40,8 @@ export default async function NewsletterPage() {
       </div>
 
       <NewsletterWorkspace issues={issues} issue={latest?.ok ? latest.data : null} legacyQuery />
+
+      <SubscribeForm />
     </main>
   );
 }

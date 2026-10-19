@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, BigInteger, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, BigInteger, Boolean, Date, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db import Base
@@ -157,3 +157,39 @@ class IngestRun(Base):
     fetched: Mapped[int] = mapped_column(Integer, default=0)
     inserted: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text)
+
+
+class Subscriber(Base):
+    """Email list member (app/delivery). Double opt-in: pending until the emailed confirm link is used.
+
+    Tokens are stored only as SHA-256 hex digests; raw tokens exist only in emailed links.
+    No IP addresses or user agents are stored.
+    """
+
+    __tablename__ = "subscribers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True)  # lowercased, stripped
+    status: Mapped[str] = mapped_column(String(16), default="pending", index=True)  # pending | active | unsubscribed
+    wants_daily: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    unsubscribed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    confirm_token_hash: Mapped[str | None] = mapped_column(String(64), index=True)
+    manage_token_hash: Mapped[str | None] = mapped_column(String(64), unique=True)
+    source: Mapped[str | None] = mapped_column(String(32))
+
+
+class EmailSend(Base):
+    """One row per (subscriber, kind, ref) delivery attempt; the unique constraint makes sends idempotent."""
+
+    __tablename__ = "email_sends"
+    __table_args__ = (UniqueConstraint("subscriber_id", "kind", "ref", name="uq_email_send"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    subscriber_id: Mapped[int] = mapped_column(ForeignKey("subscribers.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # confirm | newsletter | daily_digest
+    ref: Mapped[str] = mapped_column(String(32))  # issue id (2026-W42) or ET date (2026-10-19)
+    status: Mapped[str] = mapped_column(String(16), index=True)  # sending (transient claim) | sent | failed
+    error: Mapped[str | None] = mapped_column(String(300))
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)

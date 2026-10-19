@@ -22,7 +22,14 @@ src/app/newsletter/layout.tsx      /newsletter default title + description
 src/app/newsletter/page.tsx        /newsletter archive + latest issue (server component, ISR 10 min)
 src/app/newsletter/[issue]/        /newsletter/2026-W41  one issue (server component, ISR 1 h); same (view)/ + not-found.tsx
                                    pattern as the ticker page (layout.tsx gate via parseIssueId, loading.tsx, page.tsx)
-src/app/sitemap.ts                 /sitemap.xml  static pages + /api/tickers/sitemap + archived issues (revalidate 1 h)
+src/app/learn/page.tsx             /learn  lesson index + curriculum overview (static server component, no API calls)
+src/app/learn/[slug]/page.tsx      /learn/<slug>  one lesson (server component, ISR 1 h, generateStaticParams from
+                                   LESSON_SLUGS, dynamicParams = false so any other slug is a real 404); body from
+                                   components/learn/lessons/*Lesson.tsx, live numbers via server-api getEventStudy/getBacktestReport
+src/app/learn/curriculum/page.tsx  /learn/curriculum  8-week self-study path (static server component)
+src/app/status/layout.tsx          /status metadata (title, description)
+src/app/status/page.tsx            /status  health components, 7-day uptime, incidents, seal verification, admin-token box (client, refresh 60 s)
+src/app/sitemap.ts                 /sitemap.xml  static pages (incl. /learn, every lesson, /learn/curriculum) + /api/tickers/sitemap + archived issues (revalidate 1 h)
 src/app/robots.ts                  /robots.txt   allow /, disallow /api/, points at the sitemap
 src/app/research/page.tsx   /research        static "planned" page (AI research assistant)
 src/app/track-record/page.tsx /track-record forward signal journal vs Edge Lab (components in src/components/track/)
@@ -34,16 +41,22 @@ src/components/             shared client components
 src/lib/api.ts              the only browser API client
 src/lib/server-api.ts       server-side fetch helpers (server components, generateMetadata, sitemap.ts), SITE_URL
 src/lib/format.ts           formatting helpers and label maps
+src/lib/learn/              Learn data + pure math (no React, no fetch): lessons.ts (registry, LESSONS, lessonPath,
+                            CURRICULUM_PATH, READINGS), curriculum.ts (CURRICULUM weeks), stats.ts (seeded mulberry32 PRNG,
+                            t-stats, clustered t, PSR/DSR mirroring the backend), simulations.ts (widget simulations),
+                            live.ts (pull lesson numbers out of EventStudy / BacktestReport, dateLabel)
+Dockerfile, .dockerignore   production image: next.config.ts `output: "standalone"`, node:20-alpine, `node server.js` on :3000
 ```
 
 Most data pages are client components (`"use client"`) that fetch in `useEffect` through `api`. The exceptions are the
-crawlable pages (`/ticker/[symbol]`, `/newsletter`, `/newsletter/[issue]`) plus `sitemap.ts`, which are server components
-fetching through `src/lib/server-api.ts`. There are no API routes in Next.
+crawlable pages (`/ticker/[symbol]`, `/newsletter`, `/newsletter/[issue]`, `/learn`, `/learn/[slug]`, `/learn/curriculum`)
+plus `sitemap.ts`, which are server components (the ticker, newsletter and lesson pages fetch through
+`src/lib/server-api.ts`; the Learn index and curriculum make no API calls). There are no API routes in Next.
 
 ## Server-rendered pages (SEO)
 
 - `server-api.ts` helpers (`getTicker`, `getFundamentals`, `getHalts`, `getSitemapTickers`, `getNewsletterIssues`,
-  `getNewsletterIssue`) return `Result<T>` (`{ok: true, data}` or `{ok: false, status, error}`, status 0 = network
+  `getNewsletterIssue`, `getEventStudy(study)`, `getBacktestReport`; the last two cache 1 h for the Learn lessons) return `Result<T>` (`{ok: true, data}` or `{ok: false, status, error}`, status 0 = network
   error/timeout) and never throw. They use `next: { revalidate }` and a timeout; most are wrapped in React `cache()`
   so layout, `generateMetadata` and page share one request.
 - 404 gate: `(view)/layout.tsx` validates the param and fetches before anything streams, so an unknown ticker or
@@ -56,6 +69,11 @@ fetching through `src/lib/server-api.ts`. There are no API routes in Next.
 - Ticker summary text (`summary.ts`) is facts only, every window written with explicit dates (pages are cached).
 - Newsletter: the archive list is real links to `/newsletter/<id>`; old `/newsletter?issue=<id>` links (still used
   by the backend's `links.archive`) are redirected client-side by `NewsletterWorkspace` (`legacyQuery`).
+- Learn lessons: each lesson's live numbers come from the API (1 h cache); a 404 (study not run) or API outage renders
+  the lesson with an `ApiNote` instead of failing. Every live number carries a `LiveTag` (historical vs hypothetical,
+  with its date). Widgets are `"use client"` islands; the simulators (`NoiseSimulator`, `ClusterSimulator`,
+`SurvivorshipSimulator`) take a seed and are deterministic for it, and their output is labelled hypothetical. `repoRefs` in
+  `lessons.ts` / `curriculum.ts` must point at files that exist (check with `git ls-files <path>`).
 - Never convert these pages to `useEffect` client pages: crawlers would lose the content and links.
 
 ## Pages
@@ -65,8 +83,20 @@ fetching through `src/lib/server-api.ts`. There are no API routes in Next.
   "ingest now").
 - `/signals`: `api.signals()` with size / min_severity / signal (from `api.signalCatalog()`) / watchlist
   filters, `WatchlistPanel`, legend. SSE `article` events trigger a reload debounced by 3 s.
-- `/lab`: `api.eventStudy()`; tiles, "what survived", per-bucket `DivergingChart` of `mean_net` with a
-  5d/20d toggle, coverage/survivorship table, full results table, caveats. 404 -> "No study yet" message.
+- `/lab`: `api.studies()` + `api.eventStudy(name)` per study; a study selector (`main` = in-sample live evidence,
+  `oos` = pre-registered out-of-sample 2020-23, `insider_purchases` = Form 4 study); the `ResearchRunPanel` uses the
+  selected study's kind (`event_study`, `event_study_oos`, `insider_study`). Tiles, "what survived", per-bucket `DivergingChart` of
+  `mean_net` with a 5d/20d toggle, coverage/survivorship table, full results table (incl. clustered t when present),
+  caveats; for OOS the `ConfirmatoryBlock` verdicts (from `components/learn/`) and an in-sample vs OOS comparison table.
+  404 -> "No study yet" message. An older API without `/api/research/studies` falls back to the main study only.
+- `/learn`, `/learn/[slug]`, `/learn/curriculum`: see "Server-rendered pages". Six lessons (slug -> body in
+  `components/learn/lessons/`, mapped by `BODIES` in `app/learn/[slug]/page.tsx`): `event-study` -> `EventStudyLesson.tsx`,
+  `baselines` -> `BaselinesLesson.tsx`, `multiple-testing` -> `MultipleTestingLesson.tsx`, `clustered-errors` ->
+  `ClusteredErrorsLesson.tsx`, `survivorship-bias` -> `SurvivorshipLesson.tsx`, `sharpe-dsr-backtest-pitfalls` ->
+  `SharpeDsrLesson.tsx`. A new lesson needs an entry in `LESSONS` (lessons.ts) and in `BODIES`; the sitemap picks it up.
+- `/status`: `api.healthDetails()` + `api.healthHistory(7)` (refresh every 60 s), `api.journalVerify()`, `api.status()`
+  for `admin`; an admin-token box that stores the token in session storage (`setAdminToken`) for protected servers.
+- `/newsletter` also renders `SubscribeForm` (client island, anchor `#subscribe`); the page stays a server component.
 - `/ticker/[symbol]`: server-fetched ticker (90 days), fundamentals and halts; factual summary paragraph, then
   `TickerView` (watchlist re-checked in the browser, window switch re-fetches via `api.ticker`), `DilutionPanel` (server
   data, or client fetch if the server call failed with non-404, omitted without a CIK or on 404), `HaltsPanel`,
@@ -78,7 +108,8 @@ fetching through `src/lib/server-api.ts`. There are no API routes in Next.
   friction waterfall, borrow fees, equity/drawdown charts (inline SVG `TimeChart`), readiness checklist,
   real-money projection, stress, robustness, trade log (CSV export), run log, assumptions. Types `BacktestReport`
   etc. mirror the JSON from `backend/app/backtest/report.py`.
-- `/track-record`: `api.journal()` + `api.journalSummary()`; status tiles, live-vs-expected table ("too early" under
+- `/track-record`: `api.journal()` + `api.journalSummary()`; status tiles, `SealPanel` (hash-chain head from
+  `api.journalChain()`, verification from `api.journalVerify()`, how to recompute a day), live-vs-expected table ("too early" under
   5 results), nano-offering spotlight with a running-mean chart, filterable journal table with CSV.
 - `/ticker/[symbol]` also renders `DilutionPanel` (`initialData` or `api.fundamentals()`): runway, cash, 1-year share change, offering history.
 - Charts measure their container width. In a hidden/zero-width browser pane they render no SVG; that is expected, not a bug.
@@ -88,11 +119,14 @@ fetching through `src/lib/server-api.ts`. There are no API routes in Next.
 
 | File | Role |
 |---|---|
-| `Nav.tsx` | Header tabs from `TABS` (includes Newsletter); `/ticker/*` highlights News. Add new pages here |
+| `Nav.tsx` | Header tabs from `TABS` (includes Newsletter and Learn); `/ticker/*` highlights News. Add new pages here |
 | `NewsFeed.tsx` | News tab body; owns the SSE subscription for `/`. Has its own `EVENT_TYPES` list for the filter |
 | `ArticleCard.tsx` | One article/filing: badges, sentiment, signals, AI flags, tickers with size, `EvidenceLine` |
 | `Sidebar.tsx` | Trending tickers (`api.trending(hours)`), `api.status()`, manual `api.ingest()` |
-| `Footer.tsx` | Site-wide footer with disclaimer line and legal/methodology links (in layout.tsx) |
+| `Footer.tsx` | Site-wide footer (client component, in layout.tsx): disclaimer line, Methodology / Subscribe (`/newsletter#subscribe`) / Status / legal links; also shows a dismissible notice for any unhandled admin `ApiError` (401/403/429) with a link to `/status` |
+| `SubscribeForm.tsx` (+ `.module.css`) | Email signup (`api.subscribe(email, daily)`) on `/newsletter`; generic success message (no enumeration), 503 -> "not set up yet", 422 -> invalid email |
+| `track/SealPanel.tsx` (+ `.module.css`) | Track-record hash-chain head, verify result, the raw day export URL (`/api/journal/chain/{day}`) and a Python snippet to recompute a day's hash |
+| `learn/` | Learn UI: `LessonLayout` (shared lesson frame, JSON-LD, prev/next), `lessons/*Lesson.tsx` (async server bodies), `parts.tsx` (`LiveTag`, `ApiNote`, `RepoRefs`, `Readings`, `Disclaimer`, `VerdictBadge`, `fmtT`; no hooks, also used by `/lab`), `ConfirmatoryBlock.tsx` (OOS verdicts, also used by `/lab`), client widgets `EventStudyExplorer`, `NoiseSimulator`, `ClusterSimulator`, `SurvivorshipSimulator`, `DsrCalculator`, plus `charts.tsx`, `controls.tsx`, `learn.module.css` |
 | `DraftNotice.tsx` | Banner on legal pages until a lawyer reviews them; remove only after review |
 | `HaltsPanel.tsx` | Trading halts (ticker-scoped or small caps today); optional `initialData`; refreshes every 60s; times in US Eastern |
 | `DilutionPanel.tsx` | Runway, cash, share change, short interest, offering history on ticker pages; optional `initialData` |
@@ -106,11 +140,25 @@ fetching through `src/lib/server-api.ts`. There are no API routes in Next.
 ## API client (`src/lib/api.ts`)
 
 - `API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000"`. All requests use
-  `cache: "no-store"` and throw `"<status> <text>"` on non-2xx (pages check `startsWith("404")`).
-- `api.*` methods: `articles`, `article`, `signals`, `signalCatalog`, `eventStudy`, `watchlist`, `watch`,
-  `trending`, `halts`, `fundamentals`, `ticker`, `status`, `backtestReport`, `backtestRuns`, `journal`, `journalSummary`,
-  `newsletterIssues`, `newsletterIssue`, `newsletterHtmlUrl`, `newsletterHtml`, `newsletterPreview`, `ingest`, plus
-  `streamUrl`. Never call `fetch` from components (server components use `server-api.ts`).
+  `cache: "no-store"` and throw an `ApiError` (`status`, `detail`, `admin`) whose message starts with the status
+  (`"404 ..."`), so pages can keep checking `startsWith("404")`.
+- Writes go through `send(path, method, { admin?, body? })`. `admin: true` attaches `Authorization: Bearer <token>`
+  from `getAdminToken()` (session storage key `quantdesk.researchAdminToken`, shared by `/status` and
+  `ResearchRunPanel`; `setAdminToken` stores/clears it) and maps 401/403 to the `ADMIN_TOKEN_REQUIRED` /
+  `CHANGES_DISABLED` messages; 429 becomes "Too many requests. Try again in N seconds." `isAdminApiError(e)` is true for
+  admin 401/403/429. Admin calls: `startResearch`, `watch` (PUT/DELETE), `ingest`. Public writes (`subscribe`,
+  `newsletterPreview`) send no token. (`ResearchRequestError` was replaced by `ApiError`.)
+- `api.*` methods: `researchJobs`, `startResearch`, `articles`, `article`, `signals`, `signalCatalog`,
+  `eventStudy(study = "main")`, `studies`, `watchlist`, `watch`, `trending`, `halts`, `fundamentals`, `ticker`, `status`,
+  `backtestReport`, `backtestRuns`, `journal`, `journalSummary`, `journalChain`, `journalChainDay`, `journalVerify`,
+  `healthDetails`, `healthHistory(days)`, `subscribe(email, daily)`, `newsletterIssues`, `newsletterIssue`,
+  `newsletterHtmlUrl`, `newsletterHtml`, `newsletterPreview`, `ingest`, plus `streamUrl`. Never call `fetch` from
+  components (server components use `server-api.ts`).
+- Batch 2026-10-19 types: `StudyName`, `StudyInfo`, `ConfirmatoryResult` (+ `EventStudy.confirmatory`,
+  `confirmatory_testing`, `preregistration`, `config.study`, `StudyResult.t_stat_clustered` / `t_vs_baseline_clustered` /
+  `clusters`), `ResearchJobKind` (`backtest | event_study | event_study_oos | insider_study`), `AdminStatus`
+  (`Status.admin`), `HealthState`, `HealthComponent`, `HealthDetails`, `HealthIncident`, `HealthHistory`, `ChainLine`,
+  `JournalChain`, `ChainDay`, `ChainVerify`, and `seal` on the newsletter issue's `track_record`.
 - Newsletter types (`NewsletterIssue`, `NewsletterIssueSummary`, `NewsletterFiling`, ...) mirror the dict built by
   `backend/app/newsletter/service.py` `build_issue` (not a pydantic model). `SitemapTicker` (in server-api.ts) mirrors
   `GET /api/tickers/sitemap`.
@@ -135,9 +183,18 @@ copy it into `frontend/.env.local` and uncomment what you need. All optional. (T
 | `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` (warning logged in production) | `SITE_URL`: canonical, og:url, JSON-LD, sitemap, robots. Must equal backend `PUBLIC_BASE_URL` |
 | `PUBLIC_BASE_URL` | none | fallback for `NEXT_PUBLIC_SITE_URL` when set in a frontend env file |
 
+## Production image (`Dockerfile`)
+
+`next.config.ts` sets `output: "standalone"`. The multi-stage `Dockerfile` (node:20-alpine: `npm ci`, `npm run build`,
+non-root runner, `node server.js` on port 3000) takes `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SITE_URL` as **build args**
+(inlined into the bundle: rebuild to change them); `API_URL_INTERNAL` is read at runtime (`http://api:8000` in
+`docker-compose.prod.yml`, service `web`). `.dockerignore` excludes `node_modules`, `.next` and `.env*`. CI builds the
+image but never pushes it.
+
 ## SSE
 
-`ResearchRunPanel` provides the launch/rerun controls on Backtest and Edge Lab, including empty states.
+`ResearchRunPanel` provides the launch/rerun controls on Backtest and Edge Lab (on Edge Lab, for the selected study's kind), including
+empty states. On a protected server it asks for the admin token and stores it with `setAdminToken` (shared with `/status`).
 It polls `api.researchJobs()` for the shared job slot, prevents duplicate launches, and refreshes page
 results after completion. Job state belongs to the backend so navigation does not stop work.
 Failures leave prior results visible and expose a retry action. Research settings remain fixed.
@@ -157,7 +214,9 @@ sends `retry: 5000` and keepalives; `onopen`/`onerror` drive the LIVE/OFFLINE ba
   `/* --- Signals --- */`) is validated for colorblind readability in both themes. Don't change it casually;
   if you must, re-check contrast and CVD simulation for both modes.
 - Feature sections are appended under their own `/* --- Name --- */` header, e.g. `/* --- Ticker SEO --- */` (summary,
-  related links, `.skel*` loading skeletons) and `/* --- Newsletter (/newsletter) --- */` (`.nl*`).
+  related links, `.skel*` loading skeletons), `/* --- Newsletter (/newsletter) --- */` (`.nl*`) and `/* --- Learn --- */`
+  (`--learn-hist`, `--learn-hypo` label colors, dark default + light override). New components prefer CSS modules
+  (`learn.module.css`, `SubscribeForm.module.css`, `SealPanel.module.css`, `status.module.css`) over more globals.
 - Size labels/filters: `SIZE_LABELS`, `SIZE_FILTERS` in format.ts must match backend `BUCKETS`.
 
 ## Verify

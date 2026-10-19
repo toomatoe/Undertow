@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 
 import { issuePath } from "@/components/newsletter/format";
+import { CURRICULUM_PATH, LESSONS, lessonPath } from "@/lib/learn/lessons";
 import { getNewsletterIssues, getSitemapTickers, SITE_URL } from "@/lib/server-api";
 
 export const revalidate = 3600;
@@ -13,6 +14,9 @@ const STATIC_PAGES: { path: string; changeFrequency: "hourly" | "daily" | "weekl
   { path: "/backtest", changeFrequency: "weekly", priority: 0.6 },
   { path: "/methodology", changeFrequency: "monthly", priority: 0.6 },
   { path: "/newsletter", changeFrequency: "weekly", priority: 0.6 },
+  { path: "/learn", changeFrequency: "weekly", priority: 0.7 },
+  ...LESSONS.map((l) => ({ path: lessonPath(l.slug), changeFrequency: "monthly" as const, priority: 0.6 })),
+  { path: CURRICULUM_PATH, changeFrequency: "monthly", priority: 0.6 },
   { path: "/legal/disclaimer", changeFrequency: "monthly", priority: 0.2 },
   { path: "/legal/terms", changeFrequency: "monthly", priority: 0.2 },
   { path: "/legal/privacy", changeFrequency: "monthly", priority: 0.2 },

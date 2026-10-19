@@ -1,30 +1,33 @@
 import asyncio
-import hmac
 import json
 import logging
 import os
+import threading
+import time
 from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
-from urllib.parse import urlsplit
 
 import httpx
-from pydantic import SecretStr
-from pydantic_settings import BaseSettings, SettingsConfigDict
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, cast, func, or_, select, text
 from sqlalchemy.orm import Session
 
+from app import health as health_mod
 from app.backtest import borrow
 from app.backtest.report import is_search, read_runs, trial_id
-from app.config import get_settings
+from app.config import AdminSettings, get_settings
 from app.db import SessionLocal, get_session, init_db
 from app.alerts import service as alerts
 from app.alerts.service import Alerter
+from app.delivery import service as delivery
+from app.delivery.routes import router as delivery_router
+from app.delivery.settings import get_delivery_settings
 from app.fundamentals import service as fundamentals
+from app.journal import digest as chain
 from app.journal import service as journal
 from app.newsletter import service as newsletter
 from app.models import AlertLog, Article, ArticleTicker, Company, IngestRun, JournalEntry, TradingHalt, WatchlistItem
@@ -36,26 +39,44 @@ from app.pipeline.ingest import NEW_ARTICLE_HOOKS, backfill_signals, build_sourc
 from app.pipeline.signals import ALL_SIGNALS, signal_dict
 from app.pipeline.tickers import TickerUniverse
 from app.research.eventstudy import RESULTS_FILE
-from app.research_jobs import JobBusy, ResearchJobs
+from app.research.oos import OOS_RESULTS_FILE
+from app.research_jobs import MODULES, JobBusy, ResearchJobs
 from app.schemas import (
+    AdminStatus,
     ArticleOut,
     ArticlePage,
+    ChainDay,
+    ChainVerify,
     DailySentiment,
     Evidence,
+    HealthDetails,
+    HealthHistory,
+    JournalChain,
     ResearchJob,
     ResearchJobsOut,
     SignalOut,
     SourceStatus,
     Status,
+    StudyInfo,
     TickerDetail,
     TrendingTicker,
 )
+from app.security import RateLimiter, RateLimitMiddleware, admin_dependency, admin_policy
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("quantdesk")
 settings = get_settings()
 
 EVIDENCE_HORIZON = 20  # trading days shown next to live alerts
+# Fixed allowlist: study name -> result file under DATA_DIR. Paths are never built from user input.
+STUDY_FILES = {
+    "main": RESULTS_FILE,
+    "oos": OOS_RESULTS_FILE,
+    "insider_purchases": "event_study_insider_purchases.json",
+}
+StudyName = Literal["main", "oos", "insider_purchases"]
+CHAIN_TAIL = 30  # lines returned by GET /api/journal/chain
+VERIFY_TTL_SECONDS = 600  # verify_chain recomputes every sealed day: cache it
 
 
 class AppState:
@@ -66,6 +87,15 @@ class AppState:
     evidence: dict[tuple[str, str], Evidence] = {}  # (signal, bucket) -> result
     journal_marked: date | None = None
     alerter: Alerter | None = None
+    # Loop heartbeats (UTC, last success) for /api/health/details
+    last_slow_cycle: datetime | None = None
+    last_edgar_poll: datetime | None = None
+    last_halts_poll: datetime | None = None
+    sealed_through: date | None = None
+    last_digest_day: date | None = None
+    last_purge_day: date | None = None  # UTC day of the last pending-subscriber purge
+    verify_cache: tuple[float, dict] | None = None  # (monotonic time, verify_chain result)
+    study_cache: dict[str, tuple[float, dict]] = {}  # study name -> (file mtime, parsed JSON)
 
 
 state = AppState()
@@ -112,6 +142,10 @@ async def ingest_once() -> dict:
     return await asyncio.to_thread(run_ingest, settings, state.universe, state.enricher)
 
 
+def utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
 async def scheduler() -> None:
     if not settings.ingest_on_startup:
         await asyncio.sleep(settings.ingest_interval_seconds)
@@ -128,10 +162,27 @@ async def scheduler() -> None:
             await asyncio.to_thread(journal_cycle)
         except Exception:
             log.exception("Journal cycle failed")
-        try:  # weekly newsletter: build last week's issue once, after the week is complete
+        try:  # tamper-evident seal of the journal through yesterday (UTC), once per day
+            await asyncio.to_thread(seal_cycle)
+        except Exception:
+            log.exception("Journal seal failed")
+        try:  # weekly newsletter: build last week's issue once, after the week is complete (emails it if configured)
             await asyncio.to_thread(newsletter_cycle)
         except Exception:
             log.exception("Newsletter build failed")
+        try:  # daily email digest of yesterday (ET), once the configured ET hour has passed
+            await asyncio.to_thread(digest_cycle)
+        except Exception:
+            log.exception("Daily digest failed")
+        try:  # delete never-confirmed sign-ups older than 30 days, once per UTC day
+            await asyncio.to_thread(purge_cycle)
+        except Exception:
+            log.exception("Pending subscriber purge failed")
+        state.last_slow_cycle = utcnow()
+        try:  # uptime history for /api/health/history
+            await asyncio.to_thread(uptime_cycle)
+        except Exception as exc:
+            log.warning("Uptime snapshot failed: %s", exc)
         await asyncio.sleep(settings.ingest_interval_seconds)
 
 
@@ -141,10 +192,12 @@ async def edgar_poller() -> None:
     while True:
         try:
             await asyncio.to_thread(poll_edgar, settings, state.universe)
+            state.last_edgar_poll = utcnow()
         except Exception:
             log.exception("EDGAR poll crashed")
         try:
             await asyncio.to_thread(poll_halts)
+            state.last_halts_poll = utcnow()
         except Exception as exc:
             log.warning("Halt poll failed: %s", exc)
         await asyncio.sleep(settings.edgar_poll_seconds)
@@ -177,10 +230,95 @@ def newsletter_kwargs() -> dict:
 
 
 def newsletter_cycle() -> None:
-    """Build the issue for the most recently completed week (ending Sunday) if it doesn't exist yet."""
+    """Build the issue for the most recently completed week (ending Sunday) if it doesn't exist yet.
+    A NEW issue is emailed to confirmed subscribers when delivery is configured (blocking: runs in a thread)."""
     with SessionLocal() as session:
         if built := newsletter.ensure_latest(session, settings.data_dir, **newsletter_kwargs()):
             log.info("Newsletter: built issue %s", built)
+            if get_delivery_settings().enabled:
+                try:
+                    log.info("Newsletter email: %s", delivery.send_newsletter(session, settings.data_dir, built))
+                except Exception:
+                    log.exception("Newsletter email failed")
+
+
+def digest_cycle(now: datetime | None = None) -> None:
+    """Daily digest for YESTERDAY (ET), once per ET day after EMAIL_DAILY_DIGEST_HOUR_ET. Idempotent per subscriber."""
+    if not get_delivery_settings().enabled:
+        return
+    day = delivery.daily_digest_day(now)
+    if day is None or state.last_digest_day == day:
+        return
+    with SessionLocal() as session:
+        try:
+            log.info("Daily digest: %s", delivery.send_daily_digest(session, settings.data_dir, day))
+            state.last_digest_day = day
+        except Exception:
+            log.exception("Daily digest email failed")
+
+
+def purge_cycle(now: datetime | None = None) -> None:
+    """Delete never-confirmed sign-ups (delivery.purge_pending) at most once per UTC day. Runs even when delivery is
+    off now, so pending rows from an earlier configuration still expire. A failed purge is retried next cycle."""
+    now = now or utcnow()
+    today = now.astimezone(timezone.utc).date()
+    if state.last_purge_day == today:
+        return
+    with SessionLocal() as session:
+        if n := delivery.purge_pending(session, now=now):
+            log.info("Delivery: purged %d unconfirmed sign-up(s)", n)
+    state.last_purge_day = today
+
+
+def seal_cycle(now: datetime | None = None) -> None:
+    """Seal the journal hash chain through yesterday (UTC). seal_through is idempotent; this skips the file read
+    once the day is done."""
+    now = now or utcnow()
+    yesterday = now.astimezone(timezone.utc).date() - timedelta(days=1)
+    if state.sealed_through == yesterday:
+        return
+    with SessionLocal() as session:
+        added = chain.seal_through(session, settings.data_dir, yesterday, now=now)
+    if added:
+        log.info("Journal chain: sealed %d day(s) through %s", len(added), added[-1]["day"])
+        state.verify_cache = None
+    state.sealed_through = yesterday
+
+
+def health_inputs() -> health_mod.HealthInputs:
+    db_ok, db_error = True, None
+    last_ingest = alert_last = None
+    try:
+        with SessionLocal() as session:
+            session.execute(text("SELECT 1"))
+            last_ingest = session.scalar(select(func.max(IngestRun.started_at)).where(IngestRun.error.is_(None)))
+            row = session.scalars(select(AlertLog).where(AlertLog.status != "skipped").order_by(AlertLog.id.desc()).limit(1)).first()
+            if row is not None:
+                at = row.detected_at if row.detected_at.tzinfo else row.detected_at.replace(tzinfo=timezone.utc)
+                alert_last = {"status": row.status, "reason": row.reason, "at": at.isoformat()}
+    except Exception as exc:  # health must report, never raise
+        db_ok, db_error = False, type(exc).__name__
+    try:
+        issues = newsletter.list_issues(settings.data_dir)
+    except OSError:
+        issues = []
+    try:  # never creates the manager here (lifespan does)
+        active = (research_jobs.snapshot().get("active") or {}).get("kind") if research_jobs else None
+    except Exception:
+        active = None
+    return health_mod.HealthInputs(
+        db_ok=db_ok, db_error=db_error, last_ingest_ok=last_ingest,
+        last_edgar_poll=state.last_edgar_poll, last_halts_poll=state.last_halts_poll,
+        edgar_poll_seconds=settings.edgar_poll_seconds, ingest_interval_seconds=settings.ingest_interval_seconds,
+        journal_marked=state.journal_marked,
+        newsletter_latest={"id": issues[0]["id"], "week_end": issues[0].get("week_end")} if issues else None,
+        alerts_channel=state.alerter.channel if state.alerter else "none", alerts_last=alert_last,
+        email_enabled=get_delivery_settings().enabled, research_active=active,
+    )
+
+
+def uptime_cycle() -> None:
+    health_mod.append_snapshot(settings.data_dir, health_mod.evaluate(health_inputs()))
 
 
 def load_companies() -> None:
@@ -223,51 +361,37 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="QuantDesk API", version="0.2.0", lifespan=lifespan)
+# Per-client rate limits (app/security.py). The middleware looks the limiter up per request, so tests can swap it.
+rate_limiter: RateLimiter | None = RateLimiter(
+    settings.rate_limit_per_minute, settings.rate_limit_write_per_minute, trust_proxy=settings.trust_proxy_headers
+)
+app.add_middleware(RateLimitMiddleware, get_limiter=lambda: rate_limiter)
+# Added last = outermost, so 429 responses carry CORS headers too.
 app.add_middleware(
     CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"], allow_headers=["*"]
 )
+app.include_router(delivery_router)  # /api/subscribe, /api/unsubscribe, ... (app/delivery/AGENTS.md)
 
 SentimentFilter = Literal["positive", "negative", "neutral"]
 
-
-class ResearchLaunchSettings(BaseSettings):
-    """Who may start research subprocesses. Kept here until it moves into app.config.Settings."""
-
-    # env_ignore_empty: a blank RESEARCH_JOBS_ENABLED= line means "unset", not a startup error.
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
-
-    # When set, POST /api/research/jobs/{kind} requires "Authorization: Bearer <token>".
-    research_admin_token: SecretStr | None = None
-    # Explicit on/off without a token. Unset: on only when PUBLIC_BASE_URL is a local origin.
-    research_jobs_enabled: bool | None = None
+# One admin policy for every mutating endpoint (app/security.py). `research_launch` is the policy's settings
+# object: the global Settings (which inherits AdminSettings); tests replace it with an AdminSettings instance.
+ResearchLaunchSettings = AdminSettings  # backwards-compatible name
+research_launch: AdminSettings = settings
 
 
-research_launch = ResearchLaunchSettings()
-LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+def current_admin_policy(scope: str = "mutations"):
+    return admin_policy(research_launch, settings.public_base_url, scope)
 
 
 def research_launch_policy() -> tuple[bool, str | None]:
-    """(enabled, admin token or None). A token always wins; otherwise public deployments are closed."""
-    token = research_launch.research_admin_token
-    if token is not None and token.get_secret_value().strip():
-        return True, token.get_secret_value().strip()
-    if research_launch.research_jobs_enabled is not None:
-        return research_launch.research_jobs_enabled, None
-    host = (urlsplit(settings.public_base_url).hostname or "").lower()
-    return host in LOCAL_HOSTS or host.endswith(".localhost"), None
+    """(enabled, admin token or None) for research launches."""
+    p = current_admin_policy("research")
+    return p.enabled, p.token
 
 
-def require_research_launch(request: Request) -> None:
-    enabled, token = research_launch_policy()
-    if not enabled:
-        raise HTTPException(403, "Research runs are disabled on this server. Run them from the command line, "
-                                 "or set RESEARCH_ADMIN_TOKEN to allow authorized launches.")
-    if token is None:
-        return
-    scheme, _, supplied = request.headers.get("authorization", "").partition(" ")
-    if scheme.lower() != "bearer" or not hmac.compare_digest(supplied.strip().encode(), token.encode()):
-        raise HTTPException(401, "A valid admin token is required to start research runs.",
-                            headers={"WWW-Authenticate": "Bearer"})
+require_admin = admin_dependency(current_admin_policy)
+require_research_launch = require_admin("research")
 
 
 @app.get("/api/research/jobs", response_model=ResearchJobsOut)
@@ -278,7 +402,9 @@ async def research_job_status():
 
 @app.post("/api/research/jobs/{kind}", response_model=ResearchJob, status_code=202,
           dependencies=[Depends(require_research_launch)])
-async def start_research_job(kind: Literal["backtest", "event_study"]):
+async def start_research_job(kind: str = Path(max_length=64)):
+    if kind not in MODULES:  # fixed allowlist; clients choose a kind, never a command
+        raise HTTPException(422, f"Unknown research kind. Use one of: {', '.join(MODULES)}")
     try:
         return get_research_jobs().start(kind)
     except JobBusy as exc:
@@ -315,7 +441,20 @@ def apply_common_filters(stmt, *, ticker, sizes, watchlist, signal, min_severity
 
 @app.get("/api/health")
 def health():
+    """Cheap liveness check (no DB). Exempt from rate limits; used by the container healthcheck."""
     return {"ok": True}
+
+
+@app.get("/api/health/details", response_model=HealthDetails)
+def health_details():
+    """Per-component state with the thresholds in app/health.py (db failure = down; stale ingest/EDGAR = degraded)."""
+    return health_mod.evaluate(health_inputs())
+
+
+@app.get("/api/health/history", response_model=HealthHistory)
+def health_history(days: int = Query(7, ge=1, le=health_mod.UPTIME_KEEP_DAYS)):
+    """Uptime % per component and per day, plus status transitions, from {data_dir}/uptime.jsonl."""
+    return health_mod.history(health_mod.read_snapshots(settings.data_dir), days)
 
 
 @app.get("/api/articles", response_model=ArticlePage)
@@ -390,12 +529,62 @@ def signal_catalog():
     return [signal_dict(s) for s in sorted(ALL_SIGNALS.values(), key=lambda s: (-s.severity, s.label))]
 
 
+STUDY_MISSING = {
+    "main": "No event study yet. Run: python -m app.research.eventstudy",
+    "oos": "No out-of-sample study yet. Run: python -m app.research.oos",
+    "insider_purchases": "No insider-purchase study yet. Run: python -m app.insiders.study",
+}
+
+
+def read_study_file(name: str) -> dict | None:
+    """Parsed result file for an allowlisted study name (cached by mtime), or None when missing/unreadable."""
+    path = os.path.join(settings.data_dir, STUDY_FILES[name])  # KeyError for anything off the allowlist
+    try:
+        mtime = os.path.getmtime(path)
+    except OSError:
+        state.study_cache.pop(name, None)
+        return None
+    cached = state.study_cache.get(name)
+    if cached and cached[0] == mtime:
+        return cached[1]
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, ValueError) as exc:
+        log.warning("Study %s unreadable: %s", name, exc)
+        return None
+    if not isinstance(data, dict):
+        return None
+    state.study_cache[name] = (mtime, data)
+    return data
+
+
+@app.get("/api/research/studies", response_model=list[StudyInfo])
+def research_studies():
+    """Every allowlisted study: whether its result file exists, when it was generated and how many tests it ran."""
+    out = []
+    for name in STUDY_FILES:
+        data = read_study_file(name)
+        testing = (data or {}).get("testing") or {}
+        config = (data or {}).get("config") or {}
+        out.append(StudyInfo(study=name, available=data is not None, generated_at=(data or {}).get("generated_at"),
+                             n_tests=testing.get("n_tests") if isinstance(testing, dict) else None,
+                             design=config.get("study") if isinstance(config, dict) else None))
+    return out
+
+
 @app.get("/api/research/event-study")
-def event_study():
+def event_study(study: StudyName = "main"):
+    """Event-study results. study=main (default, the live evidence; response unchanged) | oos | insider_purchases."""
+    if study != "main":
+        data = read_study_file(study)
+        if data is None:
+            raise HTTPException(404, STUDY_MISSING[study])
+        return data
     if state.study is None:
         load_study()
     if state.study is None:
-        raise HTTPException(404, "No event study yet. Run: python -m app.research.eventstudy")
+        raise HTTPException(404, STUDY_MISSING["main"])
     return state.study
 
 
@@ -420,7 +609,7 @@ def alerts_status(limit: int = Query(50, ge=1, le=500), session: Session = Depen
     }
 
 
-@app.post("/api/alerts/test")
+@app.post("/api/alerts/test", dependencies=[Depends(require_admin("mutations"))])
 def alerts_test():
     if state.alerter is None:
         raise HTTPException(503, "Alerter not started")
@@ -487,6 +676,45 @@ def journal_summary(session: Session = Depends(get_session)):
         for r in state.study["results"]:
             expected[(r["signal"], r["bucket"], r["horizon_days"])] = r
     return {"rows": journal.summary(session, expected), "marked": state.journal_marked.isoformat() if state.journal_marked else None}
+
+
+@app.get("/api/journal/chain", response_model=JournalChain)
+def journal_chain():
+    """Tamper-evident seal: chain head plus the last 30 sealed days (journal/AGENTS.md)."""
+    records, err = chain._read(settings.data_dir)
+    head = None
+    if records and not err:
+        head = {"head_hash": records[-1]["hash"], "head_day": records[-1]["day"], "days": len(records)}
+    return {"head": head, "lines": records[-CHAIN_TAIL:], "error": err}
+
+
+@app.get("/api/journal/chain/{day}", response_model=ChainDay)
+def journal_chain_day(day: str = Path(pattern=r"^\d{4}-\d{2}-\d{2}$"), session: Session = Depends(get_session)):
+    """Everything needed to recompute one sealed day's hash by hand."""
+    try:
+        parsed = date.fromisoformat(day)
+    except ValueError:
+        raise HTTPException(422, "day must be a valid YYYY-MM-DD date") from None
+    out = chain.export_day(session, settings.data_dir, parsed)
+    if out is None:
+        raise HTTPException(404, f"{day} is not sealed")
+    return out
+
+
+verify_lock = threading.Lock()
+
+
+@app.get("/api/journal/verify", response_model=ChainVerify)
+def journal_verify():
+    """Recompute every sealed day from the DB (cached for 10 minutes, and dropped when new days are sealed)."""
+    with verify_lock:  # one recomputation at a time; concurrent callers get the fresh cached result
+        cached = state.verify_cache
+        if cached and time.monotonic() - cached[0] < VERIFY_TTL_SECONDS:
+            return cached[1]
+        with SessionLocal() as session:
+            result = {**chain.verify_chain(session, settings.data_dir), "checked_at": utcnow()}
+        state.verify_cache = (time.monotonic(), result)
+        return result
 
 
 @app.get("/api/newsletter/issues")
@@ -667,7 +895,7 @@ def get_watchlist(session: Session = Depends(get_session)):
     ]
 
 
-@app.put("/api/watchlist/{symbol}")
+@app.put("/api/watchlist/{symbol}", dependencies=[Depends(require_admin("mutations"))])
 def add_to_watchlist(symbol: str, session: Session = Depends(get_session)):
     symbol = symbol.upper()
     if symbol not in state.universe and len(state.universe) > 0:
@@ -678,7 +906,7 @@ def add_to_watchlist(symbol: str, session: Session = Depends(get_session)):
     return {"symbol": symbol, "on_watchlist": True}
 
 
-@app.delete("/api/watchlist/{symbol}")
+@app.delete("/api/watchlist/{symbol}", dependencies=[Depends(require_admin("mutations"))])
 def remove_from_watchlist(symbol: str, session: Session = Depends(get_session)):
     item = session.get(WatchlistItem, symbol.upper())
     if item:
@@ -703,6 +931,7 @@ def status(session: Session = Depends(get_session)):
                 error=run.error if run else None,
             )
         )
+    policy = current_admin_policy("mutations")
     return Status(
         articles=session.scalar(select(func.count(Article.id))) or 0,
         enriched=session.scalar(select(func.count(Article.id)).where(Article.enriched_at.is_not(None))) or 0,
@@ -711,10 +940,11 @@ def status(session: Session = Depends(get_session)):
         enrich_enabled=settings.enrich_enabled,
         enrich_model=settings.enrich_model if settings.enrich_enabled else None,
         sources=sources,
+        admin=AdminStatus(protected=policy.protected, mutations_enabled=policy.enabled),
     )
 
 
-@app.post("/api/ingest")
+@app.post("/api/ingest", dependencies=[Depends(require_admin("mutations"))])
 async def trigger_ingest():
     return await ingest_once()
 

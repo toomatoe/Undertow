@@ -364,6 +364,24 @@ def verdict(gates: list[dict]) -> dict:
             "detail": "Borrow data, a paper-trading track record and risk controls are still missing. Each is required before live capital."}
 
 
+def overfitting_block(rets_by_period: dict[str, list[float]], trials: dict[str, float]) -> dict:
+    """report["overfitting"]: Deflated Sharpe per period against every distinct configuration tried.
+
+    Also publishes the exact DSR inputs the report does not otherwise carry, so a reader (the Learn calculator) can
+    recompute it: n_returns_<key> (daily returns in that period) and trial_sharpe_std (sample sd of the trial
+    Sharpes, annualized; 0.0 with fewer than 2 trials, matching expected_max_sharpe).
+    """
+    sharpes = list(trials.values())
+    overfit: dict = {"trials": len(trials)}
+    for key, rets in rets_by_period.items():
+        val, bench_sr = dsr(rets, sharpes)
+        overfit[f"dsr_{key}"] = round(val, 3)
+        overfit[f"luck_sharpe_{key}"] = round(bench_sr, 2)
+        overfit[f"n_returns_{key}"] = len(rets)
+    overfit["trial_sharpe_std"] = round(statistics.stdev(sharpes), 4) if len(sharpes) >= 2 else 0.0
+    return overfit
+
+
 def build_report() -> dict:
     s = get_settings()
     price_dir = os.path.join(s.data_dir, "prices")
@@ -390,13 +408,7 @@ def build_report() -> dict:
     history = read_runs(s.data_dir)
     trials = {trial_id(r): r["metrics"]["sharpe"] for r in history if r["strategy"] == STRATEGY["id"] and is_search(r)}
     trials.update(runner.trial_sharpes)
-    overfit = {"trials": len(trials)}
-    for key in PERIODS:
-        rets = report["periods"][key].pop("_rets")
-        val, bench_sr = dsr(rets, list(trials.values()))
-        overfit[f"dsr_{key}"] = round(val, 3)
-        overfit[f"luck_sharpe_{key}"] = round(bench_sr, 2)
-    report["overfitting"] = overfit
+    report["overfitting"] = overfitting_block({key: report["periods"][key].pop("_rets") for key in PERIODS}, trials)
 
     report["borrow_check"] = borrow_check(s.data_dir, events["B"])
     report["key_finding"] = key_finding(report)

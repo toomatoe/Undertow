@@ -1,0 +1,30 @@
+.dot { display: inline-block; width: .6rem; height: .6rem; border-radius: 50%; margin-right: .3rem; vertical-align: baseline; background: var(--muted); }
+.dot.ok { background: var(--pos); }
+.dot.degraded { background: var(--warn); }
+.dot.down { background: var(--neg); }
+.dot.disabled, .dot.unknown { background: transparent; border: 1px solid var(--muted); }
+
+.overall { border-left-width: 4px; }
+.overall.ok { border-left-color: var(--pos); }
+.overall.degraded { border-left-color: var(--warn); }
+.overall.down { border-left-color: var(--neg); }
+.overallTitle { font-size: 1.1rem !important; text-transform: none !important; letter-spacing: normal !important; color: var(--text) !important; margin: 0; }
+
+.name { text-align: left; font-weight: 500; white-space: nowrap; }
+.detail { color: var(--muted); overflow-wrap: anywhere; min-width: 12rem; }
+.bad { color: var(--neg); overflow-wrap: anywhere; }
+
+.bars { margin: .25rem 0 0; max-width: 420px; }
+.barTrack { fill: var(--panel-2); stroke: var(--border); }
+.barOk { fill: var(--pos); }
+.barWarn { fill: var(--warn); }
+.barBad { fill: var(--neg); }
+.barEmpty { fill: transparent; }
+.barLabel { fill: var(--muted); font-size: 10px; }
+
+.incidents { margin: 0; padding-left: 1.1rem; display: grid; gap: .3rem; font-size: .875rem; }
+
+.token { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; font-size: .875rem; }
+.token input { min-width: 0; flex: 1 1 14rem; max-width: 24rem; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); background: var(--panel-2); }
+.token button { padding: .45rem .8rem; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); background: var(--panel-2); cursor: pointer; }
+.token input:focus-visible, .token button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

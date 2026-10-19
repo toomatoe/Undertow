@@ -1,12 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api, ResearchRequestError, type ResearchJobKind, type ResearchJobs } from "@/lib/api";
+import { api, ApiError, getAdminToken, setAdminToken, type ResearchJobKind, type ResearchJobs } from "@/lib/api";
 import styles from "./ResearchRunPanel.module.css";
 
-const names = { backtest: "backtest", event_study: "event study" };
-// Admin token for protected deployments; kept for this browser tab only.
-const TOKEN_KEY = "quantdesk.researchAdminToken";
+const names: Record<ResearchJobKind, string> = {
+  backtest: "backtest",
+  event_study: "event study",
+  event_study_oos: "out-of-sample study",
+  insider_study: "insider-purchase study",
+};
+const capitalized = (k: ResearchJobKind) => names[k].charAt(0).toUpperCase() + names[k].slice(1);
 
 export default function ResearchRunPanel({ kind, hasReport, onComplete }: {
   kind: ResearchJobKind;
@@ -56,13 +60,14 @@ export default function ResearchRunPanel({ kind, hasReport, onComplete }: {
   }, [refresh]);
 
   useEffect(() => {
-    try { setToken(window.sessionStorage.getItem(TOKEN_KEY) ?? ""); } catch { /* storage unavailable */ }
+    // Admin token for protected deployments: shared with the Status page, kept for this browser tab only.
+    setToken(getAdminToken());
   }, []);
 
   function updateToken(value: string) {
     setToken(value);
     setAuthError(null);
-    try { window.sessionStorage.setItem(TOKEN_KEY, value); } catch { /* storage unavailable */ }
+    setAdminToken(value);
   }
 
   async function start() {
@@ -74,14 +79,15 @@ export default function ResearchRunPanel({ kind, hasReport, onComplete }: {
     setError(null);
     setAuthError(null);
     try {
-      const job = await api.startResearch(kind, jobs.requires_token ? token.trim() : undefined);
+      setAdminToken(token);
+      const job = await api.startResearch(kind);
       if (!mounted.current) return;
       setJobs((current) => current && ({ ...current, active: job, latest: { ...current.latest, [kind]: job } }));
     } catch (e) {
       if (!mounted.current) return;
       const detail = String(e instanceof Error ? e.message : e);
-      if (e instanceof ResearchRequestError && e.status === 401) setAuthError("The admin token was not accepted. Check it and try again.");
-      else if (e instanceof ResearchRequestError && e.status === 403) setError(`Research runs are turned off on this server. ${detail}`);
+      if (e instanceof ApiError && e.status === 401) setAuthError("The admin token was not accepted. Check it and try again.");
+      else if (e instanceof ApiError && e.status === 403) setError(`Research runs are turned off on this server. ${e.detail ?? detail}`);
       else setError(`Could not confirm the run started. Check status before retrying; another run may already be active. ${detail}`);
     } finally {
       busy.current = false;
@@ -105,7 +111,7 @@ export default function ResearchRunPanel({ kind, hasReport, onComplete }: {
           </button>
         )}
       </div>
-      {jobs && !jobs.enabled && <p className={`muted small ${styles.note}`}>Runs from this page are turned off on this server. The operator can run research from the command line, or set RESEARCH_ADMIN_TOKEN to allow authorized runs here.</p>}
+      {jobs && !jobs.enabled && <p className={`muted small ${styles.note}`}>Runs from this page are turned off on this server. The operator can run research from the command line, or set ADMIN_TOKEN to allow authorized runs here.</p>}
       {jobs?.enabled && jobs.requires_token && (
         <div className={styles.token}>
           <label htmlFor={tokenId}>Admin token</label>
@@ -117,7 +123,7 @@ export default function ResearchRunPanel({ kind, hasReport, onComplete }: {
       )}
       <div role="status" aria-live="polite" aria-atomic="true" className={styles.status}>
         {!jobs && !error && "Checking research status…"}
-        {active && <p>{names[active.kind] === "backtest" ? "Backtest" : "Event study"} running. {active.message} {active.kind !== kind && "Wait for this run to finish before starting another."} {hasReport && "The previous report remains available below."}</p>}
+        {active && <p>{capitalized(active.kind)} running. {active.message} {active.kind !== kind && "Wait for this run to finish before starting another."} {hasReport && "The previous report remains available below."}</p>}
         {!active && latest && <p>{latest.status === "succeeded" ? "Completed" : latest.status === "interrupted" ? "Run interrupted" : latest.status === "failed" ? "Run failed" : "Run in progress"}: {latest.message} {(latest.status === "failed" || latest.status === "interrupted") && "You can retry using the run button."}</p>}
         {(active || latest) && <p>Started {new Date((active || latest)!.started_at).toLocaleString()}{!active && latest?.finished_at && ` · Finished ${new Date(latest.finished_at).toLocaleString()}`}</p>}
       </div>
