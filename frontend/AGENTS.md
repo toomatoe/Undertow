@@ -2,12 +2,16 @@
 
 Next.js 15.5 App Router, React 19, TypeScript (strict). No UI library, no state library, no CSS framework:
 plain components plus `src/app/globals.css`. Path alias `@/*` -> `src/*`.
+QuantDesk runs locally: the site is http://localhost:3000 and the API http://localhost:8000 by default, with no env
+file needed. There are no accounts, pricing pages or sign-up flows; don't add any.
 
 ## Layout
 
 ```
 src/app/layout.tsx          root layout: Geist fonts, <Nav/>, globals.css
-src/app/page.tsx            /                -> <NewsFeed/>
+src/app/page.tsx            /                landing page (server component, ISR 1 h): hero, Key findings cards read from the
+                                             three study endpoints (components/home/), quick links. No buy/sell language
+src/app/news/page.tsx       /news            server wrapper (metadata) around the client <NewsFeed/> (moved here from /)
 src/app/signals/page.tsx    /signals         filing signals (default size "nano,micro,small")
 src/app/lab/page.tsx        /lab             Edge Lab: event-study results
 src/app/ticker/[symbol]/           /ticker/X  server-rendered SEO ticker page (ISR 15 min), see "Server-rendered pages"
@@ -31,12 +35,18 @@ src/app/status/layout.tsx          /status metadata (title, description)
 src/app/status/page.tsx            /status  health components, 7-day uptime, incidents, seal verification, admin-token box (client, refresh 60 s)
 src/app/sitemap.ts                 /sitemap.xml  static pages (incl. /learn, every lesson, /learn/curriculum) + /api/tickers/sitemap + archived issues (revalidate 1 h)
 src/app/robots.ts                  /robots.txt   allow /, disallow /api/, points at the sitemap
-src/app/research/page.tsx   /research        static "planned" page (AI research assistant)
+src/app/research/page.tsx   /research        static research index (studies, pre-registrations, link to the paper; research.module.css)
+src/app/research/paper/     /research/paper  the working paper: page.tsx reads src/content/working-paper.md at build time
+                                             (force-static) and renders it with components/markdown/ (TOC from headings)
+src/app/paper/page.tsx      /paper           hypothetical paper portfolio (server shell + client PaperPortfolioView)
 src/app/track-record/page.tsx /track-record forward signal journal vs Edge Lab (components in src/components/track/)
 src/app/backtest/page.tsx   /backtest        backtest report + live-readiness log (components in src/components/backtest/)
 src/app/methodology/page.tsx /methodology  how every number is produced (keep in sync with backend logic)
 src/app/legal/{disclaimer,terms,privacy}/page.tsx  DRAFT legal pages (DraftNotice until lawyer review)
-src/app/trading/page.tsx    /trading         static "not built" page (paper trading plan)
+src/app/trading/page.tsx    /trading         redirect("/paper") (the old "Trading (planned)" page is gone)
+src/app/{signals,backtest,track-record}/layout.tsx  metadata for those client pages (a "use client" page cannot export it)
+src/content/working-paper.md byte-identical copy of docs/paper/WORKING_PAPER.md (the Docker build context cannot see
+                            docs/); backend/tests/test_paper_numbers.py enforces the copy. Edit the paper in docs/, then copy
 src/components/             shared client components
 src/lib/api.ts              the only browser API client
 src/lib/server-api.ts       server-side fetch helpers (server components, generateMetadata, sitemap.ts), SITE_URL
@@ -45,12 +55,13 @@ src/lib/learn/              Learn data + pure math (no React, no fetch): lessons
                             CURRICULUM_PATH, READINGS), curriculum.ts (CURRICULUM weeks), stats.ts (seeded mulberry32 PRNG,
                             t-stats, clustered t, PSR/DSR mirroring the backend), simulations.ts (widget simulations),
                             live.ts (pull lesson numbers out of EventStudy / BacktestReport, dateLabel)
-Dockerfile, .dockerignore   production image: next.config.ts `output: "standalone"`, node:20-alpine, `node server.js` on :3000
+Dockerfile, .dockerignore   standalone image (next.config.ts `output: "standalone"`, node:20-alpine, `node server.js` on :3000),
+                            used by the compose `web` profile
 ```
 
 Most data pages are client components (`"use client"`) that fetch in `useEffect` through `api`. The exceptions are the
-crawlable pages (`/ticker/[symbol]`, `/newsletter`, `/newsletter/[issue]`, `/learn`, `/learn/[slug]`, `/learn/curriculum`)
-plus `sitemap.ts`, which are server components (the ticker, newsletter and lesson pages fetch through
+crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/newsletter`, `/newsletter/[issue]`, `/learn`,
+`/learn/[slug]`, `/learn/curriculum`) plus `sitemap.ts`, which are server components (the ticker, newsletter and lesson pages fetch through
 `src/lib/server-api.ts`; the Learn index and curriculum make no API calls). There are no API routes in Next.
 
 ## Server-rendered pages (SEO)
@@ -78,7 +89,14 @@ plus `sitemap.ts`, which are server components (the ticker, newsletter and lesso
 
 ## Pages
 
-- `/` `NewsFeed`: filters (search debounced 300 ms, ticker, size, source, sentiment, event type),
+- `/` landing page: `getEventStudy("main" | "oos" | "insider_purchases")` in parallel; `components/home/findings.ts`
+  (pure, no React/fetch) turns each `Result` into a `Finding` card with Historical/Hypothetical labels and a fallback
+  sentence when a study is missing (404) or the API is down (status 0). `KeyFindings.tsx` renders them. No tab is active on `/`.
+- `/paper`: `PaperPortfolioView` (client) calls `api.paperPortfolio({hedge, max_concurrent})`: tiles, `EquityChart`,
+  per-signal table, recent positions, assumptions; always shows the backend's hypothetical `label`. Paper-only: no
+  order, broker or account UI, ever.
+- `/research`: static index of the studies and pre-registrations. `/research/paper`: the working paper (see Layout).
+- `/news` `NewsFeed`: filters (search debounced 300 ms, ticker, size, source, sentiment, event type),
   `before`-cursor pagination ("Load older"), live SSE inserts, `Sidebar` (trending tickers, source status,
   "ingest now").
 - `/signals`: `api.signals()` with size / min_severity / signal (from `api.signalCatalog()`) / watchlist
@@ -113,15 +131,18 @@ plus `sitemap.ts`, which are server components (the ticker, newsletter and lesso
   5 results), nano-offering spotlight with a running-mean chart, filterable journal table with CSV.
 - `/ticker/[symbol]` also renders `DilutionPanel` (`initialData` or `api.fundamentals()`): runway, cash, 1-year share change, offering history.
 - Charts measure their container width. In a hidden/zero-width browser pane they render no SVG; that is expected, not a bug.
-- `/research`, `/trading`: placeholders. Trading must stay paper-only; agents never place orders.
+- `/trading` redirects to `/paper`. Anything trading-related stays hypothetical and paper-only; agents never place orders.
 
 ## Components
 
 | File | Role |
 |---|---|
-| `Nav.tsx` | Header tabs from `TABS` (includes Newsletter and Learn); `/ticker/*` highlights News. Add new pages here |
+| `Nav.tsx` | Header tabs from `TABS` (News `/news`, Signals, Track record, Paper `/paper`, Newsletter, Edge Lab, Backtest, Learn, Research); `isActive()`: `/ticker/*` highlights News, `/research/paper` highlights Research, `/` highlights none. Add new pages here |
+| `home/` | Landing page: `findings.ts` (pure Finding builders + `pct`), `KeyFindings.tsx`, `home.module.css` |
+| `markdown/Markdown.tsx` (+ `.module.css`) | Tiny server-side Markdown renderer for docs we own (`parseMarkdown`, `headings`, `plainText`): headings with ids, lists, GFM tables, code, quotes, links (http(s)/relative only) |
+| `portfolio/` | `/paper`: `PaperPortfolioView.tsx` (client), `EquityChart.tsx`, `portfolio.module.css` |
 | `NewsFeed.tsx` | News tab body; owns the SSE subscription for `/`. Has its own `EVENT_TYPES` list for the filter |
-| `ArticleCard.tsx` | One article/filing: badges, sentiment, signals, AI flags, tickers with size, `EvidenceLine` |
+| `ArticleCard.tsx` | One article/filing: badges, sentiment, signals, AI flags, tickers with size, `EvidenceLine`; forward-test signals get a "Forward test of pre-registered finding" badge and an "(in-sample, hypothetical)" evidence line |
 | `Sidebar.tsx` | Trending tickers (`api.trending(hours)`), `api.status()`, manual `api.ingest()` |
 | `Footer.tsx` | Site-wide footer (client component, in layout.tsx): disclaimer line, Methodology / Subscribe (`/newsletter#subscribe`) / Status / legal links; also shows a dismissible notice for any unhandled admin `ApiError` (401/403/429) with a link to `/status` |
 | `SubscribeForm.tsx` (+ `.module.css`) | Email signup (`api.subscribe(email, daily)`) on `/newsletter`; generic success message (no enumeration), 503 -> "not set up yet", 422 -> invalid email |
@@ -152,13 +173,17 @@ plus `sitemap.ts`, which are server components (the ticker, newsletter and lesso
   `eventStudy(study = "main")`, `studies`, `watchlist`, `watch`, `trending`, `halts`, `fundamentals`, `ticker`, `status`,
   `backtestReport`, `backtestRuns`, `journal`, `journalSummary`, `journalChain`, `journalChainDay`, `journalVerify`,
   `healthDetails`, `healthHistory(days)`, `subscribe(email, daily)`, `newsletterIssues`, `newsletterIssue`,
-  `newsletterHtmlUrl`, `newsletterHtml`, `newsletterPreview`, `ingest`, plus `streamUrl`. Never call `fetch` from
+  `newsletterHtmlUrl`, `newsletterHtml`, `newsletterPreview`, `ingest`, `paperPortfolio(params)`, plus `streamUrl`. Never call `fetch` from
   components (server components use `server-api.ts`).
 - Batch 2026-10-19 types: `StudyName`, `StudyInfo`, `ConfirmatoryResult` (+ `EventStudy.confirmatory`,
   `confirmatory_testing`, `preregistration`, `config.study`, `StudyResult.t_stat_clustered` / `t_vs_baseline_clustered` /
   `clusters`), `ResearchJobKind` (`backtest | event_study | event_study_oos | insider_study`), `AdminStatus`
   (`Status.admin`), `HealthState`, `HealthComponent`, `HealthDetails`, `HealthIncident`, `HealthHistory`, `ChainLine`,
   `JournalChain`, `ChainDay`, `ChainVerify`, and `seal` on the newsletter issue's `track_record`.
+- v1.0 types (all new fields optional, so older APIs still type-check): `Signal.forward_test`, `Evidence.study` /
+  `forward_test` / `t_stat_clustered` / `companies`, `Article.forward_test`, journal rows' `evaluation_horizon` /
+  `forward_test_label`, and `PaperPortfolio` (`PaperAssumptions`, `PaperEquityPoint`, `PaperTotals`, `PaperSignalRow`,
+  `PaperPosition`, `PaperPortfolioParams`) mirroring `PaperPortfolioOut`.
 - Newsletter types (`NewsletterIssue`, `NewsletterIssueSummary`, `NewsletterFiling`, ...) mirror the dict built by
   `backend/app/newsletter/service.py` `build_issue` (not a pydantic model). `SitemapTicker` (in server-api.ts) mirrors
   `GET /api/tickers/sitemap`.
@@ -180,15 +205,20 @@ copy it into `frontend/.env.local` and uncomment what you need. All optional. (T
 |---|---|---|
 | `NEXT_PUBLIC_API_URL` | `http://localhost:8000` | `api.ts` (browser); fallback for `API_URL_INTERNAL`. Inlined at build time |
 | `API_URL_INTERNAL` | falls back to `NEXT_PUBLIC_API_URL` | `server-api.ts`: API origin as seen from the Next server (differs inside Docker) |
-| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` (warning logged in production) | `SITE_URL`: canonical, og:url, JSON-LD, sitemap, robots. Must equal backend `PUBLIC_BASE_URL` |
+| `NEXT_PUBLIC_SITE_URL` | `http://localhost:3000` (unset is the normal local case) | `SITE_URL`: canonical, og:url, JSON-LD, sitemap, robots. The **site** origin, not the API. Must equal backend `PUBLIC_BASE_URL`. While it is a loopback origin (`isLocalSiteUrl()`), `robots.txt` disallows everything |
 | `PUBLIC_BASE_URL` | none | fallback for `NEXT_PUBLIC_SITE_URL` when set in a frontend env file |
 
-## Production image (`Dockerfile`)
+## Container image (`Dockerfile`) and the compose `web` profile
+
+`docker compose --profile web up -d --build` (or `scripts/start.ps1`) builds this image as the `web` service with build
+args `NEXT_PUBLIC_API_URL=http://localhost:8000` and `NEXT_PUBLIC_SITE_URL=http://localhost:3000`, sets
+`API_URL_INTERNAL=http://api:8000` and publishes `127.0.0.1:3000`. A plain `docker compose up` skips it, so it never
+collides with `npm run dev` on :3000 (don't run both). `docker-compose.prod.yml` is optional, for later.
 
 `next.config.ts` sets `output: "standalone"`. The multi-stage `Dockerfile` (node:20-alpine: `npm ci`, `npm run build`,
 non-root runner, `node server.js` on port 3000) takes `NEXT_PUBLIC_API_URL` and `NEXT_PUBLIC_SITE_URL` as **build args**
 (inlined into the bundle: rebuild to change them); `API_URL_INTERNAL` is read at runtime (`http://api:8000` in
-`docker-compose.prod.yml`, service `web`). `.dockerignore` excludes `node_modules`, `.next` and `.env*`. CI builds the
+the compose `web` service). `.dockerignore` excludes `node_modules`, `.next` and `.env*`. CI builds the
 image but never pushes it.
 
 ## SSE
@@ -237,4 +267,7 @@ Visual check: dev server on :3000 (preview config `frontend` in `.claude/launch.
 All user-facing copy follows `docs/PRODUCT_RESEARCH.md` section 4 and `/legal/disclaimer`:
 - Impersonal facts and historical statistics only. No buy/sell language, price targets or "you should".
 - Label simulated results as hypothetical wherever they appear, show costs and losers, and never make earnings claims.
+- No pricing, plans, sign-up or "Pro" copy: QuantDesk is free and local-only. Don't describe it as a hosted or public service.
+- **Markdown rendering:** render Markdown only through `components/markdown/Markdown.tsx`, which builds React elements.
+  Never use `dangerouslySetInnerHTML` for Markdown or any document text, and never add an HTML-string Markdown library (the escaped JSON-LD `<script>` tags are the only `dangerouslySetInnerHTML` use).
 - When the backend logic changes (signals, entry timing, costs), update `/methodology` in the same PR.

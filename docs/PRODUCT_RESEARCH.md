@@ -1,3 +1,5 @@
+> **Decision 2026-10-19: local-only, no paid tier.** QuantDesk runs on the owner's machine via Docker. No Stripe, accounts, pricing or hosting; the monetization sections below are kept as background research only.
+
 # QuantDesk: Product Research (Small-Cap Event Intelligence)
 
 *Compiled 2026-10-16. Educational research, not legal or financial advice. Prices were checked against vendor pages where those pages loaded. **(secondary)** means the figure came from a third-party review or aggregator and was not confirmed on the vendor's own page. Several vendor pages (DilutionTracker, Fintel, Benzinga, TipRanks) blocked automated fetches, so their prices are secondary and should be re-checked by hand before you quote them.*

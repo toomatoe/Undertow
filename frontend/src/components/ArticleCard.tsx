@@ -3,7 +3,29 @@ import Link from "next/link";
 import type { Article, Evidence } from "@/lib/api";
 import { formatScore, humanize, pct, sentimentClass, SOURCE_LABELS, timeAgo } from "@/lib/format";
 
+
+export const FORWARD_TEST_LABEL = "Forward test of pre-registered finding";
+
+/** e.g. "+1.66% vs ordinary days over 5d, n=662, clustered t 3.29 (in-sample, hypothetical)", from the evidence fields. */
+function ForwardTestEvidenceLine({ ev }: { ev: Evidence }) {
+  const drift =
+    ev.excess_vs_baseline !== null && ev.excess_vs_baseline !== undefined
+      ? `${pct(ev.excess_vs_baseline, 2)} vs ordinary days`
+      : `${pct(ev.mean_abnormal, 2)} vs index`;
+  const t = ev.t_stat_clustered ?? ev.t_stat;
+  return (
+    <span
+      className={`evidence ${ev.significant ? "sig" : ""}`}
+      title={`Pre-registered insider study (${ev.study ?? "insider_purchases"}), in-sample result now being forward-tested live. Hypothetical, before any live results.`}
+    >
+      Past {ev.bucket} caps: {drift} over {ev.horizon_days}d, n={ev.n}, {ev.t_stat_clustered != null ? "clustered t" : "t"} {t.toFixed(2)}{" "}
+      (in-sample, hypothetical)
+    </span>
+  );
+}
+
 function EvidenceLine({ ev }: { ev: Evidence }) {
+  if (ev.forward_test) return <ForwardTestEvidenceLine ev={ev} />;
   const verdict = ev.significant ? "edge after costs" : ev.mean_net > 0 ? "not significant" : "no edge after costs";
   return (
     <span className={`evidence ${ev.significant ? "sig" : ""}`} title={`t = ${ev.t_stat}, n = ${ev.n} past events`}>
@@ -15,6 +37,9 @@ function EvidenceLine({ ev }: { ev: Evidence }) {
 
 export default function ArticleCard({ article, fresh = false }: { article: Article; fresh?: boolean }) {
   const a = article;
+  const forwardTest =
+    a.forward_test === true ||
+    a.signals?.some((s) => s.forward_test === true) === true;
   return (
     <article className={`card ${fresh ? "fresh" : ""} ${a.severity ? `sev-${a.severity}` : ""}`}>
       <div className="card-meta">
@@ -25,6 +50,14 @@ export default function ArticleCard({ article, fresh = false }: { article: Artic
           {timeAgo(a.published_at)}
         </time>
         {a.event_type && <span className="badge event">{a.event_type}</span>}
+        {forwardTest && (
+          <span
+            className="badge event"
+            title="Live forward test of a finding from a separate pre-registered study. Historical figures are in-sample and hypothetical."
+          >
+            {FORWARD_TEST_LABEL}
+          </span>
+        )}
         <span className={`sent ${sentimentClass(a.sentiment)}`} title={a.sentiment_label ?? "not scored"}>
           {formatScore(a.sentiment)}
         </span>

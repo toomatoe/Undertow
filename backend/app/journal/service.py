@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.backtest import borrow
 from app.models import Article, Company, JournalEntry
-from app.pipeline.signals import ALL_SIGNALS
+from app.pipeline.signals import is_forward_test, signal_def
 from app.research.eventstudy import ET, day0_index
 from app.research.prices import PriceSeries, load_prices
 
@@ -33,6 +33,23 @@ ENTRY_DELAY = 1  # same as the backtest base case
 HORIZONS = (1, 5, 20)
 BORROW_MAX_AGE_HOURS = 36
 DATA_ENDED_AFTER_DAYS = 10  # calendar days without a print before an open entry is closed out
+
+# Horizon (trading days, one of HORIZONS) on which each signal is judged. Default 20 (the Edge Lab horizon).
+# insider_cluster_purchase is the live forward test of the insider study's micro / 5-day finding, so it is
+# judged at 5 days (a hypothetical long). Marking still fills 1/5/20 for every entry. Exported for the paper portfolio.
+DEFAULT_EVALUATION_HORIZON = 20
+EVALUATION_HORIZONS: dict[str, int] = {"insider_cluster_purchase": 5}
+FORWARD_TEST_LABEL = "forward test of pre-registered finding"
+assert all(h in HORIZONS for h in EVALUATION_HORIZONS.values()), "evaluation horizons must be marked horizons"
+
+
+def evaluation_horizon(signal: str) -> int:
+    return EVALUATION_HORIZONS.get(signal, DEFAULT_EVALUATION_HORIZON)
+
+
+def forward_test_label(signal: str) -> str | None:
+    """FORWARD_TEST_LABEL for forward-test signals (pipeline.signals.FORWARD_TEST_SIGNALS), else None."""
+    return FORWARD_TEST_LABEL if is_forward_test(signal) else None
 
 
 def _aware(dt: datetime) -> datetime:
@@ -88,7 +105,9 @@ def record_new(session: Session, data_dir: str) -> int:
         if not sized or not a.signals:
             continue
         sym, company = sized[0]
-        primary = ALL_SIGNALS[a.signals[0]]
+        primary = signal_def(a.signals[0])
+        if primary is None:  # unknown code: never guess a direction
+            continue
         b = snap.get(sym) if snap else None
         session.add(
             JournalEntry(
@@ -185,8 +204,10 @@ def summary(session: Session, expected: dict[tuple[str, str, int], dict]) -> lis
     out = []
     for (sig, bucket), entries in sorted(groups.items(), key=lambda kv: -len(kv[1])):
         sign = -1 if entries[0].direction == "-" else 1
-        row = {"signal": sig, "label": ALL_SIGNALS[sig].label if sig in ALL_SIGNALS else sig,
-               "direction": entries[0].direction, "bucket": bucket, "n": len(entries)}
+        sdef = signal_def(sig)
+        row = {"signal": sig, "label": sdef.label if sdef else sig,
+               "direction": entries[0].direction, "bucket": bucket, "n": len(entries),
+               "evaluation_horizon": evaluation_horizon(sig), "forward_test_label": forward_test_label(sig)}
         for h in HORIZONS:
             vals = [getattr(e, f"abn_{h}") for e in entries if getattr(e, f"abn_{h}") is not None]
             row[f"n_{h}"] = len(vals)

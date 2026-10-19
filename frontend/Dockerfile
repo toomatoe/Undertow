@@ -1,7 +1,8 @@
-# Production image for the Next.js frontend (output: "standalone" in next.config.ts).
+# Standalone image for the Next.js frontend (output: "standalone" in next.config.ts). Used by the optional
+# `web` service in docker-compose.yml (`docker compose --profile web up -d --build`). The defaults are local:
 #   docker build -t quantdesk-web \
-#     --build-arg NEXT_PUBLIC_API_URL=https://api.example.com \
-#     --build-arg NEXT_PUBLIC_SITE_URL=https://example.com frontend
+#     --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 \
+#     --build-arg NEXT_PUBLIC_SITE_URL=http://localhost:3000 frontend
 # NEXT_PUBLIC_* values are inlined into the browser bundle at build time: rebuild to change them.
 # API_URL_INTERNAL (server-side fetches, e.g. http://api:8000 inside compose) is read at runtime.
 

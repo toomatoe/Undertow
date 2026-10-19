@@ -146,9 +146,9 @@ export default function NewsFeed() {
             {pending} new article{pending > 1 ? "s" : ""}. Refresh
           </button>
         )}
-        {error && <p className="error">Could not load articles: {error}</p>}
+        {error && <p className="error">Could not load articles: {error}. Is the backend running on :8000?</p>}
         {loading && items.length === 0 && <p className="muted">Loading…</p>}
-        {!loading && !error && items.length === 0 && <p className="muted">No articles match these filters.</p>}
+        {!loading && !error && items.length === 0 && <p className="empty-state">No articles match these filters yet. New filings and headlines appear here as each ingest cycle runs.</p>}
 
         {items.map((a) => (
           <ArticleCard key={a.id} article={a} fresh={freshIds.has(a.id)} />

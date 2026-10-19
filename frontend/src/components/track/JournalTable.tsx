@@ -10,6 +10,11 @@ import { Abn, DirMark, downloadCsv, formatDay, formatFiled, sizeShort, sizeTitle
 
 const PAGE = 50;
 
+// Optional fields /api/journal adds per row (backend main.journal_entries, journal.service.evaluation_horizon).
+// TODO(paper-portfolio): mirror these in lib/api.ts JournalEntry and drop this local type.
+type JournalRowExtras = { evaluation_horizon?: number | null; forward_test_label?: string | null };
+const extras = (e: JournalEntry): JournalRowExtras => e as JournalEntry & JournalRowExtras;
+
 const CSV_HEADER = [
   "id",
   "filed_at",
@@ -128,6 +133,7 @@ export default function JournalTable({ entries }: { entries: JournalEntry[] }) {
           <tbody>
             {shown.map((e) => {
               const extra = e.signals.filter((s) => s !== e.primary_signal);
+              const { evaluation_horizon: horizon, forward_test_label: forwardLabel } = extras(e);
               return (
                 <tr key={e.id}>
                   <td className="tr-text">{formatFiled(e.filed_at)}</td>
@@ -147,6 +153,16 @@ export default function JournalTable({ entries }: { entries: JournalEntry[] }) {
                       <span className="muted" title={`Also: ${extra.map(humanize).join(", ")}`}>
                         {" "}
                         +{extra.length} more
+                      </span>
+                    )}
+                    {forwardLabel && (
+                      <span
+                        className="muted small"
+                        style={{ display: "block" }}
+                        title="Live forward test of a finding from a separate pre-registered study, judged as a hypothetical long at this horizon"
+                      >
+                        {forwardLabel.charAt(0).toUpperCase() + forwardLabel.slice(1)}
+                        {horizon ? ` · horizon ${horizon}d` : ""}
                       </span>
                     )}
                   </td>

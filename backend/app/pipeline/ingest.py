@@ -15,7 +15,7 @@ from app.models import Article, ArticleTicker, IngestRun
 from app.pipeline.dedupe import title_hash, url_hash
 from app.pipeline.enrich import Enricher, EnrichmentFailed
 from app.pipeline.events import broadcaster
-from app.pipeline.signals import ALL_SIGNALS, signals_for_filing
+from app.pipeline.signals import signal_def, signals_for_filing
 from app.pipeline.tickers import TickerUniverse, tag_tickers
 from app.sources.alpaca import AlpacaNewsSource
 from app.sources.base import RawArticle, Source
@@ -80,7 +80,7 @@ def store(session: Session, raw: RawArticle, universe: TickerUniverse) -> Articl
         form=raw.form,
         cik=raw.cik,
         signals=raw.signals or None,
-        severity=max((ALL_SIGNALS[c].severity for c in raw.signals), default=None),
+        severity=max((d.severity for c in raw.signals if (d := signal_def(c)) is not None), default=None),
         tickers=[ArticleTicker(symbol=s, method=m) for s, m in tickers.items()],
     )
     session.add(article)
@@ -184,13 +184,46 @@ def _store_source(source: Source, universe: TickerUniverse) -> IngestRun:
             new_ids = []
         session.add(run)
         session.commit()
+    run_new_article_hooks(new_ids)
+    return run
+
+
+def run_new_article_hooks(new_ids: list[int]) -> None:
     for article_id in new_ids:
         for hook in NEW_ARTICLE_HOOKS:
             try:
                 hook(article_id)
             except Exception:
                 log.exception("New-article hook failed for %s", article_id)
-    return run
+
+
+def store_and_publish(raws: list[RawArticle], universe: TickerUniverse, *, body: str | None = None) -> list[int]:
+    """Store raws outside a Source (e.g. the live Form 4 forward test): same store() path, broadcast after each
+    commit, then NEW_ARTICLE_HOOKS. body="" marks the rows as having no filing text to fetch. Returns new ids."""
+    new_ids: list[int] = []
+    with SessionLocal() as session:
+        for raw in sorted(raws, key=lambda r: r.published_at):
+            article = store(session, raw, universe)
+            if article is None:
+                continue
+            if body is not None:
+                article.body = body
+            session.commit()
+            new_ids.append(article.id)
+            broadcaster.publish("article", {"id": article.id})
+    run_new_article_hooks(new_ids)
+    return new_ids
+
+
+def _poll_form4(settings: Settings, universe: TickerUniverse) -> dict:
+    """Live Form 4 forward test (app.insiders.live). Isolated: a failure here never breaks the 8-K poll."""
+    try:
+        from app.insiders.live import poll_form4
+
+        return poll_form4(settings, universe, SessionLocal)
+    except Exception as exc:
+        log.warning("Form 4 forward-test poll failed: %s", exc)
+        return {"error": f"{type(exc).__name__}: {exc}"[:300]}
 
 
 def poll_edgar(settings: Settings, universe: TickerUniverse) -> dict:
@@ -199,7 +232,8 @@ def poll_edgar(settings: Settings, universe: TickerUniverse) -> dict:
         return {"status": "skipped"}
     try:
         run = _store_source(EdgarSource(settings.sec_user_agent, universe), universe)
-        return {"fetched": run.fetched, "inserted": run.inserted, "error": run.error}
+        form4 = _poll_form4(settings, universe)
+        return {"fetched": run.fetched, "inserted": run.inserted, "error": run.error, "form4": form4}
     finally:
         _edgar_lock.release()
 
@@ -214,6 +248,8 @@ def run_ingest(settings: Settings, universe: TickerUniverse, enricher: Enricher 
             run = _store_source(source, universe)
             stats["sources"][source.name] = {"fetched": run.fetched, "inserted": run.inserted, "error": run.error}
             stats["inserted"] += run.inserted
+        if settings.edgar_enabled and settings.edgar_poll_seconds <= 0:  # no fast poller: Form 4 joins this cycle
+            stats["form4"] = _poll_form4(settings, universe)
 
         if settings.edgar_enabled:
             with SessionLocal() as session:

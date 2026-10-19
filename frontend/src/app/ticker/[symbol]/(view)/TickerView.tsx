@@ -78,7 +78,7 @@ export default function TickerView({ initial, initialDays, fundamentals, fundame
 
   return (
     <main className="page">
-      <Link href="/" className="back">
+      <Link href="/news" className="back">
         ← News
       </Link>
       {error && <p className="error">{error}</p>}

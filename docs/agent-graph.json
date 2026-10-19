@@ -1,5 +1,5 @@
 {
-  "$comment": "Machine-readable module graph for agents. Planners assign work items to modules so parallel builders never share files; reviewers use depends_on/used_by to find what a change can break; the verify step uses tests + shared_resources. Keep in sync when adding a module (see docs/AGENT_PROCESS.md). Every repo file matches exactly one module path (dirs end in /); a module owns its own test files, and tests lists what to run.",
+  "$comment": "Machine-readable module graph for agents (QuantDesk v1.0, local-only). Planners assign work items to modules so parallel builders never share files; reviewers use depends_on/used_by to find what a change can break; the verify step uses tests + shared_resources. Keep in sync when adding a module (see docs/AGENT_PROCESS.md). Every repo file matches exactly one module path (dirs end in /); a module owns its own test files, and tests lists what to run.",
   "version": 1,
   "shared_resources": {
     "docker_api_image": "Building/running the api image (`docker compose build api`, `docker compose run --rm api ...`). One agent at a time: parallel builds collide.",
@@ -13,18 +13,18 @@
       "id": "api",
       "paths": ["backend/app/main.py", "backend/app/schemas.py", "backend/app/research_jobs.py", "backend/tests/test_api.py", "backend/tests/test_research_jobs.py"],
       "agents_md": "backend/AGENTS.md",
-      "summary": "FastAPI routes (incl. /api/newsletter/*, /api/tickers/sitemap, /api/research/studies, /api/journal/chain|verify, /api/health/details|history; mounts the delivery router), rate-limit middleware + admin dependency wiring, lifespan, scheduler loops (slow: ingest, borrow snapshot, journal, seal_cycle, newsletter_cycle (+ email), digest_cycle, uptime_cycle; fast: EDGAR+halts poller), AppState. research_jobs.MODULES: backtest, event_study, event_study_oos, insider_study.",
-      "depends_on": ["config_db", "platform", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter", "delivery", "insiders"],
+      "summary": "FastAPI routes (incl. /api/paper-portfolio (hypothetical, cached 10 min), /api/newsletter/*, /api/tickers/sitemap, /api/research/studies, /api/journal/chain|verify, /api/health/details|history; mounts the delivery router), rate-limit middleware + admin dependency wiring, lifespan (load_study + load_forward_evidence), to_out (main vs forward-test EvidenceOut), scheduler loops (slow: ingest, borrow snapshot, journal, seal_cycle, newsletter_cycle (+ email), digest_cycle, uptime_cycle; fast: EDGAR + live Form 4 forward-test poller + halts), AppState (incl. paper_cache, forward_evidence). Optional schema fields: SignalOut/ArticleOut.forward_test, EvidenceOut, Paper* models. research_jobs.MODULES: backtest, event_study, event_study_oos, insider_study.",
+      "depends_on": ["config_db", "platform", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter", "delivery", "insiders", "paper"],
       "tests": ["backend/tests/test_api.py", "backend/tests/test_research_jobs.py"],
       "hotspot": true
     },
     {
       "id": "config_db",
-      "paths": ["backend/app/config.py", "backend/app/db.py", "backend/app/models.py", "backend/app/__init__.py"],
+      "paths": ["backend/app/config.py", "backend/app/db.py", "backend/app/models.py", "backend/app/__init__.py", "backend/tests/test_config_local.py"],
       "agents_md": "backend/AGENTS.md",
-      "summary": "Settings (env) incl. AdminSettings (ADMIN_TOKEN, RESEARCH_JOBS_ENABLED, MUTATIONS_ENABLED) and rate-limit settings, engine/session, stopgap column migration, all ORM tables (incl. subscribers, email_sends).",
+      "summary": "Settings (env; local zero-config defaults: PUBLIC_BASE_URL = site origin http://localhost:3000, every integration off until set) incl. AdminSettings (ADMIN_TOKEN, RESEARCH_JOBS_ENABLED, MUTATIONS_ENABLED) and rate-limit settings, engine/session, stopgap column migration, all ORM tables (incl. subscribers, email_sends). test_config_local.py checks the zero-config local defaults.",
       "depends_on": [],
-      "tests": ["backend/tests"],
+      "tests": ["backend/tests/test_config_local.py", "backend/tests"],
       "hotspot": true
     },
     {
@@ -39,17 +39,17 @@
       "id": "pipeline",
       "paths": ["backend/app/pipeline/", "backend/tests/test_pipeline.py", "backend/tests/test_ingest.py", "backend/tests/test_enrich.py"],
       "agents_md": "backend/app/pipeline/AGENTS.md",
-      "summary": "Ingest cycle, fast EDGAR poll, NEW_ARTICLE_HOOKS, dedupe, ticker tagging, company sizes, signal taxonomy, LLM enrichment, SSE.",
-      "depends_on": ["config_db", "sources"],
+      "summary": "Ingest cycle, fast EDGAR poll (+ _poll_form4 hook for the live insider forward test), store_and_publish, NEW_ARTICLE_HOOKS, dedupe, ticker tagging, company sizes, signal taxonomy (ALL_SIGNALS for the main study; FORWARD_TEST_SIGNALS outside it; signal_def()), LLM enrichment, SSE.",
+      "depends_on": ["config_db", "sources", "insiders"],
       "tests": ["backend/tests/test_pipeline.py", "backend/tests/test_ingest.py", "backend/tests/test_enrich.py"]
     },
     {
       "id": "research",
-      "paths": ["backend/app/research/", "backend/tests/test_eventstudy.py", "backend/tests/test_oos.py", "backend/tests/test_snapshot.py"],
+      "paths": ["backend/app/research/", "backend/tests/test_eventstudy.py", "backend/tests/test_oos.py", "backend/tests/test_snapshot.py", "backend/tests/test_paper_numbers.py"],
       "agents_md": "backend/app/research/AGENTS.md",
-      "summary": "Edge Lab event study (StudyDesign/run_design, firm-clustered t, --offline replay), pre-registered out-of-sample study (oos.py, PREREGISTRATION_OOS.md), hash-only input manifests and canonical compare (snapshot.py), Yahoo price loader (raw/adjusted prices, split unadjusting).",
+      "summary": "Edge Lab event study (StudyDesign/run_design, firm-clustered t, --offline replay), pre-registered out-of-sample study (oos.py, PREREGISTRATION_OOS.md), hash-only input manifests and canonical compare (snapshot.py), Yahoo price loader (raw/adjusted prices, split unadjusting). paper_numbers.py: HEADLINE claims of docs/paper/WORKING_PAPER.md checked against docs/results (test needs the repo at /repo, mounted by scripts/pytest.sh).",
       "depends_on": ["pipeline"],
-      "tests": ["backend/tests/test_eventstudy.py", "backend/tests/test_oos.py", "backend/tests/test_snapshot.py"]
+      "tests": ["backend/tests/test_eventstudy.py", "backend/tests/test_oos.py", "backend/tests/test_snapshot.py", "backend/tests/test_paper_numbers.py"]
     },
     {
       "id": "backtest",
@@ -63,9 +63,17 @@
       "id": "journal",
       "paths": ["backend/app/journal/", "backend/tests/test_journal.py", "backend/tests/test_journal_digest.py"],
       "agents_md": "backend/app/journal/AGENTS.md",
-      "summary": "Forward signal journal (track record), daily marking, live-vs-expected summary, tamper-evident daily SHA-256 hash chain (digest.py, {data_dir}/journal_chain.jsonl).",
+      "summary": "Forward signal journal (track record), daily marking, per-signal evaluation horizons (EVALUATION_HORIZONS: 5 days for insider_cluster_purchase, else 20) and forward-test labels, live-vs-expected summary, tamper-evident daily SHA-256 hash chain (digest.py, {data_dir}/journal_chain.jsonl).",
       "depends_on": ["config_db", "research", "backtest"],
       "tests": ["backend/tests/test_journal.py", "backend/tests/test_journal_digest.py"]
+    },
+    {
+      "id": "paper",
+      "paths": ["backend/app/paper/", "backend/tests/test_paper_portfolio.py"],
+      "agents_md": "backend/app/paper/AGENTS.md",
+      "summary": "Hypothetical paper portfolio simulated from the forward journal (service.build_portfolio): one fixed-notional position per entry, side from the prior direction, evaluation horizon from journal.service, costs/borrow imported from research and backtest, cache-only prices, optional IWM hedge. No execution code (test greps for it). Served by GET /api/paper-portfolio in main.py.",
+      "depends_on": ["config_db", "journal", "research", "backtest", "pipeline"],
+      "tests": ["backend/tests/test_paper_portfolio.py"]
     },
     {
       "id": "alerts",
@@ -101,11 +109,11 @@
     },
     {
       "id": "insiders",
-      "paths": ["backend/app/insiders/", "backend/tests/test_insiders.py", "backend/tests/fixtures/form4/"],
+      "paths": ["backend/app/insiders/", "backend/tests/test_insiders.py", "backend/tests/fixtures/form4/", "backend/tests/test_insider_live.py", "backend/tests/fixtures/form4_live/"],
       "agents_md": "backend/app/insiders/AGENTS.md",
-      "summary": "Separate pre-registered Form 4 insider-purchase event study: SEC insider data sets, safe Form 4 XML parser, CMP routine/opportunistic classifier, writes {data_dir}/event_study_insider_purchases.json (python -m app.insiders.study). Never touches pipeline/signals.py.",
-      "depends_on": ["research", "config_db"],
-      "tests": ["backend/tests/test_insiders.py"]
+      "summary": "Separate pre-registered Form 4 insider-purchase event study: SEC insider data sets, safe Form 4 XML parser, CMP routine/opportunistic classifier, writes {data_dir}/event_study_insider_purchases.json (python -m app.insiders.study). Plus the live forward test of its one significant cell (micro insider_cluster_purchase, 5 days): live.py polls EDGAR Form 4 in the fast loop (INSIDER_LIVE_ENABLED, settings.py), applies the study's own rules, emits forward-test articles via pipeline.ingest.store_and_publish; evidence.py serves the frozen evidence row. Never adds to ALL_SIGNALS.",
+      "depends_on": ["research", "config_db", "pipeline", "journal"],
+      "tests": ["backend/tests/test_insiders.py", "backend/tests/test_insider_live.py"]
     },
     {
       "id": "platform",
@@ -119,17 +127,17 @@
       "id": "fe_core",
       "paths": ["frontend/src/lib/api.ts", "frontend/src/lib/format.ts", "frontend/src/components/Nav.tsx", "frontend/src/components/Footer.tsx", "frontend/src/app/layout.tsx", "frontend/src/app/globals.css", "frontend/src/app/favicon.ico", "frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig.json", "frontend/next.config.ts", "frontend/eslint.config.mjs", "frontend/.gitignore"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Browser API client + types (mirror backend; ApiError, admin token helpers, send() for writes), formatting helpers, nav (incl. Learn tab), footer (Subscribe/Status links, admin-error notice), layout, global styles/tokens. next.config.ts sets output: standalone. server-api.ts belongs to fe_ticker.",
+      "summary": "Browser API client + types (mirror backend; ApiError, admin token helpers, send() for writes), formatting helpers, nav (News at /news, Paper, Learn, Research tabs; isActive()), footer (Subscribe/Status links, admin-error notice), layout, global styles/tokens. next.config.ts sets output: standalone. server-api.ts belongs to fe_ticker.",
       "depends_on": ["api"],
       "tests": ["frontend: npx tsc --noEmit"],
       "hotspot": true
     },
     {
       "id": "fe_news_signals",
-      "paths": ["frontend/src/app/page.tsx", "frontend/src/app/signals/", "frontend/src/components/NewsFeed.tsx", "frontend/src/components/Sidebar.tsx", "frontend/src/components/ArticleCard.tsx", "frontend/src/components/WatchlistPanel.tsx", "frontend/src/components/HaltsPanel.tsx"],
+      "paths": ["frontend/src/app/page.tsx", "frontend/src/app/signals/", "frontend/src/components/NewsFeed.tsx", "frontend/src/components/Sidebar.tsx", "frontend/src/components/ArticleCard.tsx", "frontend/src/components/WatchlistPanel.tsx", "frontend/src/components/HaltsPanel.tsx", "frontend/src/app/news/", "frontend/src/components/home/"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "News feed and Signals pages.",
-      "depends_on": ["fe_core"],
+      "summary": "Landing page / (server component; Key findings cards from the three study endpoints via components/home/findings.ts, KeyFindings.tsx), /news (NewsFeed, moved from /), Signals page and its cards (forward-test badge + in-sample hypothetical evidence line).",
+      "depends_on": ["fe_core", "fe_ticker"],
       "tests": ["frontend: npx tsc --noEmit"]
     },
     {
@@ -149,10 +157,18 @@
       "tests": ["frontend: npx tsc --noEmit"]
     },
     {
-      "id": "fe_content",
-      "paths": ["frontend/src/app/methodology/", "frontend/src/app/legal/", "frontend/src/components/DraftNotice.tsx", "frontend/src/app/newsletter/", "frontend/src/components/newsletter/", "frontend/src/app/research/", "frontend/src/app/trading/", "frontend/src/components/SubscribeForm.tsx", "frontend/src/components/SubscribeForm.module.css"],
+      "id": "fe_paper",
+      "paths": ["frontend/src/app/paper/", "frontend/src/components/portfolio/"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Methodology, legal drafts, server-rendered newsletter archive and issue pages (/newsletter, /newsletter/[issue]) with the SubscribeForm client island, placeholder pages.",
+      "summary": "/paper: hypothetical paper portfolio (server shell + client PaperPortfolioView, EquityChart): tiles, equity curve, per-signal table, recent positions, assumptions, always showing the backend label. Paper-only: no order, broker or account UI.",
+      "depends_on": ["fe_core", "fe_research", "api"],
+      "tests": ["frontend: npx tsc --noEmit"]
+    },
+    {
+      "id": "fe_content",
+      "paths": ["frontend/src/app/methodology/", "frontend/src/app/legal/", "frontend/src/components/DraftNotice.tsx", "frontend/src/app/newsletter/", "frontend/src/components/newsletter/", "frontend/src/app/research/", "frontend/src/app/trading/", "frontend/src/components/SubscribeForm.tsx", "frontend/src/components/SubscribeForm.module.css", "frontend/src/content/", "frontend/src/components/markdown/"],
+      "agents_md": "frontend/AGENTS.md",
+      "summary": "Methodology, legal drafts, server-rendered newsletter archive and issue pages (/newsletter, /newsletter/[issue]) with the SubscribeForm client island, /research index, /research/paper (working paper from src/content/working-paper.md, a byte-identical copy of docs/paper/WORKING_PAPER.md, rendered by the safe components/markdown/ renderer; no dangerouslySetInnerHTML), /trading -> /paper redirect.",
       "depends_on": ["fe_core", "fe_ticker"],
       "tests": ["frontend: npx tsc --noEmit"]
     },
@@ -176,7 +192,7 @@
       "id": "docs",
       "paths": ["docs/", "README.md", "AGENTS.md", "CLAUDE.md", ".env.example", "frontend/AGENTS.md", "backend/AGENTS.md"],
       "agents_md": "docs/AGENTS.md",
-      "summary": "Research docs, results, product research, this graph, process doc, README, and the shared guides/env examples owned by the workflow's final docs node (SHARED_DOCS in feature-graph.js).",
+      "summary": "Research docs (feasibility, product research kept as background after the 2026-10-19 local-only decision), published results, the working paper (docs/paper/), batch plans, this graph, process doc, README, and the shared guides/env examples owned by the workflow's final docs node (SHARED_DOCS in feature-graph.js).",
       "depends_on": [],
       "tests": []
     },
@@ -184,7 +200,7 @@
       "id": "tooling",
       "paths": ["scripts/", ".claude/workflows/", ".claude/launch.json", "docker-compose.yml", ".gitignore", "backend/Dockerfile", "backend/.dockerignore", "backend/requirements.txt", "backend/requirements-dev.txt", "backend/pytest.ini", "backend/tests/conftest.py", "Makefile", "docker-compose.prod.yml", ".github/", "frontend/Dockerfile", "frontend/.dockerignore", ".gitattributes", ".vscode/"],
       "agents_md": "docs/AGENT_PROCESS.md",
-      "summary": "Agent tooling and dev/deploy infra: scripts/pytest.sh (parallel-safe tests on mounted source), scripts/reproduce.sh (offline study replay + compare), Makefile shortcuts, feature-graph workflow, preview config, dev and prod compose files, api and web Dockerfiles, CI workflow (.github/workflows/ci.yml), ignore/attributes rules, api requirements, pytest config and conftest.",
+      "summary": "Agent tooling and local infra: scripts/start.ps1 (Windows one-command local start), scripts/pytest.sh (parallel-safe tests on mounted source: backend/ at /app, repo read-only at /repo), scripts/reproduce.sh (offline study replay + compare), Makefile shortcuts, feature-graph workflow, preview config, local compose file (web profile) and the optional, for-later prod compose file, api and web Dockerfiles, CI workflow (.github/workflows/ci.yml), ignore/attributes rules, api requirements, pytest config and conftest.",
       "depends_on": [],
       "tests": ["bash scripts/pytest.sh tests/test_api.py"]
     }

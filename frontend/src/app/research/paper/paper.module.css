@@ -1,0 +1,105 @@
+/* /research/paper: notice, table of contents and article column. */
+.page {
+  max-width: 1180px;
+}
+
+.crumbs {
+  margin: 0 0 0.75rem;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.crumbs a {
+  color: var(--accent);
+}
+
+.notice {
+  margin: 0 0 1.5rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.notice a {
+  color: var(--accent);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+}
+
+.article {
+  min-width: 0;
+  max-width: 820px;
+}
+
+.toc {
+  min-width: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  font-size: 0.875rem;
+}
+
+.tocTitle {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.toc ol {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.toc li + li {
+  margin-top: 0.35rem;
+}
+
+.toc a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.toc a:hover,
+.toc a:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.footer {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.footer a {
+  color: var(--accent);
+}
+
+/* Wide screens: contents in a sticky column beside the article. */
+@media (min-width: 1000px) {
+  .layout {
+    grid-template-columns: 240px minmax(0, 1fr);
+    align-items: start;
+    gap: 2.5rem;
+  }
+
+  .toc {
+    position: sticky;
+    top: 72px;
+    max-height: calc(100vh - 96px);
+    overflow-y: auto;
+  }
+}

@@ -44,6 +44,8 @@ class SignalOut(BaseModel):
     direction: str
     severity: int
     why: str
+    # True for pipeline.signals.FORWARD_TEST_SIGNALS (live forward test of a separate pre-registered study)
+    forward_test: bool = False
 
 
 class Evidence(BaseModel):
@@ -58,6 +60,20 @@ class Evidence(BaseModel):
     excess_vs_baseline: float | None = None  # drift minus the same stocks' ordinary-day drift
     t_stat: float
     significant: bool  # survives the multiple-testing correction
+
+
+class EvidenceOut(Evidence):
+    """Evidence as served on articles: Evidence plus OPTIONAL fields for forward-test evidence.
+
+    A subclass (not new Evidence fields) because result rows are loaded with Evidence.model_fields as the key
+    list (main.load_study, tests/test_insiders.py), and study rows do not carry these keys.
+    Main-study evidence serializes with the defaults below.
+    """
+
+    study: str | None = None  # "insider_purchases" for the insider forward test; None = the main event study
+    forward_test: bool = False  # in-sample result of a pre-registered study, now being forward-tested live
+    t_stat_clustered: float | None = None  # firm-clustered t (the insider study's significance rule)
+    companies: int | None = None  # distinct companies behind n
 
 
 class ArticleOut(BaseModel):
@@ -82,16 +98,17 @@ class ArticleOut(BaseModel):
     severity: int | None = None
     signals: list[SignalOut] = []
     ai_flags: list[str] | None = None
-    evidence: list[Evidence] = []
+    evidence: list[EvidenceOut] = []
+    forward_test: bool = False  # any signal is a forward-test signal (label: forward test of pre-registered finding)
 
     @field_validator("signals", mode="before")
     @classmethod
     def expand_signals(cls, v):
-        from app.pipeline.signals import ALL_SIGNALS, signal_dict
+        from app.pipeline.signals import signal_def, signal_dict
 
         if not v:
             return []
-        return [signal_dict(ALL_SIGNALS[c]) if isinstance(c, str) else c for c in v if not isinstance(c, str) or c in ALL_SIGNALS]
+        return [signal_dict(signal_def(c)) if isinstance(c, str) else c for c in v if not isinstance(c, str) or signal_def(c) is not None]
 
     @field_validator("published_at")
     @classmethod
@@ -264,3 +281,71 @@ class HealthHistory(BaseModel):
     components: dict[str, UptimeStat]
     daily: list[UptimeDay]
     incidents: list[HealthIncident]
+
+
+# --- Paper portfolio (app/paper/service.py): hypothetical, simulated from the journal, never traded -------------
+
+
+class PaperAssumptions(BaseModel):
+    notional: float
+    max_concurrent: int
+    hedge: bool
+    starting_capital: float
+    cost_model: str  # where the cost / borrow numbers come from (event study + backtest constants)
+    horizons: dict[str, int]  # "default" plus per-signal evaluation horizons (trading days)
+
+
+class PaperEquityPoint(BaseModel):
+    date: str
+    equity: float
+    open_positions: int
+
+
+class PaperTotals(BaseModel):
+    pnl: float
+    return_pct: float  # pnl / starting capital (notional x max_concurrent)
+    n_closed: int
+    n_open: int
+    hit_rate: float | None  # share of closed positions with net return > 0
+    skipped_capacity: int  # entries skipped while max_concurrent positions were open
+    unpriced: int  # entries without a cached price series (excluded)
+    pending: int = 0  # entries the journal has not priced yet (day 0 + 1 not printed)
+    undirected: int = 0  # entries whose signal has no expected direction ('?'): no position
+
+
+class PaperSignalRow(BaseModel):
+    signal: str
+    label: str
+    direction: str
+    horizon: int
+    forward_test: bool
+    forward_test_label: str | None = None
+    n: int
+    n_closed: int
+    pnl: float
+    mean_return_net: float | None
+    hit_rate: float | None
+
+
+class PaperPosition(BaseModel):
+    ticker: str
+    signal: str
+    side: Literal["long", "short"]
+    size_bucket: str | None = None
+    horizon: int
+    entry_date: str
+    exit_date: str | None
+    status: Literal["open", "closed"]
+    net_return: float
+    pnl: float
+
+
+class PaperPortfolioOut(BaseModel):
+    as_of: str
+    label: str  # always the hypothetical label
+    assumptions: PaperAssumptions
+    equity_curve: list[PaperEquityPoint]
+    totals: PaperTotals
+    by_signal: list[PaperSignalRow]
+    positions: list[PaperPosition]  # most recent 50
+    empty_reason: str | None = None

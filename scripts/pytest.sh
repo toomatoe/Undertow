@@ -8,6 +8,8 @@
 # can run tests at the same time. Only `docker compose build api` is an exclusive resource;
 # this script never touches it. Rebuild the dependency image only when requirements change:
 #   docker build -q -t quantdesk-api-test backend
+# The repo root is also mounted read-only at /repo, so tests that compare backend code with docs/ or
+# frontend/ (tests/test_paper_numbers.py) can see them. Both mounts are per-container, so parallel runs are safe.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -28,4 +30,7 @@ if ! docker image inspect quantdesk-api-test >/dev/null 2>&1; then
   docker build -q -t quantdesk-api-test "$ROOT/backend" >/dev/null
 fi
 
-MSYS_NO_PATHCONV=1 docker run --rm -v "$HOST_PATH/backend:/app" -w /app quantdesk-api-test pytest -q "$@"
+MSYS_NO_PATHCONV=1 docker run --rm \
+  -v "$HOST_PATH/backend:/app" \
+  -v "$HOST_PATH:/repo:ro" \
+  -w /app quantdesk-api-test pytest -q "$@"

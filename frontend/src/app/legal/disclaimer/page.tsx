@@ -9,17 +9,18 @@ export default function DisclaimerPage() {
     <main className="page prose legal">
       <DraftNotice />
       <h1>Disclaimer</h1>
-      <p className="muted">Last updated October 16, 2026</p>
+      <p className="muted">Last updated October 19, 2026</p>
 
       <h2>Research and information only</h2>
       <p>
-        QuantDesk publishes general, impersonal information about public SEC filings, trading halts and market data, along with
-        statistical research about how stocks have historically behaved after those events. Nothing on this site, in our alerts or in any
-        communication from us is investment, legal, tax or accounting advice, or a recommendation to buy, sell or hold any security.
+        QuantDesk is a personal research tool that runs on your own computer. It shows general, impersonal information about public SEC
+        filings, trading halts and market data, along with statistical research about how stocks have historically behaved after those
+        events. Nothing in QuantDesk, its alerts, newsletters or emails is investment, legal, tax or accounting advice, or a recommendation
+        to buy, sell or hold any security.
       </p>
       <p>
-        We do not know your financial situation, objectives or risk tolerance, and nothing we publish is tailored to you. Watchlists and
-        filters only narrow down the same information every user receives. We do not manage money, take custody of funds, execute trades or
+        QuantDesk does not know your financial situation, objectives or risk tolerance, and nothing it shows is tailored to you. Watchlists
+        and filters only narrow down the same public information. QuantDesk does not manage money, take custody of funds, execute trades or
         connect to brokerage accounts.
       </p>
 
@@ -42,22 +43,22 @@ export default function DisclaimerPage() {
         </li>
       </ul>
       <p>
-        Our own backtest of the strongest signal we found concluded it was <strong>not tradable</strong> after realistic costs. We publish
-        losing results and drawdowns alongside everything else, and we never present simulated results as real.
+        QuantDesk&apos;s own backtest of the strongest signal it found concluded it was <strong>not tradable</strong> after realistic costs.
+        Losing results and drawdowns are shown alongside everything else, and simulated results are never presented as real.
       </p>
 
       <h2>Data accuracy</h2>
       <p>
-        Data comes from public sources: SEC EDGAR, FINRA, Nasdaq Trader and news feeds. It may be delayed, incomplete or wrong. Automated
-        classification (signal types, company size, ticker matching, AI summaries) can misread filings. Always read the original filing,
-        which every alert links to, before acting on anything.
+        Data comes from public sources: SEC EDGAR, FINRA, Nasdaq Trader and news feeds. Research price history comes from Yahoo Finance for
+        personal use only and is never redistributed. Data may be delayed, incomplete or wrong. Automated classification (signal types,
+        company size, ticker matching, AI summaries) can misread filings. Always read the original filing, which every alert links to,
+        before acting on anything.
       </p>
 
-      <h2>No conflicts: our trading policy</h2>
+      <h2>No sponsors, no conflicts</h2>
       <ul>
-        <li>QuantDesk and its operators do not trade any security within 48 hours before or after we publish an alert or analysis about it.</li>
-        <li>We do not accept payment from companies to cover, promote or omit them.</li>
-        <li>If this ever changes, we will disclose it on this page and on the affected content.</li>
+        <li>QuantDesk is free and has no paying customers, advertisers or sponsors.</li>
+        <li>No company pays to be covered, promoted or left out.</li>
       </ul>
 
       <h2>Your responsibility</h2>

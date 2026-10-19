@@ -29,6 +29,7 @@ from app.delivery.settings import get_delivery_settings
 from app.fundamentals import service as fundamentals
 from app.journal import digest as chain
 from app.journal import service as journal
+from app.paper import service as paper
 from app.newsletter import service as newsletter
 from app.models import AlertLog, Article, ArticleTicker, Company, IngestRun, JournalEntry, TradingHalt, WatchlistItem
 from app.sources import halts as halts_source
@@ -36,7 +37,8 @@ from app.pipeline.companies import BUCKET_NAMES, load_latest_floats, sync_compan
 from app.pipeline.enrich import Enricher
 from app.pipeline.events import broadcaster
 from app.pipeline.ingest import NEW_ARTICLE_HOOKS, backfill_signals, build_sources, poll_edgar, run_ingest
-from app.pipeline.signals import ALL_SIGNALS, signal_dict
+from app.insiders import evidence as insider_evidence
+from app.pipeline.signals import ALL_SIGNALS, FORWARD_TEST_SIGNALS, is_forward_test, signal_def, signal_dict
 from app.pipeline.tickers import TickerUniverse
 from app.research.eventstudy import RESULTS_FILE
 from app.research.oos import OOS_RESULTS_FILE
@@ -49,9 +51,11 @@ from app.schemas import (
     ChainVerify,
     DailySentiment,
     Evidence,
+    EvidenceOut,
     HealthDetails,
     HealthHistory,
     JournalChain,
+    PaperPortfolioOut,
     ResearchJob,
     ResearchJobsOut,
     SignalOut,
@@ -77,6 +81,8 @@ STUDY_FILES = {
 StudyName = Literal["main", "oos", "insider_purchases"]
 CHAIN_TAIL = 30  # lines returned by GET /api/journal/chain
 VERIFY_TTL_SECONDS = 600  # verify_chain recomputes every sealed day: cache it
+PAPER_TTL_SECONDS = 600  # paper portfolio: recomputed from the journal + cached prices at most every 10 minutes
+PAPER_NOTIONAL = 10_000  # fixed server-side (hypothetical notional per position)
 
 
 class AppState:
@@ -85,6 +91,8 @@ class AppState:
     sizes: dict[str, str | None] = {}  # symbol -> size bucket
     study: dict | None = None
     evidence: dict[tuple[str, str], Evidence] = {}  # (signal, bucket) -> result
+    # Forward-test evidence ((signal, bucket) -> row of the separate pre-registered study); None = not loaded yet
+    forward_evidence: dict[tuple[str, str], EvidenceOut] | None = None
     journal_marked: date | None = None
     alerter: Alerter | None = None
     # Loop heartbeats (UTC, last success) for /api/health/details
@@ -96,6 +104,8 @@ class AppState:
     last_purge_day: date | None = None  # UTC day of the last pending-subscriber purge
     verify_cache: tuple[float, dict] | None = None  # (monotonic time, verify_chain result)
     study_cache: dict[str, tuple[float, dict]] = {}  # study name -> (file mtime, parsed JSON)
+    # (ET date, hedge, max_concurrent) -> (monotonic time, build_portfolio result): hypothetical paper portfolio
+    paper_cache: dict[tuple[date, bool, int], tuple[float, dict]] = {}
 
 
 state = AppState()
@@ -116,12 +126,33 @@ def load_study() -> None:
     with open(path, encoding="utf-8") as f:
         study = json.load(f)
     evidence = {
-        (r["signal"], r["bucket"]): Evidence(**{k: r[k] for k in Evidence.model_fields})
+        (r["signal"], r["bucket"]): Evidence(**{k: r[k] for k in Evidence.model_fields if k in r})
         for r in study["results"]
         if r["horizon_days"] == EVIDENCE_HORIZON
     }
     state.study, state.evidence = study, evidence
     log.info("Loaded event study: %d results", len(state.study["results"]))
+
+
+def load_forward_evidence() -> dict[tuple[str, str], EvidenceOut]:
+    """Evidence for FORWARD_TEST_SIGNALS: the insider study's micro / 5-day row of insider_cluster_purchase, from
+    {data_dir}/event_study_insider_purchases.json or the frozen bundled row (insiders/evidence.py). Never from
+    event_study.json."""
+    row, origin = insider_evidence.load_forward_test_row(settings.data_dir)
+    out: dict[tuple[str, str], EvidenceOut] = {}
+    if row is not None:
+        try:
+            ev = EvidenceOut(**{k: row[k] for k in EvidenceOut.model_fields if k in row},
+                             study=insider_evidence.STUDY, forward_test=True)
+            out[(ev.signal, ev.bucket)] = ev
+        except Exception as exc:  # a malformed row must never break the article feed
+            log.warning("Forward-test evidence row invalid (%s): %s", origin, exc)
+    state.forward_evidence = out
+    return out
+
+
+def forward_evidence() -> dict[tuple[str, str], EvidenceOut]:
+    return state.forward_evidence if state.forward_evidence is not None else load_forward_evidence()
 
 
 def to_out(article: Article) -> ArticleOut:
@@ -132,9 +163,12 @@ def to_out(article: Article) -> ArticleOut:
         if t.size_bucket:
             buckets.append(t.size_bucket)
     for sig in out.signals:
+        forward = is_forward_test(sig.code)
+        out.forward_test = out.forward_test or forward
+        source = forward_evidence() if forward else state.evidence
         for bucket in dict.fromkeys(buckets):
-            if (ev := state.evidence.get((sig.code, bucket))) is not None:
-                out.evidence.append(ev)
+            if (ev := source.get((sig.code, bucket))) is not None:
+                out.evidence.append(ev if isinstance(ev, EvidenceOut) else EvidenceOut(**ev.model_dump()))
     return out
 
 
@@ -342,6 +376,7 @@ async def lifespan(app: FastAPI):
         if n := backfill_signals(session):
             log.info("Backfilled signals on %d filings", n)
     load_study()
+    load_forward_evidence()
     if settings.enrich_enabled:
         state.enricher = Enricher(settings.anthropic_api_key, settings.enrich_model)
         log.info("LLM enrichment on (%s)", settings.enrich_model)
@@ -526,7 +561,10 @@ def list_signals(
 
 @app.get("/api/signals/catalog", response_model=list[SignalOut])
 def signal_catalog():
-    return [signal_dict(s) for s in sorted(ALL_SIGNALS.values(), key=lambda s: (-s.severity, s.label))]
+    """Main-study signals, then the forward-test signals (forward_test: true; not part of the main study)."""
+    main = sorted(ALL_SIGNALS.values(), key=lambda s: (-s.severity, s.label))
+    forward = sorted(FORWARD_TEST_SIGNALS.values(), key=lambda s: (-s.severity, s.label))
+    return [signal_dict(s) for s in [*main, *forward]]
 
 
 STUDY_MISSING = {
@@ -662,7 +700,10 @@ def journal_entries(
     for e, title, url in rows:
         d = {c.name: getattr(e, c.name) for c in JournalEntry.__table__.columns}
         d["filed_at"] = (e.filed_at if e.filed_at.tzinfo else e.filed_at.replace(tzinfo=timezone.utc)).isoformat()
-        d.update(title=title, filing_url=url, signal_label=ALL_SIGNALS[e.primary_signal].label if e.primary_signal in ALL_SIGNALS else e.primary_signal)
+        sig = signal_def(e.primary_signal)
+        d.update(title=title, filing_url=url, signal_label=sig.label if sig else e.primary_signal,
+                 evaluation_horizon=journal.evaluation_horizon(e.primary_signal),
+                 forward_test_label=journal.forward_test_label(e.primary_signal))
         out.append(d)
     total = session.scalar(select(func.count(JournalEntry.id))) or 0
     first = session.scalar(select(func.min(JournalEntry.filed_at)))
@@ -675,6 +716,8 @@ def journal_summary(session: Session = Depends(get_session)):
     if state.study:
         for r in state.study["results"]:
             expected[(r["signal"], r["bucket"], r["horizon_days"])] = r
+    for (sig, bucket), ev in forward_evidence().items():  # forward tests: the insider study's in-sample row
+        expected[(sig, bucket, ev.horizon_days)] = ev.model_dump()
     return {"rows": journal.summary(session, expected), "marked": state.journal_marked.isoformat() if state.journal_marked else None}
 
 
@@ -714,6 +757,26 @@ def journal_verify():
         with SessionLocal() as session:
             result = {**chain.verify_chain(session, settings.data_dir), "checked_at": utcnow()}
         state.verify_cache = (time.monotonic(), result)
+        return result
+
+
+paper_lock = threading.Lock()
+
+
+@app.get("/api/paper-portfolio", response_model=PaperPortfolioOut)
+def paper_portfolio(hedge: bool = False, max_concurrent: int = Query(20, ge=1, le=100)):
+    """Hypothetical paper portfolio simulated from the forward journal (app/paper/AGENTS.md). Read-only and public
+    (rate-limited by the middleware); cache-only prices, no network; cached per (ET date, params) for 10 minutes."""
+    key = (datetime.now(journal.ET).date(), hedge, max_concurrent)
+    with paper_lock:
+        cached = state.paper_cache.get(key)
+        if cached and time.monotonic() - cached[0] < PAPER_TTL_SECONDS:
+            return cached[1]
+        with SessionLocal() as session:
+            result = paper.build_portfolio(session, settings.data_dir, notional=PAPER_NOTIONAL,
+                                           max_concurrent=max_concurrent, hedge=hedge, today=key[0])
+        state.paper_cache = {k: v for k, v in state.paper_cache.items() if k[0] == key[0]}  # drop older days
+        state.paper_cache[key] = (time.monotonic(), result)
         return result
 
 

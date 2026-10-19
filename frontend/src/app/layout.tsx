@@ -10,7 +10,8 @@ const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"]
 
 export const metadata: Metadata = {
   title: "QuantDesk",
-  description: "Market news, research and (eventually) paper trading",
+  description:
+    "Local, personal small-cap SEC filing research: live filing signals next to their event-study evidence. Does not trade; simulated results are hypothetical.",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

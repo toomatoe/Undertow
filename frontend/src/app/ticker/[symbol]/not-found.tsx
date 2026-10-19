@@ -3,7 +3,7 @@ import Link from "next/link";
 export default function TickerNotFound() {
   return (
     <main className="page">
-      <Link href="/" className="back">
+      <Link href="/news" className="back">
         ← News
       </Link>
       <section className="panel ticker-missing">
@@ -13,7 +13,7 @@ export default function TickerNotFound() {
           tracked source.
         </p>
         <p>
-          <Link href="/signals">Browse filing signals</Link> · <Link href="/">Latest news</Link>
+          <Link href="/signals">Browse filing signals</Link> · <Link href="/news">Latest news</Link>
         </p>
       </section>
     </main>

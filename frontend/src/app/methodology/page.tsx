@@ -30,6 +30,16 @@ export default function MethodologyPage() {
         </li>
         <li><strong>News</strong>: public RSS feeds. Headlines link to the publisher; full articles are never republished.</li>
       </ul>
+      <p>
+        <strong>Research prices and their limits.</strong> The prices behind the Edge Lab, the backtest and the working paper come from
+        Yahoo Finance and are used for personal, local research only. They are cached on the machine that runs the studies and are never
+        redistributed or served by the API; only aggregate statistics (averages, t-statistics, counts) are shown. Because of this, the app is
+        not to be deployed publicly with Yahoo prices: a public deployment needs a licensed price feed first.
+      </p>
+      <p>
+        Every design choice, result table and limitation of the studies is written up in one document:{" "}
+        <Link href="/research/paper">Read the working paper</Link>.
+      </p>
 
       <h2>Signals</h2>
       <p>

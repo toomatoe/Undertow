@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="ISO-8859-1" ?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+<title>Latest Filings - Wed, 14 Oct 2026 16:30:00 EDT</title>
+<link rel="alternate" href="/cgi-bin/browse-edgar?action=getcurrent"/>
+<link rel="self" href="/cgi-bin/browse-edgar?action=getcurrent"/>
+<id>https://www.sec.gov/cgi-bin/browse-edgar?action=getcurrent</id>
+<author><name>Webmaster</name><email>webmaster@sec.gov</email></author>
+<updated>2026-10-14T16:30:00-04:00</updated>
+<entry>
+<title>4 - Bigtest Example Corp (0000222222) (Issuer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/222222/000090000826000001/0000900008-26-000001-index.htm"/>
+<summary type="html"> &lt;b&gt;Filed:&lt;/b&gt; 2026-10-14 &lt;b&gt;AccNo:&lt;/b&gt; 0000900008-26-000001 &lt;b&gt;Size:&lt;/b&gt; 5 KB</summary>
+<updated>2026-10-14T16:20:00-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="4"/>
+<id>urn:tag:sec.gov,2008:accession-number=0000900008-26-000001</id>
+</entry>
+<entry>
+<title>4 - Example Big (0000900008) (Reporting)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/900008/000090000826000001/0000900008-26-000001-index.htm"/>
+<summary type="html"> &lt;b&gt;Filed:&lt;/b&gt; 2026-10-14 &lt;b&gt;AccNo:&lt;/b&gt; 0000900008-26-000001 &lt;b&gt;Size:&lt;/b&gt; 5 KB</summary>
+<updated>2026-10-14T16:20:00-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="4"/>
+<id>urn:tag:sec.gov,2008:accession-number=0000900008-26-000001</id>
+</entry>
+<entry>
+<title>4/A - Microtest Example Corp (0000111111) (Issuer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/111111/000090000126000099/0000900001-26-000099-index.htm"/>
+<summary type="html"> &lt;b&gt;Filed:&lt;/b&gt; 2026-10-14 &lt;b&gt;AccNo:&lt;/b&gt; 0000900001-26-000099 &lt;b&gt;Size:&lt;/b&gt; 5 KB</summary>
+<updated>2026-10-14T16:10:00-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="4/A"/>
+<id>urn:tag:sec.gov,2008:accession-number=0000900001-26-000099</id>
+</entry>
+<entry>
+<title>4 - Example Dana (0000900001) (Reporting)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/900001/000090000126000001/0000900001-26-000001-index.htm"/>
+<summary type="html"> &lt;b&gt;Filed:&lt;/b&gt; 2026-10-14 &lt;b&gt;AccNo:&lt;/b&gt; 0000900001-26-000001 &lt;b&gt;Size:&lt;/b&gt; 5 KB</summary>
+<updated>2026-10-14T16:05:12-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="4"/>
+<id>urn:tag:sec.gov,2008:accession-number=0000900001-26-000001</id>
+</entry>
+<entry>
+<title>4 - Microtest Example Corp (0000111111) (Issuer)</title>
+<link rel="alternate" type="text/html" href="https://www.sec.gov/Archives/edgar/data/111111/000090000126000001/0000900001-26-000001-index.htm"/>
+<summary type="html"> &lt;b&gt;Filed:&lt;/b&gt; 2026-10-14 &lt;b&gt;AccNo:&lt;/b&gt; 0000900001-26-000001 &lt;b&gt;Size:&lt;/b&gt; 5 KB</summary>
+<updated>2026-10-14T16:05:12-04:00</updated>
+<category scheme="https://www.sec.gov/" label="form type" term="4"/>
+<id>urn:tag:sec.gov,2008:accession-number=0000900001-26-000001</id>
+</entry>
+</feed>

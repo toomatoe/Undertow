@@ -4,14 +4,20 @@ import { issuePath } from "@/components/newsletter/format";
 import { CURRICULUM_PATH, LESSONS, lessonPath } from "@/lib/learn/lessons";
 import { getNewsletterIssues, getSitemapTickers, SITE_URL } from "@/lib/server-api";
 
-export const revalidate = 3600;
+// Rendered per request: this app runs locally, and a build-time prerender would bake in "API not reachable"
+// (the API is not running during `docker build`).
+export const dynamic = "force-dynamic";
 
 const STATIC_PAGES: { path: string; changeFrequency: "hourly" | "daily" | "weekly" | "monthly"; priority: number }[] = [
-  { path: "/", changeFrequency: "hourly", priority: 1 },
+  { path: "/", changeFrequency: "daily", priority: 1 },
+  { path: "/news", changeFrequency: "hourly", priority: 0.9 },
   { path: "/signals", changeFrequency: "hourly", priority: 0.9 },
   { path: "/track-record", changeFrequency: "daily", priority: 0.8 },
   { path: "/lab", changeFrequency: "weekly", priority: 0.7 },
   { path: "/backtest", changeFrequency: "weekly", priority: 0.6 },
+  { path: "/paper", changeFrequency: "daily", priority: 0.7 },
+  { path: "/research", changeFrequency: "monthly", priority: 0.7 },
+  { path: "/research/paper", changeFrequency: "monthly", priority: 0.8 },
   { path: "/methodology", changeFrequency: "monthly", priority: 0.6 },
   { path: "/newsletter", changeFrequency: "weekly", priority: 0.6 },
   { path: "/learn", changeFrequency: "weekly", priority: 0.7 },

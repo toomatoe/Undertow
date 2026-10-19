@@ -7,39 +7,50 @@ export default function PrivacyPage() {
     <main className="page prose legal">
       <DraftNotice />
       <h1>Privacy</h1>
-      <p className="muted">Last updated October 16, 2026</p>
+      <p className="muted">Last updated October 19, 2026</p>
 
-      <h2>What we collect today</h2>
+      <p>
+        QuantDesk runs on your own computer. Everything it stores stays in your local database and data folder; nobody else operates a
+        server for it, and there are no accounts.
+      </p>
+
+      <h2>What is stored, and where</h2>
       <ul>
         <li>
-          <strong>No accounts yet.</strong> Watchlists are stored on the QuantDesk server you run, not tied to any identity.
+          <strong>No accounts.</strong> Watchlists are stored in your local QuantDesk database, not tied to any identity.
         </li>
         <li>
-          <strong>Server logs:</strong> standard request logs (IP address, time, page) kept for security and debugging, rotated regularly.
+          <strong>Local logs:</strong> the API and web containers write standard request logs (address, time, page) on your machine only.
         </li>
         <li>
-          <strong>Alert delivery:</strong> if you configure a Discord webhook, its URL is kept in the server&apos;s environment
-          configuration only.
+          <strong>Alert delivery (optional, off by default):</strong> if you configure a Discord webhook, its URL is kept only in your local
+          environment configuration.
+        </li>
+        <li>
+          <strong>Email (optional, off by default):</strong> email delivery stays off unless you configure your own mail server. If you turn
+          it on, subscriber addresses are stored in your local database, only after double opt-in, and every email has an unsubscribe link.
         </li>
       </ul>
 
-      <h2>What we don&apos;t do</h2>
+      <h2>What QuantDesk doesn&apos;t do</h2>
       <ul>
         <li>No selling or sharing of personal data.</li>
         <li>No advertising trackers or third-party analytics.</li>
+        <li>No payments and no card numbers: QuantDesk is free.</li>
         <li>No access to brokerage accounts, positions or trades.</li>
       </ul>
 
-      <h2>When accounts and payments are added</h2>
+      <h2>Deleting your data</h2>
       <p>
-        We will collect only what is needed: an email address for login and alerts, and billing handled by a payment processor (we will not
-        store card numbers). This page will be updated before that launches, with retention periods and how to delete your data.
+        All data lives in your local Docker volumes and data folder. Removing them (for example with <code>docker compose down -v</code>)
+        deletes everything QuantDesk stored.
       </p>
 
       <h2>Outbound requests</h2>
       <p>
-        The server fetches public data from SEC EDGAR, FINRA, Nasdaq Trader, news RSS feeds and, for research, Yahoo Finance. These
-        requests carry a generic user agent and no information about you.
+        Your local QuantDesk fetches public data from SEC EDGAR, FINRA, Nasdaq Trader, news RSS feeds and, for research, Yahoo Finance.
+        SEC requests carry the user agent you configure (SEC asks for a contact address); no other information about you is sent. Optional
+        integrations you turn on (Alpaca, Anthropic, Discord, your mail server) receive only what they need to work.
       </p>
     </main>
   );

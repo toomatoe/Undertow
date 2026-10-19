@@ -50,6 +50,27 @@ FORM_SIGNALS: dict[str, SignalDef] = {
 
 ALL_SIGNALS: dict[str, SignalDef] = {s.code: s for s in [*ITEM_SIGNALS.values(), *FORM_SIGNALS.values()]}
 
+# Forward tests of findings from separate, pre-registered studies. Deliberately NOT in ALL_SIGNALS: the main
+# study's taxonomy and Bonferroni count stay unchanged (tests/test_insiders.py::test_main_signal_taxonomy_untouched).
+# Live code that resolves a stored code must use signal_def(), never ALL_SIGNALS[code].
+FORWARD_TEST_SIGNALS: dict[str, SignalDef] = {
+    "insider_cluster_purchase": SignalDef(
+        "insider_cluster_purchase", "Insider cluster purchase (forward test of pre-registered finding)", "+", 2,
+        "Two or more different directors/officers reported open-market purchases within 10 days (Form 4); "
+        "live forward test of the insider study's micro-cap 5-day result",
+    ),
+}
+
+
+def signal_def(code: str) -> SignalDef | None:
+    """SignalDef for a stored signal code: the main taxonomy first, then the forward-test signals."""
+    return ALL_SIGNALS.get(code) or FORWARD_TEST_SIGNALS.get(code)
+
+
+def is_forward_test(code: str) -> bool:
+    return code not in ALL_SIGNALS and code in FORWARD_TEST_SIGNALS
+
+
 # Forms the live EDGAR source pulls (8-K handled separately via items)
 EVENT_FORMS = ["8-K", "424B4", "424B5", "S-1", "S-3", "SCHEDULE 13D"]
 
@@ -68,4 +89,5 @@ def signals_for_filing(form: str, items: list[str]) -> list[SignalDef]:
 
 
 def signal_dict(sig: SignalDef) -> dict:
-    return asdict(sig)
+    """SignalOut payload; `forward_test` is True only for FORWARD_TEST_SIGNALS codes."""
+    return {**asdict(sig), "forward_test": is_forward_test(sig.code)}

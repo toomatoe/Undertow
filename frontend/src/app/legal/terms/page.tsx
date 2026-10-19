@@ -9,53 +9,58 @@ export default function TermsPage() {
     <main className="page prose legal">
       <DraftNotice />
       <h1>Terms of use</h1>
-      <p className="muted">Last updated October 16, 2026</p>
+      <p className="muted">Last updated October 19, 2026</p>
 
       <h2>1. What QuantDesk is</h2>
       <p>
-        QuantDesk is a publication of general financial information and research about public SEC filings and market events. By using the
-        site, the API or our alerts, you agree to these terms and to the <Link href="/legal/disclaimer">Disclaimer</Link>, which is part of
-        them.
+        QuantDesk is a personal research tool that you run on your own computer. It collects general financial information about public
+        SEC filings and market events and shows statistical research about them. It is free, has no accounts and is not offered as a hosted
+        service. By running or using it, you agree to these terms and to the <Link href="/legal/disclaimer">Disclaimer</Link>, which is
+        part of them.
       </p>
 
       <h2>2. Not advice</h2>
       <p>
-        QuantDesk is not a broker-dealer or a registered investment adviser, and it does not provide personalized advice. Content is
-        impersonal and offered to all users on the same terms. Do not rely on it as the basis for any investment decision.
+        QuantDesk is not a broker-dealer or a registered investment adviser, and it does not provide personalized advice. Its content is
+        general and impersonal. Do not rely on it as the basis for any investment decision.
       </p>
 
       <h2>3. Acceptable use</h2>
       <ul>
-        <li>Don&apos;t resell, redistribute or republish our alerts, research or data feeds without written permission.</li>
-        <li>Don&apos;t scrape the site or API faster than normal use, try to break security, or interfere with service for others.</li>
+        <li>Keep it local. Don&apos;t expose your copy to the public internet or redistribute its research, data or alerts.</li>
+        <li>
+          Respect the data sources: keep the request rate low, set your own contact details in the SEC user agent, and follow each
+          provider&apos;s terms.
+        </li>
         <li>Don&apos;t use QuantDesk to manipulate markets, spread false information or coordinate trading.</li>
       </ul>
 
       <h2>4. Third-party data</h2>
       <p>
-        Some content comes from third parties (SEC, FINRA, Nasdaq, news publishers) under their own terms. Headlines link to the original
-        source; we do not republish full articles. Third-party data is provided as-is, and its providers make no warranties to you.
+        Content comes from third parties (SEC, FINRA, Nasdaq, news publishers) under their own terms. Headlines link to the original
+        source; QuantDesk does not republish full articles. The price history used for research comes from Yahoo Finance for personal use
+        only: it is cached on your machine and must not be shared or served to others. Third-party data is provided as-is, and its
+        providers make no warranties to you.
       </p>
 
-      <h2>5. Accounts and subscriptions</h2>
+      <h2>5. Optional features</h2>
       <p>
-        If paid plans are offered, pricing, billing periods and cancellation terms will be shown before purchase. You can cancel any time;
-        access continues until the end of the paid period. We may change plans with notice.
+        Email delivery, Discord alerts, AI summaries and the Alpaca news feed are all off by default. They turn on only when you add your
+        own settings to your local configuration, and they then run under the terms of the service you connect.
       </p>
 
       <h2>6. No warranty; limitation of liability</h2>
       <p>
-        The service is provided &quot;as is&quot;, without warranties of accuracy, timeliness, availability or fitness for a purpose. Alerts can be
-        late, missing or wrong. To the maximum extent the law allows, QuantDesk is not liable for any trading losses or for indirect,
-        incidental or consequential damages arising from your use of the service. Our total liability is limited to the amount you paid us in
-        the 12 months before the claim.
+        QuantDesk is provided &quot;as is&quot;, without warranties of accuracy, timeliness, availability or fitness for a purpose. Alerts can be
+        late, missing or wrong. To the maximum extent the law allows, its authors are not liable for any trading losses or for indirect,
+        incidental or consequential damages arising from your use of it.
       </p>
 
       <h2>7. Changes</h2>
-      <p>We may update these terms. Material changes will be announced on the site. Continued use after a change means you accept it.</p>
+      <p>These terms may change with new versions of QuantDesk. The date at the top shows the latest update.</p>
 
       <h2>8. Contact</h2>
-      <p>Questions about these terms: use the contact details on the repository or site homepage.</p>
+      <p>Questions about these terms: use the contact details on the project repository.</p>
     </main>
   );
 }

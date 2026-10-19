@@ -20,7 +20,8 @@ the dev database, and the hotspot files.
 **Keep it current:** a new module gets a node in the same PR that adds it. Every file in the repo should match exactly
 one module path (a path ending in `/` is a directory prefix), and each module lists its own test files in `paths`, so a
 planner can hand out ownership without gaps or overlaps. The `tooling` module covers `scripts/` (incl. `reproduce.sh`),
-`.claude/workflows/`, the `Makefile`, both compose files (`docker-compose.yml`, `docker-compose.prod.yml`), the api and web
+`.claude/workflows/`, `scripts/start.ps1`, the `Makefile`, both compose files (`docker-compose.yml` with its `web` profile, and the
+optional, for-later `docker-compose.prod.yml`), the api and web
 Dockerfiles, CI (`.github/`), ignore/attributes files and pytest config. Check coverage after adding files: every path from
 `git ls-files --cached --others --exclude-standard` must match exactly one module path.
 
@@ -97,6 +98,9 @@ Merging is the orchestrator's call, made after its own review.
 ## Helper: `scripts/pytest.sh`
 
 Runs backend tests against the current source in the `quantdesk-api-test` dependency image without rebuilding it.
+It mounts `backend/` at `/app` and the repo root read-only at `/repo`, so tests that compare backend code with `docs/` or
+`frontend/` (`tests/test_paper_numbers.py`, the bundled-evidence check in `tests/test_insider_live.py`) can see them; they
+skip when the mount is missing. Both mounts are per-container, so parallel runs stay safe.
 It also handles Windows' virtualized path for the Claude desktop app, where Docker sees `AppData/Local/Packages/Claude_*/LocalCache/Roaming/...`.
 
 ```bash
