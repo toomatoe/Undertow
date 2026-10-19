@@ -4,33 +4,49 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/", label: "News" },
+  { href: "/news", label: "News" },
   { href: "/signals", label: "Signals" },
   { href: "/track-record", label: "Track record" },
+  { href: "/paper", label: "Paper" },
   { href: "/newsletter", label: "Newsletter" },
   { href: "/lab", label: "Edge Lab" },
   { href: "/backtest", label: "Backtest" },
   { href: "/learn", label: "Learn" },
   { href: "/research", label: "Research" },
-  { href: "/trading", label: "Trading" },
 ];
 
+/** True when `path` is `href` or below it (segment-aware: /research does not match /researchers). */
+function under(path: string, href: string): boolean {
+  return path === href || path.startsWith(`${href}/`);
+}
+
+/**
+ * Active tab: ticker pages belong to News; /research/paper highlights Research (not Paper, which is /paper);
+ * the landing page `/` highlights no tab (the brand link is the way home).
+ */
+export function isActive(path: string, href: string): boolean {
+  if (href === "/news") return under(path, "/news") || under(path, "/ticker");
+  return under(path, href);
+}
+
 export default function Nav() {
-  const path = usePathname();
-  const active = (href: string) => (href === "/" ? path === "/" || path.startsWith("/ticker") : path.startsWith(href));
+  const path = usePathname() ?? "/";
   return (
     <header className="nav">
-      <Link href="/" className="brand">
+      <Link href="/" className="brand" aria-current={path === "/" ? "page" : undefined}>
         Quant<span>Desk</span>
       </Link>
-      <nav>
-        {TABS.map((t) => (
-          <Link key={t.href} href={t.href} className={active(t.href) ? "tab active" : "tab"}>
-            {t.label}
-          </Link>
-        ))}
+      <nav aria-label="Main">
+        {TABS.map((t) => {
+          const on = isActive(path, t.href);
+          return (
+            <Link key={t.href} href={t.href} className={on ? "tab active" : "tab"} aria-current={on ? "page" : undefined}>
+              {t.label}
+            </Link>
+          );
+        })}
       </nav>
-      <span className="nav-note">Research only · not financial advice</span>
+      <span className="nav-note">Runs locally · research only · not financial advice</span>
     </header>
   );
 }

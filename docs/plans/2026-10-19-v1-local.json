@@ -1,0 +1,206 @@
+{
+  "batch": "2026-10-19-v1-local",
+  "goal": "QuantDesk v1.0, local-only: no paid tier, no domain or hosting; finish the project as a locally run research platform.",
+  "decision": "Decision 2026-10-19: local-only, no paid tier. QuantDesk runs on the owner's machine via Docker. No Stripe, accounts, pricing or hosting. Yahoo prices stay personal-use only, so no public deployment.",
+  "waves": [
+    [
+      "local-first",
+      "working-paper",
+      "insider-live"
+    ],
+    [
+      "paper-portfolio"
+    ],
+    [
+      "polish-qa"
+    ],
+    [
+      "docs"
+    ]
+  ],
+  "items": [
+    {
+      "id": "local-first",
+      "title": "Local-only defaults, Windows quickstart script, optional web container, legal copy without paid plans",
+      "modules": [
+        "config_db",
+        "fe_ticker",
+        "fe_content",
+        "tooling"
+      ],
+      "owned_paths": [
+        "backend/app/config.py",
+        "frontend/src/lib/server-api.ts",
+        "frontend/src/app/sitemap.ts",
+        "frontend/src/app/robots.ts",
+        "frontend/src/app/legal/",
+        "frontend/Dockerfile",
+        "docker-compose.yml",
+        "docker-compose.prod.yml",
+        "scripts/start.ps1",
+        "backend/tests/test_config_local.py"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "working-paper",
+      "title": "Working paper from published results, number-check test, /research/paper page",
+      "modules": [
+        "research",
+        "fe_content",
+        "fe_research",
+        "tooling",
+        "docs"
+      ],
+      "owned_paths": [
+        "docs/paper/",
+        "backend/app/research/paper_numbers.py",
+        "backend/tests/test_paper_numbers.py",
+        "backend/app/research/AGENTS.md",
+        "scripts/pytest.sh",
+        ".github/workflows/ci.yml",
+        "frontend/src/content/",
+        "frontend/src/components/markdown/",
+        "frontend/src/app/research/",
+        "frontend/src/app/lab/page.tsx",
+        "frontend/src/app/methodology/"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "insider-live",
+      "title": "Live Form 4 forward test of the pre-registered insider-cluster finding",
+      "modules": [
+        "insiders",
+        "pipeline",
+        "journal",
+        "api",
+        "fe_news_signals",
+        "fe_research"
+      ],
+      "owned_paths": [
+        "backend/app/insiders/",
+        "backend/tests/test_insider_live.py",
+        "backend/tests/fixtures/form4_live/",
+        "backend/app/pipeline/signals.py",
+        "backend/app/pipeline/ingest.py",
+        "backend/app/pipeline/AGENTS.md",
+        "backend/app/journal/",
+        "backend/app/main.py",
+        "backend/app/schemas.py",
+        "backend/tests/test_api.py",
+        "backend/tests/test_journal.py",
+        "frontend/src/components/ArticleCard.tsx",
+        "frontend/src/components/track/JournalTable.tsx"
+      ],
+      "depends_on": []
+    },
+    {
+      "id": "paper-portfolio",
+      "title": "Hypothetical paper portfolio from the journal (GET /api/paper-portfolio + /paper page)",
+      "modules": [
+        "api",
+        "journal",
+        "backtest",
+        "fe_core",
+        "fe_research",
+        "fe_content"
+      ],
+      "owned_paths": [
+        "backend/app/paper/",
+        "backend/tests/test_paper_portfolio.py",
+        "backend/app/main.py",
+        "backend/app/schemas.py",
+        "frontend/src/lib/api.ts",
+        "frontend/src/app/paper/",
+        "frontend/src/components/portfolio/",
+        "frontend/src/app/trading/"
+      ],
+      "depends_on": [
+        "insider-live"
+      ]
+    },
+    {
+      "id": "polish-qa",
+      "title": "Landing page, /news route, consistent nav/footer, empty-data and 375px QA across all pages",
+      "modules": [
+        "fe_core",
+        "fe_news_signals",
+        "fe_ticker",
+        "fe_research",
+        "fe_content",
+        "fe_learn",
+        "fe_status"
+      ],
+      "owned_paths": [
+        "frontend/src/app/page.tsx",
+        "frontend/src/app/news/",
+        "frontend/src/components/Nav.tsx",
+        "frontend/src/components/Footer.tsx",
+        "frontend/src/app/layout.tsx",
+        "frontend/src/app/globals.css",
+        "frontend/src/app/sitemap.ts",
+        "frontend/src/components/home/",
+        "frontend/src/app/signals/",
+        "frontend/src/app/track-record/",
+        "frontend/src/app/newsletter/",
+        "frontend/src/app/backtest/",
+        "frontend/src/app/learn/",
+        "frontend/src/app/status/",
+        "frontend/src/app/ticker/",
+        "frontend/src/components/"
+      ],
+      "depends_on": [
+        "local-first",
+        "working-paper",
+        "insider-live",
+        "paper-portfolio"
+      ]
+    },
+    {
+      "id": "docs",
+      "title": "README rewrite, guides, product-research decision note, agent graph for v1.0 local-only",
+      "modules": [
+        "docs"
+      ],
+      "owned_paths": [
+        "README.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        ".env.example",
+        "docs/PRODUCT_RESEARCH.md",
+        "docs/FEASIBILITY.md",
+        "docs/AGENTS.md",
+        "docs/AGENT_PROCESS.md",
+        "docs/agent-graph.json",
+        "docs/plans/",
+        "frontend/AGENTS.md",
+        "backend/AGENTS.md"
+      ],
+      "depends_on": [
+        "local-first",
+        "working-paper",
+        "insider-live",
+        "paper-portfolio",
+        "polish-qa"
+      ]
+    }
+  ],
+  "planner_notes": "Assumptions and deviations:\n- PUBLIC_BASE_URL is the public SITE origin in this codebase. It builds newsletter links, the admin policy uses it for its localhost check, and it must equal NEXT_PUBLIC_SITE_URL. Its correct local default is http://localhost:3000, which is what config.py and .env.example already use. The computed brief asked for PUBLIC_BASE_URL=http://localhost:8000. That would break newsletter links and could change admin-policy behaviour, so the plan keeps :3000 for site origins and :8000 for API origins (NEXT_PUBLIC_API_URL / API_URL_INTERNAL). This follows the user's actual intent (\"just locally host it\").\n- The user said \"u do whatever\" about the Yahoo licensing point. The plan only adds docs: personal and local use only, no public deployment, aggregates only. No licensed feed and no code.\n- The live insider forward test sizes companies by the CURRENT SEC public float. The frozen CY2023Q2 frame from the pre-registration cannot be used for live data. The plan documents this as a necessary deviation; it is not a design change to the registered study. Clusters need about 10 days of live history after first start (warm-up), because live purchases are stored in a JSONL file under DATA_DIR rather than a new DB table, to avoid touching models.py.\n- The insider evidence must also work on a fresh stack with no study JSON in DATA_DIR. insider-live ships a frozen copy of the single micro/5d result row, and a test checks it against docs/results.\n- Test mounts: today scripts/pytest.sh mounts only backend/, so tests cannot see docs/ or frontend/. working-paper adds a read-only /repo mount so the paper-number and copy-sync tests run. Tests skip only when the repo is genuinely absent (bare image).\n- The frontend Docker build context is frontend/, so the paper is duplicated at frontend/src/content/working-paper.md. A test enforces byte equality with docs/paper/WORKING_PAPER.md.\n- The workflow's automatic docs item is replaced by an explicit item with id 'docs' that depends on all others. Because a 'docs' id is present, SHARED_DOCS are not stripped from other items; only docs/paper/ (working-paper) sits under docs/, and the docs item lists explicit docs paths.\n- Hotspots: main.py, schemas.py: insider-live (wave 1), then paper-portfolio (wave 2, depends on it). config.py: local-first only. api.ts: paper-portfolio only (insider-live uses optional fields plus local casts until then). Nav.tsx, Footer.tsx, layout.tsx, globals.css: polish-qa only. sitemap.ts: local-first, then polish-qa (dependency edge). models.py: nobody.\n- Waves: (1) local-first, working-paper, insider-live in parallel; (2) paper-portfolio; (3) polish-qa; (4) docs.\n\nNeeds the user / out of scope for this repo:\n- \"Add it to my portfolio website\": the portfolio site is not in this repository and its location or stack is unknown, so no item owns it. The orchestrator should ask the user for the portfolio repo path or URL (and whether it is static HTML, Next or similar), then add a QuantDesk project card there: short description, key finding (labeled hypothetical), a GitHub link (toomatoe/QuantDesk if public) and screenshots. It should link to the GitHub repo, not a live demo, since the app is local-only and must not be publicly deployed with Yahoo data. Do not put the owner's email in it.\n- No API keys, accounts, payments or legal review are needed. Email (SMTP), Discord, Alpaca and Anthropic stay optional and off by default.\n- Risk: polish-qa needs a running local stack for browser QA. Verify must stop the dev server before any next build. Builders never run docker compose build/up.",
+  "critic_gaps": [
+    "The user's request to add QuantDesk to their portfolio website has not been started. No item owned it, and the portfolio repo's path, URL and stack are unknown, so the user needs to be asked for them.",
+    "The frontend production build has never been run: no `next build`, no `docker compose --profile web up -d --build`, and `scripts/start.ps1` has not been run end to end. So these are unproven: the force-static /research/paper page reading src/content/working-paper.md inside the image, the new web container, and the quickstart in the README.",
+    "There has been no full browser QA on a fresh stack with empty data. Pages not checked include /, /news, /signals, /track-record, /paper (empty state), /newsletter, /lab (including ?study=), /backtest, /learn, /research, /research/paper, /status, the ticker pages, the legal pages and robots.txt. The last polish pass re-checked only /signals for the nav fix at 901-1200px. The 375px no-horizontal-scroll rule has not been re-confirmed after the latest globals.css changes.",
+    "Frontend eslint has not been re-run since the paper-portfolio, polish-qa and docs waves. Verify ran only tsc.",
+    "Bug in backend/app/alerts/service.py:46: it builds `sigs` from ALL_SIGNALS only, then uses sigs[0]. For an insider_cluster_purchase article the list is empty, so the Discord alert raises IndexError. The error is caught, but the alert is logged as failed. The fix is to use pipeline.signals.signal_def.",
+    "backend/app/newsletter/service.py:144 uses ALL_SIGNALS.get(code), which returns None for the forward-test signal. The insider forward-test articles are probably dropped from or mislabelled in the newsletter, and nobody has checked.",
+    "frontend/src/components/ArticleCard.tsx:7 still has TODO(paper-portfolio) and a local ForwardTestEvidence type, even though api.ts now has those fields. The local type should be removed.",
+    "backend/app/delivery/AGENTS.md:18 still says the email env vars are passed through by docker-compose.prod.yml. It should say they are optional and that the prod compose file is for later.",
+    "Forward-test evidence is loaded once when the API starts. Re-running the insider study needs an API restart, because research_jobs.on_study_success reloads only the main study.",
+    "InsiderLiveSettings (INSIDER_LIVE_ENABLED) lives in insiders/settings.py instead of app.config.Settings. This is minor config fragmentation.",
+    "The live Form 4 poller has been tested only against fixture XML and Atom files, never against the real EDGAR getcurrent type=4 feed or the index.json layout.",
+    "The paper's references (authors, journals) were written from memory and have not been checked against a library database.",
+    "docs/plans/2026-10-19-v1-local.json was rebuilt from the diff, so its item ids do not match the real plan ids (local-first, working-paper, insider-live, paper-portfolio, polish-qa, docs).",
+    "Nothing is committed. 49 modified files and many new ones are uncommitted on main, with mixed CRLF/LF line endings. A feature branch, commit and PR are still to do."
+  ]
+}

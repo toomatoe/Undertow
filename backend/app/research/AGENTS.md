@@ -137,6 +137,26 @@ docker compose restart api        # lifespan -> load_study() picks up the new fi
   (e.g. `docker compose cp api:/app/data/event_study.json docs/results/event_study_<date>.json` while the
   API runs) and update the results summary in `README.md`. See `docs/AGENTS.md`.
 
+## Working paper numbers (`paper_numbers.py`)
+
+`docs/paper/WORKING_PAPER.md` writes up all three studies and the backtest. Every headline number it quotes is
+listed in `HEADLINE` (label, result file, selector, field, value, tolerance, `fmt`). Selectors: a `results` row
+by `{signal, bucket, horizon_days}`, a row of another list (`{"list": "confirmatory", "hypothesis": "H1"}`) or a
+dotted path with `[i]` indices (`{"path": "periods.A.waterfall[0]"}`). `check(repo_root)` returns mismatches:
+the JSON value must equal `value` within `tolerance`, and `fmt.format(value)` (e.g. `"+1.66%"`, `"t = 3.29"`,
+`"n = 662"`) must appear literally in the paper. `find_repo_root()`: env `QUANTDESK_REPO_ROOT`, else `/repo`
+(when it has `docs/`), else `Path(__file__).parents[3]` (CI checkout). Pure stdlib; CLI:
+`python -m app.research.paper_numbers`.
+
+**Rule: change a number in the paper -> update HEADLINE** (and a republished result file -> update both).
+Then copy the paper to `frontend/src/content/working-paper.md` (byte-identical; the frontend build context cannot
+see `docs/`), which `/research/paper` renders.
+
+`backend/tests/test_paper_numbers.py` asserts `check()` is empty, `HEADLINE` covers all four result files with at
+least 12 claims, the frontend copy equals the paper (CRLF-normalized), and that `check()` catches paper and JSON
+drift. It needs the repo root: `scripts/pytest.sh` mounts it read-only at `/repo`; it skips only when `docs/` is
+missing (bare api image).
+
 ## Tests
 
 `backend/tests/test_eventstudy.py` covers `day0_index` cut-off, market adjustment in `measure`,

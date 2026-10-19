@@ -105,10 +105,12 @@ export default function SignalsPage() {
           </label>
         </div>
 
-        {error && <p className="error">Could not load signals: {error}</p>}
+        {error && <p className="error">Could not load signals: {error}. Is the backend running on :8000?</p>}
         {loading && items.length === 0 && <p className="muted">Loading…</p>}
         {!loading && !error && items.length === 0 && (
-          <p className="muted">No filings match. Filings older than the app&apos;s first run are not loaded.</p>
+          <p className="empty-state">
+            No signals match yet: the poller adds them as new filings arrive on EDGAR. Filings older than the app&apos;s first run are not loaded.
+          </p>
         )}
         {items.map((a) => (
           <ArticleCard key={a.id} article={a} />

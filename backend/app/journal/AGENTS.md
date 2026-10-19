@@ -15,6 +15,19 @@ No orders, no money.
 | `mark(session, data_dir)` | at most once per UTC day (`state.journal_marked`) | For rows in `waiting`/`open`: entry = adjusted close on **day 0 + 1**, then abnormal return vs IWM at +1/+5/+20 trading days. Prices go to `data/prices_live` (Yahoo, personal use, cache key changes daily). |
 | `summary(session, expected)` | `GET /api/journal/summary` | Per (primary signal, size): n, mean/median/hit rate per horizon, next to the Edge Lab `mean_abnormal` for the same signal/size/horizon. |
 
+Signal codes are resolved with `pipeline.signals.signal_def()` (main taxonomy, then `FORWARD_TEST_SIGNALS`), never
+`ALL_SIGNALS[...]`; an unresolvable code is skipped, not guessed.
+
+**Evaluation horizon and forward tests.** `EVALUATION_HORIZONS` (exported for the paper portfolio) maps a signal to
+the horizon it is judged on; `evaluation_horizon(code)` defaults to `DEFAULT_EVALUATION_HORIZON` = 20. Today only
+`insider_cluster_purchase` = 5: the live forward test of the insider study's micro / 5-day finding
+(insiders/AGENTS.md), journaled with direction `+`, i.e. a hypothetical long. Marking is unchanged (1/5/20 filled
+for every row, `complete` at 20). `forward_test_label(code)` returns `FORWARD_TEST_LABEL` = "forward test of
+pre-registered finding" for `FORWARD_TEST_SIGNALS` codes, else None. `summary()` rows carry `evaluation_horizon` and
+`forward_test_label`; `/api/journal` rows carry the same two optional fields (main.py). These rows are ordinary
+`JournalEntry`s, so the hash chain seals and verifies them with the unchanged `RECORD_FIELDS`
+(`test_insider_live.py::test_journal_long_row_horizon_5_label_and_seal_verifies`).
+
 `mark_entry(entry, series, bench, today)` is a pure function of its inputs; test it with synthetic series (`tests/test_journal.py`).
 
 ## Status machine
@@ -93,6 +106,6 @@ which days are sealed).
 
 ## API
 
-- `GET /api/journal?signal=&size=&status=&limit=`: `{total, since, entries[]}`, newest first. Each entry includes `title`, `filing_url`, `signal_label`.
-- `GET /api/journal/summary`: `{rows[], marked}`.
+- `GET /api/journal?signal=&size=&status=&limit=`: `{total, since, entries[]}`, newest first. Each entry includes `title`, `filing_url`, `signal_label`, `evaluation_horizon`, `forward_test_label` (null unless a forward test).
+- `GET /api/journal/summary`: `{rows[], marked}`. Expectations come from the main study, plus the insider study's micro / 5-day row for `insider_cluster_purchase` (`expected_5`).
 - UI: `frontend/src/app/track-record/` with `components/track/`.

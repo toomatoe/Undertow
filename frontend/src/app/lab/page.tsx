@@ -233,6 +233,13 @@ export default function LabPage() {
     load("main");
   }, [refreshInfos, load]);
 
+  // Deep links from /research: /lab?study=oos or /lab?study=insider_purchases preselect a study.
+  useEffect(() => {
+    const wanted = new URLSearchParams(window.location.search).get("study");
+    const match = STUDIES.find((s) => s.key === wanted);
+    if (match) setSelected(match.key);
+  }, []);
+
   const requested = useRef(new Set<StudyName>());
 
   const available = useCallback((name: StudyName) => infos?.find((i) => i.study === name)?.available ?? false, [infos]);
@@ -270,25 +277,30 @@ export default function LabPage() {
   );
 
   const selector = (
-    <div className="seg" role="group" aria-label="Study">
-      {STUDIES.map((s) => {
-        const info = infos?.find((i) => i.study === s.key);
-        const ok = s.key === "main" ? true : (info?.available ?? false);
-        return (
-          <button
-            key={s.key}
-            type="button"
-            className={s.key === selected ? "on" : ""}
-            aria-pressed={s.key === selected}
-            disabled={!ok && s.key !== selected}
-            title={ok ? `${s.about}${info?.generated_at ? `, generated ${dateLabel(info.generated_at)}` : ""}` : `${s.about}: not run yet`}
-            onClick={() => setSelected(s.key)}
-          >
-            {s.label}
-            {!ok && infos && " (not run yet)"}
-          </button>
-        );
-      })}
+    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px 16px" }}>
+      <div className="seg" role="group" aria-label="Study">
+        {STUDIES.map((s) => {
+          const info = infos?.find((i) => i.study === s.key);
+          const ok = s.key === "main" ? true : (info?.available ?? false);
+          return (
+            <button
+              key={s.key}
+              type="button"
+              className={s.key === selected ? "on" : ""}
+              aria-pressed={s.key === selected}
+              disabled={!ok && s.key !== selected}
+              title={ok ? `${s.about}${info?.generated_at ? `, generated ${dateLabel(info.generated_at)}` : ""}` : `${s.about}: not run yet`}
+              onClick={() => setSelected(s.key)}
+            >
+              {s.label}
+              {!ok && infos && " (not run yet)"}
+            </button>
+          );
+        })}
+      </div>
+      <Link href="/research/paper" className="small">
+        Read the working paper
+      </Link>
     </div>
   );
 

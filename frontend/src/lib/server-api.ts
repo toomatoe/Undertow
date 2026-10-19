@@ -14,13 +14,15 @@ import type {
   TickerDetail,
 } from "./api";
 
+// QuantDesk runs locally, so every variable below is optional and the defaults need no configuration:
+// site origin http://localhost:3000, API origin http://localhost:8000.
 // Environment variables (server-only module, so non-NEXT_PUBLIC names are readable here):
-//   API_URL_INTERNAL      optional; API origin as seen from the Next server (e.g. http://backend:8000 in Docker).
-//                         Falls back to NEXT_PUBLIC_API_URL, then http://localhost:8000.
+//   API_URL_INTERNAL      optional; API origin as seen from the Next server (http://api:8000 in the compose `web`
+//                         service). Falls back to NEXT_PUBLIC_API_URL, then http://localhost:8000.
 //   NEXT_PUBLIC_API_URL   API origin as seen from the browser (also used by ./api); fallback for the above.
-//   NEXT_PUBLIC_SITE_URL  public origin of this site (canonical, og:url, JSON-LD, sitemap, robots).
-//                         Default http://localhost:3000 (a warning is logged in production).
-//   PUBLIC_BASE_URL       same public origin as used by the backend newsletter; fallback when
+//   NEXT_PUBLIC_SITE_URL  origin of this site (canonical, og:url, JSON-LD, sitemap, robots).
+//                         Default http://localhost:3000; leaving it unset is the normal local case.
+//   PUBLIC_BASE_URL       same site origin as used by the backend newsletter; fallback when
 //                         NEXT_PUBLIC_SITE_URL is unset, so one value can serve both. Must match if both are set.
 // Where they come from: Next only loads frontend/.env, frontend/.env.local, frontend/.env.<mode>[.local]
 // (or the real process environment). The repo-root .env is read by docker compose / the backend, NOT by
@@ -37,15 +39,18 @@ export const SERVER_API_BASE = (
 const DEFAULT_SITE_URL = "http://localhost:3000";
 const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.PUBLIC_BASE_URL;
 
-if (!configuredSiteUrl && process.env.NODE_ENV === "production") {
-  console.warn(
-    `[server-api] Neither NEXT_PUBLIC_SITE_URL nor PUBLIC_BASE_URL is set; canonical URLs, JSON-LD, ` +
-      `sitemap.xml and robots.txt will point at ${DEFAULT_SITE_URL}.`,
-  );
-}
-
-/** Public origin of this site, for canonical URLs, the sitemap and JSON-LD. No trailing slash. */
+/** Origin of this site, for canonical URLs, the sitemap and JSON-LD. No trailing slash. Unset = local default. */
 export const SITE_URL = (configuredSiteUrl || DEFAULT_SITE_URL).replace(/\/+$/, "");
+
+/** True when SITE_URL is a loopback origin (localhost, 127.0.0.1, ::1, *.localhost), i.e. nothing is public. */
+export function isLocalSiteUrl(url: string = SITE_URL): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, "");
+    return host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".localhost");
+  } catch {
+    return false;
+  }
+}
 
 export type Result<T> = { ok: true; data: T } | { ok: false; status: number; error: string };
 

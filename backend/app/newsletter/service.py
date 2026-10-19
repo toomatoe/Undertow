@@ -25,7 +25,7 @@ from app.fundamentals import service as fundamentals
 from app.journal import digest as journal_digest
 from app.journal import service as journal
 from app.models import Article, Company, JournalEntry, TradingHalt
-from app.pipeline.signals import ALL_SIGNALS
+from app.pipeline.signals import signal_def
 from app.research.eventstudy import ET, RESULTS_FILE
 from app.sources.halts import REASONS, SERIOUS
 
@@ -141,7 +141,7 @@ def _study(data_dir: str) -> dict | None:
 
 
 def _sig(code: str) -> dict:
-    s = ALL_SIGNALS.get(code)
+    s = signal_def(code)
     return {"code": code, "label": s.label if s else code, "direction": s.direction if s else "?", "severity": s.severity if s else 1}
 
 

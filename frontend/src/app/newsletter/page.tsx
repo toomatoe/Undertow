@@ -5,7 +5,9 @@ import NewsletterWorkspace from "@/components/newsletter/NewsletterWorkspace";
 import { getNewsletterIssue, getNewsletterIssues, SITE_URL } from "@/lib/server-api";
 
 // ISR: the archive gains one issue a week; 10 minutes keeps a fresh issue from lagging long.
-export const revalidate = 600;
+// Rendered per request: this app runs locally, and a build-time prerender would bake in "API not reachable"
+// (the API is not running during `docker build`).
+export const dynamic = "force-dynamic";
 
 // Title and description come from ./layout.tsx.
 export const metadata: Metadata = {

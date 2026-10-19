@@ -15,7 +15,7 @@ Double-opt-in email list plus idempotent fan-out of the weekly "Small-Cap Filing
 | `digest.py` | `build_daily_digest(session, data_dir, day_et)` -> dict with `markdown`, `html`, `flagged_words`; `subject`, `is_empty` |
 | `routes.py` | `make_router(get_session, get_settings=None, make_transport=None)` and the default `router` |
 
-## Env vars (all optional; also in `.env.example` and passed through by `docker-compose.prod.yml`)
+## Env vars (all optional and off by default; listed in `.env.example`. QuantDesk runs locally, so email stays off unless you add SMTP settings. `docker-compose.prod.yml` passes them through but is kept only for a possible later deployment)
 
 These fields live in `DeliverySettings` only because this module was built in parallel with the config owner.
 **They should move into `app.config.Settings` later** (same env names). `PUBLIC_BASE_URL` is read via `app.config.get_settings()`.

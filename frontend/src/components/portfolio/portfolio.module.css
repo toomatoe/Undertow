@@ -1,0 +1,85 @@
+/* Hypothetical paper portfolio (/paper). Colors come from the global tokens, so light and dark both work. */
+
+.root {
+  min-width: 0;
+}
+
+.root > * {
+  min-width: 0;
+}
+
+.banner {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--warn);
+  border-left-width: 4px;
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--warn) 10%, var(--panel));
+}
+
+.banner strong {
+  font-size: 15px;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 20px;
+}
+
+.controls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.controls select {
+  padding: 3px 8px;
+  font-size: 13px;
+}
+
+.badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.side {
+  font-weight: 600;
+}
+
+.assumptions {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.foot {
+  max-width: 820px;
+}
+
+@media (max-width: 480px) {
+  .controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
+.intro {
+  max-width: 760px;
+  margin-top: 6px;
+}

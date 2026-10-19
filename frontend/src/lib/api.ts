@@ -16,6 +16,8 @@ export interface Signal {
   direction: "-" | "+" | "?";
   severity: number;
   why: string;
+  /** True for forward-test signals (backend pipeline.signals.FORWARD_TEST_SIGNALS). Optional: older APIs omit it. */
+  forward_test?: boolean;
 }
 
 export interface Evidence {
@@ -28,6 +30,13 @@ export interface Evidence {
   excess_vs_baseline: number | null;
   t_stat: number;
   significant: boolean;
+  // Optional fields of backend schemas.EvidenceOut (served on articles) for forward-test evidence.
+  /** "insider_purchases" for the insider forward test; null/absent = the main event study. */
+  study?: string | null;
+  /** In-sample result of a pre-registered study, now being forward-tested live. */
+  forward_test?: boolean;
+  t_stat_clustered?: number | null;
+  companies?: number | null;
 }
 
 export interface StudyResult extends Evidence {
@@ -130,6 +139,8 @@ export interface Article {
   signals: Signal[];
   ai_flags: string[] | null;
   evidence: Evidence[];
+  /** Any signal is a forward-test signal (label: forward test of pre-registered finding). Optional: older APIs omit it. */
+  forward_test?: boolean;
 }
 
 export interface ArticlePage {
@@ -452,6 +463,10 @@ export interface JournalEntry {
   title: string;
   filing_url: string;
   signal_label: string;
+  /** Trading days the signal is judged on (backend journal.service.evaluation_horizon: 5 or 20). */
+  evaluation_horizon?: number | null;
+  /** "forward test of pre-registered finding" for forward-test signals, else null. */
+  forward_test_label?: string | null;
 }
 
 export interface JournalPage {
@@ -489,11 +504,86 @@ export interface JournalSummaryRow {
   median_20: number | null;
   hit_20: number | null;
   expected_20: number | null;
+  evaluation_horizon?: number | null;
+  forward_test_label?: string | null;
 }
 
 export interface JournalSummary {
   rows: JournalSummaryRow[];
   marked: string | null;
+}
+
+// --- Hypothetical paper portfolio (mirrors PaperPortfolioOut in backend/app/schemas.py, app/paper/service.py) ---
+// Simulated from the forward journal: not traded, not investment advice. There is no execution path.
+
+export interface PaperAssumptions {
+  notional: number;
+  max_concurrent: number;
+  hedge: boolean;
+  starting_capital: number;
+  cost_model: string;
+  horizons: Record<string, number>; // "default" plus per-signal horizons (trading days)
+}
+
+export interface PaperEquityPoint {
+  date: string;
+  equity: number;
+  open_positions: number;
+}
+
+export interface PaperTotals {
+  pnl: number;
+  return_pct: number; // fraction of starting capital
+  n_closed: number;
+  n_open: number;
+  hit_rate: number | null;
+  skipped_capacity: number;
+  unpriced: number;
+  pending: number;
+  undirected: number;
+}
+
+export interface PaperSignalRow {
+  signal: string;
+  label: string;
+  direction: "-" | "+" | "?";
+  horizon: number;
+  forward_test: boolean;
+  forward_test_label: string | null;
+  n: number;
+  n_closed: number;
+  pnl: number;
+  mean_return_net: number | null;
+  hit_rate: number | null;
+}
+
+export interface PaperPosition {
+  ticker: string;
+  signal: string;
+  side: "long" | "short";
+  size_bucket: SizeBucket | null;
+  horizon: number;
+  entry_date: string;
+  exit_date: string | null;
+  status: "open" | "closed";
+  net_return: number;
+  pnl: number;
+}
+
+export interface PaperPortfolio {
+  as_of: string;
+  label: string;
+  assumptions: PaperAssumptions;
+  equity_curve: PaperEquityPoint[];
+  totals: PaperTotals;
+  by_signal: PaperSignalRow[];
+  positions: PaperPosition[]; // most recent 50
+  empty_reason: string | null;
+}
+
+export interface PaperPortfolioParams {
+  hedge?: boolean;
+  max_concurrent?: number; // 1..100, default 20
 }
 
 export interface Fundamentals {
@@ -816,6 +906,8 @@ export const api = {
   journalChain: () => get<JournalChain>("/api/journal/chain"),
   journalChainDay: (day: string) => get<ChainDay>(`/api/journal/chain/${encodeURIComponent(day)}`),
   journalVerify: () => get<ChainVerify>("/api/journal/verify"),
+  /** Hypothetical paper portfolio simulated from the journal (read-only). */
+  paperPortfolio: (p: PaperPortfolioParams = {}) => get<PaperPortfolio>(`/api/paper-portfolio${query(p)}`),
   healthDetails: () => get<HealthDetails>("/api/health/details"),
   healthHistory: (days = 7) => get<HealthHistory>(`/api/health/history?days=${days}`),
   /** 202 with a generic message (no enumeration); ApiError 503 when email delivery is not configured. */

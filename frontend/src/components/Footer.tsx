@@ -54,11 +54,16 @@ export default function Footer() {
         </div>
       )}
       <p>
-        QuantDesk publishes general information about public filings and historical statistics. It is not investment advice. Simulated
-        results are hypothetical.
+        QuantDesk shows general information about public filings and historical statistics. It is not investment advice and it does not
+        trade. Simulated results are hypothetical.
+        <span className="footer-local">
+          Runs locally: a personal research tool on your own machine, with no accounts and no hosted service.
+        </span>
       </p>
-      {/* wrap: six links overflow a phone-width footer (globals.css .site-footer nav does not wrap) */}
-      <nav style={{ flexWrap: "wrap" }}>
+      {/* wraps on phone width (.site-footer nav, Polish v1.0 in globals.css) */}
+      <nav aria-label="Footer">
+        <Link href="/research/paper">Working paper</Link>
+        <Link href="/paper">Paper portfolio</Link>
         <Link href="/methodology">Methodology</Link>
         <Link href="/newsletter#subscribe">Subscribe</Link>
         <Link href="/status">Status</Link>

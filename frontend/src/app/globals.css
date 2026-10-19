@@ -1880,3 +1880,95 @@ table.data td.tr-early {
 main code {
   overflow-wrap: anywhere;
 }
+
+/* --- Polish v1.0 --- */
+/* Footer: link list wraps on phone width; the "Runs locally" note sits on its own line. */
+.site-footer nav {
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.footer-local {
+  display: block;
+  margin-top: 6px;
+}
+
+/* Nav: tabs scroll inside the header on narrow screens instead of widening the page. */
+.nav {
+  max-width: 100vw;
+}
+
+.nav nav {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nav nav::-webkit-scrollbar {
+  display: none;
+}
+
+/* Tabs never wrap onto two lines inside the fixed-height header (901-1200px laptops). */
+.tab {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.brand,
+.nav-note {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Nine tabs plus the note do not fit below ~1200px; the footer carries the same note. */
+@media (max-width: 1200px) {
+  .nav-note {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .brand {
+    flex-shrink: 0;
+  }
+
+  .nav nav {
+    flex: 1;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Long unbroken strings (hashes, URLs, tickers in tables) never push the page wider than the viewport. */
+main {
+  overflow-wrap: anywhere;
+}
+
+/* Generic empty state used by pages when the API returns no rows. */
+.empty-state {
+  padding: 18px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Filter bars: a select with a long option label shrinks to the row instead of overflowing it. */
+.toolbar select,
+.toolbar input {
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* Screen-reader-only text (page headings on pages whose visible title is in a component). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

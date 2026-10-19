@@ -12,8 +12,8 @@ import { getLesson, LESSON_SLUGS, lessonDocTitle, lessonPath, type Lesson } from
 import { SITE_URL } from "@/lib/server-api";
 
 // Server-rendered for crawlers (metadata, canonical, JSON-LD, prose); do not convert to a useEffect client page.
-// Live numbers come from server-api (cached 1 h); if the API is down the lesson renders with a note.
-export const revalidate = 3600;
+// Live numbers come from server-api (rendered per request); if the API is down the lesson renders with a note.
+export const dynamic = "force-dynamic"; // live numbers; a build-time prerender would bake in "API not reachable"
 // Only the registry's slugs exist: any other /learn/<x> is a real HTTP 404 before anything streams.
 export const dynamicParams = false;
 

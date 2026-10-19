@@ -352,3 +352,33 @@ def test_newsletter_and_digest_sends_are_gated_and_never_crash(monkeypatch):
     assert state.last_digest_day == date(2026, 10, 18)  # the failed day is retried next cycle
     monkeypatch.setattr(main.delivery, "daily_digest_day", lambda now=None: None)  # before the send hour
     main.digest_cycle()
+
+
+def test_forward_test_signal_on_api_with_insider_evidence(tmp_path, monkeypatch):
+    """insider_cluster_purchase articles show on /api/signals with the insider study's micro / 5d row (bundled copy
+    when DATA_DIR has no insider study); the catalog lists it after the main signals with forward_test: true."""
+    from app.pipeline.signals import ALL_SIGNALS
+
+    monkeypatch.setattr(main.settings, "data_dir", str(tmp_path))
+    monkeypatch.setattr(state, "forward_evidence", None)
+    monkeypatch.setattr(state, "sizes", {**state.sizes, "MICR": "micro"})
+    with SessionLocal() as s:
+        s.add(Company(symbol="MICR", cik=3, name="Micro Corp", public_float=150_000_000, size_bucket="micro"))
+        s.add(Article(url="https://www.sec.gov/Archives/edgar/data/3/x/x-index.htm", url_hash="hins", title_hash="tins",
+                      title="Insider cluster purchase: MICR (2 insiders, $40,000 total)", source="edgar",
+                      source_name="SEC EDGAR", published_at=datetime.now(timezone.utc), form="4",
+                      signals=["insider_cluster_purchase"], severity=2, tickers=[ArticleTicker(symbol="MICR", method="edgar")]))
+        s.commit()
+    [a] = client.get("/api/signals?signal=insider_cluster_purchase").json()["items"]
+    assert a["forward_test"] is True
+    assert a["signals"][0]["code"] == "insider_cluster_purchase" and a["signals"][0]["forward_test"] is True
+    [ev] = a["evidence"]
+    assert (ev["study"], ev["forward_test"], ev["bucket"], ev["horizon_days"]) == ("insider_purchases", True, "micro", 5)
+    assert (ev["n"], ev["excess_vs_baseline"], ev["t_stat_clustered"]) == (662, 0.01662, 3.29)
+    # main-study evidence keeps its shape, with the optional fields at their defaults
+    tiny = next(x for x in client.get("/api/signals").json()["items"] if x["title"] == "Filing 0")
+    assert tiny["forward_test"] is False and tiny["evidence"][0]["study"] is None and tiny["evidence"][0]["forward_test"] is False
+
+    catalog = client.get("/api/signals/catalog").json()
+    assert [c["code"] for c in catalog][-1] == "insider_cluster_purchase" and catalog[-1]["forward_test"] is True
+    assert len(catalog) == len(ALL_SIGNALS) + 1 and not any(c["forward_test"] for c in catalog[:-1])

@@ -82,3 +82,28 @@ def test_record_new_and_summary(tmp_path):
         s.commit()
         rows = summary(s, {("offering_priced", "nano", 20): {"mean_abnormal": -0.156}})
         assert rows[0]["n"] == 1 and rows[0]["hit_20"] == 1.0 and rows[0]["expected_20"] == -0.156
+
+
+def test_forward_test_signal_journaled_as_long_with_5_day_horizon(tmp_path):
+    """insider_cluster_purchase is not in ALL_SIGNALS: record_new resolves it through signal_def (no KeyError)."""
+    from app.journal.service import EVALUATION_HORIZONS, HORIZONS, evaluation_horizon, forward_test_label
+
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    with SessionLocal() as s:
+        s.add(Company(symbol="MICR", cik=3, name="Micro", public_float=150_000_000, size_bucket="micro"))
+        s.add(Article(url="u3", url_hash="u3", title_hash="t3", title="Insider cluster purchase: MICR (2 insiders, $40,000 total)",
+                      source="edgar", source_name="SEC EDGAR", published_at=datetime(2026, 3, 4, 14, tzinfo=timezone.utc),
+                      form="4", signals=["insider_cluster_purchase"], severity=2,
+                      tickers=[ArticleTicker(symbol="MICR", method="edgar")]))
+        s.commit()
+        assert record_new(s, str(tmp_path)) == 1
+        e = s.query(JournalEntry).one()
+        assert (e.primary_signal, e.direction, e.size_bucket, e.form) == ("insider_cluster_purchase", "+", "micro", "4")
+        e.abn_5 = 0.02
+        s.commit()
+        [row] = summary(s, {("insider_cluster_purchase", "micro", 5): {"mean_abnormal": 0.01609}})
+        assert row["evaluation_horizon"] == 5 and row["forward_test_label"] == "forward test of pre-registered finding"
+        assert row["label"].startswith("Insider cluster purchase") and row["expected_5"] == 0.01609 and row["hit_5"] == 1.0
+    assert evaluation_horizon("offering_priced") == 20 and forward_test_label("offering_priced") is None
+    assert set(EVALUATION_HORIZONS.values()) <= set(HORIZONS)

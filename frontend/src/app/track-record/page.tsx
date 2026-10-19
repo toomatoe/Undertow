@@ -68,7 +68,7 @@ export default function TrackRecordPage() {
           {journal.total.toLocaleString()} signals recorded
           {journal.since && <> since {new Date(journal.since).toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}</>}
           {" · "}
-          <strong>Simulated tracking, no trades, not advice.</strong>
+          <strong>Simulated tracking: every result is hypothetical, no trades, not advice.</strong>
         </p>
       </div>
 

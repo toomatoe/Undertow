@@ -1,4 +1,9 @@
-# Production stack: Postgres + API + Next.js frontend.
+# OPTIONAL, FOR LATER. You do not need this file: QuantDesk is local-only (use docker-compose.yml or scripts/start.ps1).
+# Do NOT deploy QuantDesk publicly while research prices come from Yahoo Finance (personal use only, never
+# redistributed): a public deployment would need a licensed price feed first. QuantDesk is free and not hosted anywhere.
+# This file is kept only as a hardened template for a possible private server later.
+#
+# Stack: Postgres + API + Next.js frontend.
 #
 # Use it with an env file that lives OUTSIDE git and is never committed (it holds the admin token and passwords):
 #   docker compose -f docker-compose.prod.yml --env-file /etc/quantdesk/prod.env up -d --build

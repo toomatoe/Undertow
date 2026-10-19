@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 from app.config import Settings
 from app.db import SessionLocal
 from app.models import AlertLog, Article, Company, WatchlistItem
-from app.pipeline.signals import ALL_SIGNALS
+from app.pipeline.signals import signal_def
 
 log = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def _money(v: int | None) -> str:
 
 def format_message(article: Article, company: Company | None, evidence: list[dict], latency_s: float) -> dict:
     """Discord webhook payload (one embed). Pure function, easy to test."""
-    sigs = [ALL_SIGNALS[c] for c in (article.signals or []) if c in ALL_SIGNALS]
+    sigs = [s for s in (signal_def(c) for c in (article.signals or [])) if s]
     top = sigs[0]
     ticker = company.symbol if company else (article.tickers[0].symbol if article.tickers else "?")
     lines = [f"{DIRECTION_ICON[s.direction]} **{s.label}**: {s.why}" for s in sigs[:4]]

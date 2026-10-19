@@ -1,0 +1,102 @@
+/* /research index. */
+.page {
+  display: grid;
+  gap: 1.25rem;
+}
+
+.page h1 {
+  margin: 0;
+}
+
+.sectionTitle {
+  margin: 0.5rem 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+.feature,
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.feature {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.feature:hover,
+.card:hover {
+  background: var(--panel-2);
+}
+
+.feature:focus-visible,
+.card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.kicker {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.featureTitle {
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.featureText,
+.cardText {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.cta {
+  color: var(--accent);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr));
+  gap: 0.75rem;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  list-style: none;
+}
+
+.cards li {
+  display: flex;
+}
+
+.cards .card {
+  flex: 1;
+}
+
+.cardTitle {
+  font-weight: 600;
+}
+
+.paths {
+  margin: 0.25rem 0 0;
+  padding-left: 1.2rem;
+}
+
+.paths li + li {
+  margin-top: 0.35rem;
+}
+
+.paths code {
+  overflow-wrap: anywhere;
+}

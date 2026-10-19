@@ -15,8 +15,8 @@ elements and <footnoteId/> siblings are tolerated (missing values become None). 
 Security: documents containing a DOCTYPE or ENTITY declaration are rejected before parsing, so entity
 expansion ("billion laughs") and external entities cannot occur. Real EDGAR ownership XML has neither.
 
-Used by app.insiders.study for the dataset-vs-XML cross-check; a future live insider alert can reuse
-parse_ownership_xml + raw_xml_url unchanged (see AGENTS.md).
+Used by app.insiders.study for the dataset-vs-XML cross-check and, unchanged, by app.insiders.live (the live
+Form 4 forward test; see AGENTS.md).
 """
 
 import re
