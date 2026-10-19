@@ -1,4 +1,5 @@
 import asyncio
+import hmac
 import json
 import logging
 import os
@@ -6,8 +7,11 @@ from collections import defaultdict
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timedelta, timezone
 from typing import Literal
+from urllib.parse import urlsplit
 
 import httpx
+from pydantic import SecretStr
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, StreamingResponse
@@ -226,12 +230,54 @@ app.add_middleware(
 SentimentFilter = Literal["positive", "negative", "neutral"]
 
 
+class ResearchLaunchSettings(BaseSettings):
+    """Who may start research subprocesses. Kept here until it moves into app.config.Settings."""
+
+    # env_ignore_empty: a blank RESEARCH_JOBS_ENABLED= line means "unset", not a startup error.
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
+
+    # When set, POST /api/research/jobs/{kind} requires "Authorization: Bearer <token>".
+    research_admin_token: SecretStr | None = None
+    # Explicit on/off without a token. Unset: on only when PUBLIC_BASE_URL is a local origin.
+    research_jobs_enabled: bool | None = None
+
+
+research_launch = ResearchLaunchSettings()
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
+
+
+def research_launch_policy() -> tuple[bool, str | None]:
+    """(enabled, admin token or None). A token always wins; otherwise public deployments are closed."""
+    token = research_launch.research_admin_token
+    if token is not None and token.get_secret_value().strip():
+        return True, token.get_secret_value().strip()
+    if research_launch.research_jobs_enabled is not None:
+        return research_launch.research_jobs_enabled, None
+    host = (urlsplit(settings.public_base_url).hostname or "").lower()
+    return host in LOCAL_HOSTS or host.endswith(".localhost"), None
+
+
+def require_research_launch(request: Request) -> None:
+    enabled, token = research_launch_policy()
+    if not enabled:
+        raise HTTPException(403, "Research runs are disabled on this server. Run them from the command line, "
+                                 "or set RESEARCH_ADMIN_TOKEN to allow authorized launches.")
+    if token is None:
+        return
+    scheme, _, supplied = request.headers.get("authorization", "").partition(" ")
+    if scheme.lower() != "bearer" or not hmac.compare_digest(supplied.strip().encode(), token.encode()):
+        raise HTTPException(401, "A valid admin token is required to start research runs.",
+                            headers={"WWW-Authenticate": "Bearer"})
+
+
 @app.get("/api/research/jobs", response_model=ResearchJobsOut)
 async def research_job_status():
-    return get_research_jobs().snapshot()
+    enabled, token = research_launch_policy()
+    return {**get_research_jobs().snapshot(), "enabled": enabled, "requires_token": token is not None}
 
 
-@app.post("/api/research/jobs/{kind}", response_model=ResearchJob, status_code=202)
+@app.post("/api/research/jobs/{kind}", response_model=ResearchJob, status_code=202,
+          dependencies=[Depends(require_research_launch)])
 async def start_research_job(kind: Literal["backtest", "event_study"]):
     try:
         return get_research_jobs().start(kind)

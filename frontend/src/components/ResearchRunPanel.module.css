@@ -7,4 +7,9 @@
 .run:focus-visible, .error button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .status { color: var(--muted); font-size: .875rem; }
 .error { color: var(--neg); overflow-wrap: anywhere; }
+.note { margin: .35rem 0; }
+.token { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; margin: .5rem 0; font-size: .875rem; }
+.token input { min-width: 0; flex: 1 1 14rem; max-width: 24rem; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); background: var(--panel-2); }
+.token input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.token .error { flex-basis: 100%; margin: 0; }
 @media (max-width: 600px) { .row { align-items: stretch; flex-direction: column; } }

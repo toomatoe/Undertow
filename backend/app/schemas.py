@@ -16,6 +16,9 @@ class ResearchJob(BaseModel):
 class ResearchJobsOut(BaseModel):
     active: ResearchJob | None
     latest: dict[str, ResearchJob | None]
+    # Whether this API accepts launches at all, and whether they need an admin bearer token.
+    enabled: bool = False
+    requires_token: bool = False
 
 
 class TickerOut(BaseModel):

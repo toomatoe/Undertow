@@ -82,8 +82,14 @@ migrated (do them by hand or introduce Alembic). Test against an existing Postgr
 Research launches: `GET /api/research/jobs` returns the active job and latest job per kind;
 `POST /api/research/jobs/{kind}` starts `backtest` or `event_study` (202; 409 while busy).
 `app/research_jobs.py` manages fixed subprocess workloads and persisted job status under `DATA_DIR`.
-The local development API uses one worker. These controls inherit the API's trusted-local-use model;
-they do not add authentication. Study completion refreshes in-memory evidence without an API restart.
+The local development API uses one worker. Launch gate (`research_launch_policy` in `app/main.py`):
+- If `RESEARCH_ADMIN_TOKEN` is set, POST requires `Authorization: Bearer <token>`. Otherwise it gets 401; the token is compared in constant time.
+- Else, if `RESEARCH_JOBS_ENABLED=true|false` is set, it decides.
+- Else, launches are allowed only when `PUBLIC_BASE_URL` is a localhost origin; otherwise they get 403.
+
+GET also returns `enabled` and `requires_token`, never the token. A corrupt `research_jobs.json` is moved to
+`.corrupt-<timestamp>` and the API starts with empty status. Compose binds the API and Postgres to 127.0.0.1, so the localhost
+default isn't reachable from the LAN. Study completion refreshes in-memory evidence without an API restart.
 Tests in `tests/test_research_jobs.py` use offline substitute workers.
 
 Run: `bash scripts/pytest.sh [tests/test_x.py ...]` from the repo root. It mounts `backend/` into the

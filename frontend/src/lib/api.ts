@@ -564,20 +564,32 @@ export interface ResearchJob {
 export interface ResearchJobs {
   active: ResearchJob | null;
   latest: Record<ResearchJobKind, ResearchJob | null>;
+  /** False when this server does not accept launches from the UI (e.g. a public deployment without an admin token). */
+  enabled: boolean;
+  /** True when launches need the operator's admin token (RESEARCH_ADMIN_TOKEN on the API). */
+  requires_token: boolean;
 }
 
-async function researchRequest<T>(path: string, method = "GET"): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { method, cache: "no-store", signal: AbortSignal.timeout(15000) });
+export class ResearchRequestError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
+async function researchRequest<T>(path: string, method = "GET", token?: string): Promise<T> {
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await fetch(`${API_BASE}${path}`, { method, headers, cache: "no-store", signal: AbortSignal.timeout(15000) });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(`${res.status} ${typeof body?.detail === "string" ? body.detail : res.statusText}`);
+    throw new ResearchRequestError(res.status, `${res.status} ${typeof body?.detail === "string" ? body.detail : res.statusText}`);
   }
   return res.json();
 }
 
 export const api = {
   researchJobs: () => researchRequest<ResearchJobs>("/api/research/jobs"),
-  startResearch: (kind: ResearchJobKind) => researchRequest<ResearchJob>(`/api/research/jobs/${kind}`, "POST"),
+  startResearch: (kind: ResearchJobKind, token?: string) =>
+    researchRequest<ResearchJob>(`/api/research/jobs/${kind}`, "POST", token),
   articles: (f: ArticleFilters = {}) => get<ArticlePage>(`/api/articles${query(f)}`),
   article: (id: number) => get<Article>(`/api/articles/${id}`),
   signals: (f: ArticleFilters = {}) => get<ArticlePage>(`/api/signals${query(f)}`),
