@@ -130,3 +130,21 @@ def test_borrow_file_parse():
     assert p["AAA"] == {"fee_rate": 0.0025, "available": None}
     assert p["BBB"] == {"fee_rate": 0.855, "available": 1500}
     assert p["CCC"]["available"] == 0 and p["CCC"]["fee_rate"] is None
+
+
+def test_overfitting_block_publishes_exact_dsr_inputs():
+    import statistics
+
+    from app.backtest.report import overfitting_block
+
+    rng = random.Random(3)
+    rets = {"A": [rng.gauss(0.0005, 0.01) for _ in range(300)], "B": [rng.gauss(0.0, 0.01) for _ in range(120)]}
+    trials = {"A|x": 0.4, "A|y": 1.1, "B|x": -0.2, "B|y": 0.7}
+    out = overfitting_block(rets, trials)
+    for key in ("A", "B"):  # existing keys unchanged
+        val, bench = dsr(rets[key], list(trials.values()))
+        assert out[f"dsr_{key}"] == round(val, 3) and out[f"luck_sharpe_{key}"] == round(bench, 2)
+    assert out["trials"] == 4
+    assert out["n_returns_A"] == 300 and out["n_returns_B"] == 120
+    assert out["trial_sharpe_std"] == round(statistics.stdev(trials.values()), 4)
+    assert overfitting_block({"A": rets["A"]}, {"A|x": 0.4})["trial_sharpe_std"] == 0.0  # < 2 trials: no luck benchmark

@@ -169,3 +169,28 @@ def test_cli_write_and_verify(tmp_path, capsys):
     assert snapshot.main(["verify", str(tmp_path / rel)]) == 0
     (tmp_path / "public_float_CY2023Q2I.json").write_text("{}")
     assert snapshot.main(["verify", str(tmp_path / rel)]) == 1
+
+
+def test_cache_subdirs_match_insider_caches():
+    from app.insiders import datasets, study
+
+    assert datasets.CACHE_SUBDIR in snapshot.CACHE_SUBDIRS
+    assert study.XML_CACHE_SUBDIR in snapshot.CACHE_SUBDIRS
+
+
+def test_cli_write_hashes_insider_caches(tmp_path, capsys):
+    study = _cache(tmp_path)
+    (tmp_path / "insider_datasets").mkdir()
+    (tmp_path / "insider_datasets" / "2024q1_form345.zip").write_bytes(b"PK\x03\x04zip")
+    (tmp_path / "insider_datasets" / "2024q2_form345.zip.part").write_bytes(b"PK partial")
+    (tmp_path / "insider_xml").mkdir()
+    (tmp_path / "insider_xml" / "0001-24-000001.xml").write_text("<ownershipDocument/>")
+    assert snapshot.main(["write", "--data-dir", str(tmp_path), "--study", str(study)]) == 0
+    rel = capsys.readouterr().out.strip()
+    manifest = json.loads((tmp_path / rel).read_text())
+    assert manifest["reads_source"] == "all_cache_files"
+    assert "insider_datasets/2024q1_form345.zip" in manifest["files"]
+    assert "insider_xml/0001-24-000001.xml" in manifest["files"]
+    assert not any(p.endswith(".part") for p in manifest["files"])
+    (tmp_path / "insider_xml" / "0001-24-000001.xml").write_text("<changed/>")
+    assert snapshot.main(["verify", str(tmp_path / rel)]) == 1

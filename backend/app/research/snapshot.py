@@ -1,7 +1,7 @@
 """Input manifests and result comparison for reproducible study runs.
 
 A manifest records the SHA-256 of every cache file a run read (SEC submissions, the
-public-float frame, Yahoo price files), the code version (env GIT_SHA) and the hash of
+public-float frame, Yahoo price files, SEC insider data set zips and Form 4 XML), the code version (env GIT_SHA) and the hash of
 the canonical results. It holds hashes and relative paths only, never file contents:
 cached Yahoo data is for personal research use and must not be committed or published.
 
@@ -29,7 +29,11 @@ MANIFEST_VERSION = 1
 VOLATILE_KEYS = frozenset({"generated_at", "inputs_manifest", "elapsed_seconds", "duration_seconds",
                            "started_at", "finished_at"})
 # Cache locations scanned when no in-process read registry is available (CLI `write`).
-CACHE_SUBDIRS = ("submissions", "prices")
+# insider_datasets: SEC Form 3/4/5 data set zips (app.insiders.datasets.CACHE_SUBDIR);
+# insider_xml: Form 4 primary-document XML for the cross-check (app.insiders.study.XML_CACHE_SUBDIR).
+CACHE_SUBDIRS = ("submissions", "prices", "insider_datasets", "insider_xml")
+# Cache file types hashed in those directories (download temp files such as *.part are skipped).
+CACHE_EXTENSIONS = (".json", ".zip", ".xml")
 
 _tracking = False
 _reads: set[str] = set()
@@ -111,7 +115,7 @@ def _all_cache_files(data_dir: str) -> list[str]:
     found = []
     for sub in CACHE_SUBDIRS:
         for root, _, files in os.walk(os.path.join(data_dir, sub)):
-            found += [os.path.join(root, f) for f in files if f.endswith(".json")]
+            found += [os.path.join(root, f) for f in files if f.endswith(CACHE_EXTENSIONS)]
     found += [os.path.join(data_dir, f) for f in os.listdir(data_dir) if f.startswith("public_float_")] \
         if os.path.isdir(data_dir) else []
     return found

@@ -24,6 +24,8 @@ change the main study's taxonomy and its Bonferroni count. `test_main_signal_tax
 SEC requests send `SEC_USER_AGENT` from settings and stay at or below 8/s (`datasets.throttle()`,
 `MIN_INTERVAL` 0.125 s; `eventstudy.collect` sleeps 0.12 s per company). Caches under `DATA_DIR`:
 `insider_datasets/` (zips), `submissions/` (shared), `insider_xml/{accession}.xml`, `prices/` (shared).
+All four are in `research.snapshot.CACHE_SUBDIRS`, so `python -m app.research.snapshot write` hashes them too; if you
+rename `datasets.CACHE_SUBDIR` or `study.XML_CACHE_SUBDIR`, update that tuple (`test_snapshot.py` checks it).
 
 ## Modules
 
@@ -69,6 +71,7 @@ refuses to write `event_study.json` (the live evidence).
 docker compose run --rm api python -m app.insiders.study                     # ~1-2 h first run, cached after
 docker compose run --rm api python -m app.insiders.study --offline           # replay from cache, fails on misses
 docker compose run --rm api python -m app.insiders.study --offline --allow-missing --quarters 2024q1 2024q2  # debug only
+make reproduce-insiders   # scripts/reproduce.sh insiders: offline replay to snapshots/replay_*.json, compared with the online run
 ```
 
 `--quarters` is for debugging: it is recorded as `config.quarters_override` and is not the registered study.

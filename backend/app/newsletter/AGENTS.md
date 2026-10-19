@@ -2,7 +2,8 @@
 
 The regular publication behind the publisher's exclusion (`docs/PRODUCT_RESEARCH.md` section 4, distribution item 9).
 Built automatically from our own data, archived as files, exported as Markdown and email-safe HTML for pasting into
-Substack/Beehiiv. No email provider integration yet.
+Substack/Beehiiv. Email delivery (double opt-in list, fan-out of each new issue, daily digest) lives in
+`app/delivery/` (see [delivery/AGENTS.md](../delivery/AGENTS.md)); it is off unless SMTP is configured.
 
 ## Flow (`service.py`)
 

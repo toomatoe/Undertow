@@ -6,7 +6,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import ArticleCard from "@/components/ArticleCard";
 import DilutionPanel from "@/components/DilutionPanel";
 import HaltsPanel from "@/components/HaltsPanel";
-import { api, type Fundamentals, type Halt, type TickerDetail } from "@/lib/api";
+import { api, isAdminApiError, type Fundamentals, type Halt, type TickerDetail } from "@/lib/api";
 import { formatMoney, formatScore, sentimentClass, SIZE_LABELS } from "@/lib/format";
 
 interface Props {
@@ -28,6 +28,7 @@ export default function TickerView({ initial, initialDays, fundamentals, fundame
   const [days, setDays] = useState(initialDays);
   const [error, setError] = useState<string | null>(null);
   const [watching, setWatching] = useState(initial.on_watchlist);
+  const [watchError, setWatchError] = useState<{ text: string; toStatus: boolean } | null>(null);
 
   // The page is cached (ISR), so re-check the watchlist once in the browser.
   useEffect(() => {
@@ -62,8 +63,15 @@ export default function TickerView({ initial, initialDays, fundamentals, fundame
 
   const toggleWatch = async () => {
     const next = !watching;
-    await api.watch(data.symbol, next);
-    setWatching(next);
+    setWatchError(null);
+    try {
+      await api.watch(data.symbol, next);
+      setWatching(next);
+    } catch (e) {
+      // 401 (token), 403 (disabled), 429 (rate limit) carry a clear message from api.ts; strip the status prefix as Footer does.
+      if (isAdminApiError(e)) setWatchError({ text: e.message.replace(/^\d{3}\s+/, ""), toStatus: e.status !== 429 });
+      else setWatchError({ text: `Could not update the watchlist. ${String(e instanceof Error ? e.message : e)}`, toStatus: false });
+    }
   };
 
   const maxMentions = Math.max(1, ...data.daily.map((d) => d.mentions));
@@ -82,6 +90,11 @@ export default function TickerView({ initial, initialDays, fundamentals, fundame
               {watching ? "★ Watching" : "☆ Watch"}
             </button>
           </h1>
+          {watchError && (
+            <p className="error small" role="alert">
+              {watchError.text} {watchError.toStatus && <Link href="/status">Open Status</Link>}
+            </p>
+          )}
           <p className="muted">
             {data.name ?? "Unknown company"}
             {data.size_bucket && (

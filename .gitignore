@@ -22,3 +22,4 @@ backtest-*.log
 
 # Study input manifests (hashes of cached personal-use data; never commit)
 snapshots/
+*-run.log

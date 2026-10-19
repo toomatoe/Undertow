@@ -57,6 +57,11 @@ Each fill pays half of `cost_round_trip × cost_mult` (and `hedge_cost` for the 
 - `key_finding`: a generated plain-English paragraph (gross edge → biggest cost → break-even → borrow check). The UI shows it under the verdict, so keep its logic honest when changing it.
 - `monte_carlo`: base case over `MC_SEEDS`, giving p05/p50/p95 of return, Sharpe and drawdown.
 - `walk_forward`: picks hold days and stop on A only, then tests the pick on B.
+- `overfitting` (`overfitting_block`): `trials` (distinct search configs ever tried), per period `dsr_<key>`,
+  `luck_sharpe_<key>` (annual Sharpe the best of `trials` reaches by luck) and `n_returns_<key>` (daily returns the DSR
+  used), plus `trial_sharpe_std` (sample sd of the trial Sharpes, annual; 0.0 below 2 trials). The last two are the
+  exact inputs the Learn DSR calculator (`frontend/src/lib/learn/live.ts` `dsrPrefill`) uses; it estimates them for
+  older reports that lack them. Changes here are additive only: the backtest page and Learn read these keys.
 
 ## Readiness gates (report.readiness)
 

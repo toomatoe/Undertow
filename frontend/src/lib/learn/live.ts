@@ -25,7 +25,7 @@ export function findRow(study: EventStudy | null, signal: string, bucket: string
 
 /**
  * Trading days between two ISO dates, inclusive: weekdays x 252/261 (about 9 US market holidays a year).
- * An estimate: the backtest report does not publish the exact number of daily returns.
+ * An estimate, used only for older backtest reports that do not publish n_returns_<period>.
  */
 export function estimateTradingDays(startIso: string, endIso: string): number {
   const start = Date.parse(`${startIso.slice(0, 10)}T00:00:00Z`);
@@ -44,8 +44,11 @@ export interface DsrPrefill {
   label: string;
   inputs: SharpeInputs;
   trials: number;
-  /** Standard deviation of the trial Sharpes, backed out of the report's luck benchmark. */
+  /** Standard deviation of the trial Sharpes: published by the report, or backed out of its luck benchmark. */
   sdTrials: number;
+  /** True when n / sdTrials come straight from the report (n_returns_<key>, trial_sharpe_std), false when estimated. */
+  exactN: boolean;
+  exactSdTrials: boolean;
   luckSharpe: number | null;
   reportPsr: number;
   reportDsr: number | null;
@@ -56,20 +59,26 @@ export interface DsrPrefill {
 /**
  * Calculator inputs for one backtest period. The report publishes the annualized Sharpe, skew and
  * kurtosis (rounded to 2 decimals), the number of trials and the luck benchmark luck_sharpe_<key>
- * = sd(trial Sharpes) x expectedMaxFactor(trials). The number of daily returns is estimated from
- * the period's first and last trading dates (equity points - 1).
+ * = sd(trial Sharpes) x expectedMaxFactor(trials). Newer reports also publish the exact number of daily
+ * returns (n_returns_<key>) and trial_sharpe_std; those are used when present. For older reports n is
+ * estimated from the period's first and last trading dates (equity points - 1) and the sd is backed out
+ * of the luck benchmark.
  */
 export function dsrPrefill(report: BacktestReport, key: string): DsrPrefill | null {
   const p: BacktestPeriod | undefined = report.periods[key];
   if (!p?.metrics.start || !p.metrics.end) return null;
   const m = p.metrics;
-  const n = Math.max(0, estimateTradingDays(m.start!, m.end!) - 1);
+  const publishedN = report.overfitting?.[`n_returns_${key}`];
+  const exactN = typeof publishedN === "number" && Number.isFinite(publishedN) && publishedN >= 0;
+  const n = exactN ? publishedN : Math.max(0, estimateTradingDays(m.start!, m.end!) - 1);
   const inputs: SharpeInputs = { sharpeAnnual: m.sharpe, n, skew: m.skew, kurt: m.kurtosis };
   const trials = Number(report.overfitting?.trials ?? 0);
   const luck = report.overfitting?.[`luck_sharpe_${key}`];
   const luckSharpe = typeof luck === "number" ? luck : null;
   const factor = expectedMaxFactor(trials);
-  const sdTrials = luckSharpe !== null && factor > 0 ? luckSharpe / factor : 0;
+  const publishedSd = report.overfitting?.trial_sharpe_std;
+  const exactSdTrials = typeof publishedSd === "number" && Number.isFinite(publishedSd) && publishedSd >= 0;
+  const sdTrials = exactSdTrials ? publishedSd : luckSharpe !== null && factor > 0 ? luckSharpe / factor : 0;
   const reportDsr = report.overfitting?.[`dsr_${key}`];
   return {
     period: key,
@@ -77,6 +86,8 @@ export function dsrPrefill(report: BacktestReport, key: string): DsrPrefill | nu
     inputs,
     trials,
     sdTrials,
+    exactN,
+    exactSdTrials,
     luckSharpe,
     reportPsr: m.psr,
     reportDsr: typeof reportDsr === "number" ? reportDsr : null,

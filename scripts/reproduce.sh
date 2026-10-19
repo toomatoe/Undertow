@@ -3,11 +3,12 @@
 #
 #   scripts/reproduce.sh main   # in-sample event study vs the newest docs/results/event_study_*.json
 #   scripts/reproduce.sh oos    # pre-registered OOS study (prints its confirmatory verdicts)
+#   scripts/reproduce.sh insiders  # pre-registered Form 4 insider-purchase study
 #
 # Runs inside the api image, so rebuild it first after code changes (docker compose build api), or set
 # REPRO_BUILD=1 to have this script do it. The replay writes to {DATA_DIR}/snapshots/replay_*.json and never
-# replaces event_study.json (the live evidence). Extra arguments are passed to the study, e.g. --allow-missing.
-# Prints IDENTICAL or DIFF with the differing keys; exit code 0 only when identical (main) or the run succeeded (oos).
+# replaces event_study.json (the live evidence) or the online study files (event_study_oos.json, event_study_insider_purchases.json). Extra arguments are passed to the study, e.g. --allow-missing.
+# Prints IDENTICAL or DIFF with the differing keys; exit code 0 only when identical (main) or the run succeeded (oos, insiders).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -39,14 +40,25 @@ case "$TARGET" in
   oos)
     run python -m app.research.oos --offline --output /app/data/snapshots/replay_event_study_oos.json "$@"
     if run test -f /app/data/event_study_oos.json; then
-      run python -m app.research.snapshot compare /app/data/event_study_oos.json \
+      # --ignore-added: the offline replay adds offline_misses, which the online run does not have.
+      run python -m app.research.snapshot compare --ignore-added /app/data/event_study_oos.json \
         /app/data/snapshots/replay_event_study_oos.json
     else
       echo "No event_study_oos.json from an online run yet; nothing to compare the replay with"
     fi
     ;;
+  insiders)
+    run python -m app.insiders.study --offline --output /app/data/snapshots/replay_event_study_insider_purchases.json "$@"
+    if run test -f /app/data/event_study_insider_purchases.json; then
+      # --ignore-added: the offline replay adds offline_misses, which the online run does not have.
+      run python -m app.research.snapshot compare --ignore-added /app/data/event_study_insider_purchases.json \
+        /app/data/snapshots/replay_event_study_insider_purchases.json
+    else
+      echo "No event_study_insider_purchases.json from an online run yet; nothing to compare the replay with"
+    fi
+    ;;
   *)
-    echo "usage: scripts/reproduce.sh main|oos [study args]" >&2
+    echo "usage: scripts/reproduce.sh main|oos|insiders [study args]" >&2
     exit 2
     ;;
 esac

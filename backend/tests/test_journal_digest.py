@@ -1,5 +1,8 @@
 import hashlib
 import json
+import os
+import threading
+import time
 from datetime import date, datetime, timedelta, timezone
 
 import pytest
@@ -189,3 +192,92 @@ def test_export_day_recomputes_with_plain_hashlib(tmp_path):
 def test_naive_and_aware_datetimes_canonicalize_the_same():
     aware = datetime(2026, 10, 13, 10, 0, tzinfo=timezone(timedelta(hours=-4)))
     assert digest._canon(aware) == digest._canon(datetime(2026, 10, 13, 14, 0)) == "2026-10-13T14:00:00.000000Z"
+
+
+# --- writer lock (scheduler seal_cycle vs CLI seal) -----------------------------------------
+
+
+def _lock_is_free(data_dir) -> bool:
+    """True when no one holds the chain lock (fcntl: a non-blocking flock succeeds; fallback: no lock file)."""
+    if digest.fcntl is None:
+        return not os.path.exists(digest.chain_path(str(data_dir)) + digest.EXCL_LOCK_SUFFIX)
+    fd = os.open(digest.chain_path(str(data_dir)) + digest.LOCK_SUFFIX, os.O_RDWR | os.O_CREAT)
+    try:
+        digest.fcntl.flock(fd, digest.fcntl.LOCK_EX | digest.fcntl.LOCK_NB)
+        digest.fcntl.flock(fd, digest.fcntl.LOCK_UN)
+        return True
+    except BlockingIOError:
+        return False
+    finally:
+        os.close(fd)
+
+
+def test_sequential_seals_are_idempotent_and_release_the_lock(tmp_path):
+    with SessionLocal() as s:
+        assert [r["day"] for r in digest.seal_through(s, str(tmp_path), D3, now=NOW)] == ["2026-10-13", "2026-10-14", "2026-10-15"]
+        assert _lock_is_free(tmp_path)
+        assert digest.seal_through(s, str(tmp_path), D3, now=NOW) == []
+        assert _lock_is_free(tmp_path)
+    assert [r["day"] for r in lines(tmp_path)] == ["2026-10-13", "2026-10-14", "2026-10-15"]
+
+
+def test_fallback_lock_without_fcntl(tmp_path, monkeypatch):
+    monkeypatch.setattr(digest, "fcntl", None)
+    lock = tmp_path / (digest.CHAIN_FILE + digest.EXCL_LOCK_SUFFIX)
+    lock.write_text("12345")  # left behind by a crashed writer
+    old = time.time() - digest.STALE_LOCK_SECONDS - 60
+    os.utime(lock, (old, old))
+    with SessionLocal() as s:
+        assert len(digest.seal_through(s, str(tmp_path), D2, now=NOW)) == 2  # stale lock removed
+        assert not lock.exists()  # released
+        assert digest.seal_through(s, str(tmp_path), D2, now=NOW) == []
+        assert not lock.exists()
+        lock.write_text("999")  # a live writer holds it: give up rather than append unlocked
+        monkeypatch.setattr(digest, "LOCK_TIMEOUT_SECONDS", 0.2)
+        with pytest.raises(digest.ChainError):
+            digest.seal_through(s, str(tmp_path), D3, now=NOW)
+    assert [r["day"] for r in lines(tmp_path)] == ["2026-10-13", "2026-10-14"]
+
+
+def test_seal_waiting_on_another_writer_rechecks_under_the_lock(tmp_path):
+    """Another process (simulated: a second flock/lock file outside the module's thread lock) seals D1..D2 while a
+    scheduler seal is waiting; the waiting seal must then append only D3, never D1/D2 a second time."""
+    data_dir = str(tmp_path)
+    with SessionLocal() as s:  # the other writer's lines, computed before any thread touches the DB
+        h1 = digest.day_hash(digest.canonical_entries(s, D1), digest.GENESIS, D1)
+        h2 = digest.day_hash(digest.canonical_entries(s, D2), h1, D2)
+    other = [
+        {"day": D1.isoformat(), "prev_hash": digest.GENESIS, "hash": h1, "count": 2, "sealed_at": "2026-10-16T01:00:00Z", "sealed_late": False},
+        {"day": D2.isoformat(), "prev_hash": h1, "hash": h2, "count": 1, "sealed_at": "2026-10-16T01:00:00Z", "sealed_late": False},
+    ]
+    if digest.fcntl is not None:
+        fd = os.open(digest.chain_path(data_dir) + digest.LOCK_SUFFIX, os.O_RDWR | os.O_CREAT)
+        digest.fcntl.flock(fd, digest.fcntl.LOCK_EX)
+        release = lambda: (digest.fcntl.flock(fd, digest.fcntl.LOCK_UN), os.close(fd))  # noqa: E731
+    else:
+        lock = tmp_path / (digest.CHAIN_FILE + digest.EXCL_LOCK_SUFFIX)
+        lock.write_text("other")
+        release = lock.unlink
+
+    result: dict = {}
+
+    def scheduler_seal():
+        with SessionLocal() as s:
+            result["added"] = digest.seal_through(s, data_dir, D3, now=NOW)
+
+    t = threading.Thread(target=scheduler_seal)
+    t.start()
+    try:
+        t.join(0.3)
+        assert t.is_alive() and not (tmp_path / digest.CHAIN_FILE).exists()  # blocked on the lock, nothing written
+        for rec in other:
+            digest._append(data_dir, rec)
+    finally:
+        release()
+    t.join(10)
+    assert not t.is_alive()
+    assert [r["day"] for r in result["added"]] == ["2026-10-15"]
+    assert [r["day"] for r in lines(tmp_path)] == ["2026-10-13", "2026-10-14", "2026-10-15"]
+    with SessionLocal() as s:
+        assert digest.verify_chain(s, data_dir)["ok"]
+    assert _lock_is_free(tmp_path)

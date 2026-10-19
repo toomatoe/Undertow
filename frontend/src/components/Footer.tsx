@@ -8,7 +8,7 @@ import { isAdminApiError } from "@/lib/api";
 /**
  * Site-wide footer (in layout.tsx). Also the safety net for admin-protected calls whose caller forgot a catch:
  * an unhandled 401/403/429 ApiError is shown here as a dismissible alert instead of failing silently.
- * Callers that catch their own errors (WatchlistPanel, ResearchRunPanel, /status) never reach this.
+ * Callers that catch their own errors (WatchlistPanel, ResearchRunPanel, Sidebar, TickerView, /status) never reach this.
  */
 export default function Footer() {
   const [notice, setNotice] = useState<string | null>(null);

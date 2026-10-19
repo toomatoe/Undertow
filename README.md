@@ -238,6 +238,7 @@ docker compose run --rm api python -m app.insiders.study              # Form 4 i
 docker compose run --rm api python -m app.journal.digest verify       # re-verify the track-record hash chain (also: seal, export YYYY-MM-DD)
 make reproduce                                                        # offline replay of the in-sample study vs docs/results
 make reproduce-oos                                                    # offline replay of the OOS study
+make reproduce-insiders                                               # offline replay of the Form 4 insider study
 ```
 
 Build a newsletter issue by hand (the scheduler does this automatically):

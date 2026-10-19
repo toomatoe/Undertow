@@ -103,11 +103,14 @@ export default function DsrCalculator({ prefill, reportDate }: { prefill: DsrPre
         </p>
       )}
       <p className="muted small">
-        Inputs used from the report: the annualized Sharpe, skew and kurtosis (rounded to 2 decimals) and the number of trials. The
-        report does not publish the number of daily returns or the trial Sharpes themselves, so <em>n</em> is estimated from the
-        period&apos;s first and last trading dates (weekdays × 252/261 − 1) and the sd of trial Sharpes is backed out of the report&apos;s luck
-        benchmark (luck Sharpe ÷ expected-maximum factor for that many trials). Formulas: Bailey &amp; López de Prado (2012, 2014), as
-        implemented in <code>backend/app/backtest/stats.py</code>.
+        Inputs used from the report: the annualized Sharpe, skew and kurtosis (rounded to 2 decimals) and the number of trials.{" "}
+        {active?.exactN
+          ? "The number of daily returns (n) is the exact count the report published."
+          : <>The report does not publish the number of daily returns, so <em>n</em> is estimated from the period&apos;s first and last trading dates (weekdays × 252/261 − 1).</>}{" "}
+        {active?.exactSdTrials
+          ? "The sd of trial Sharpes is the value the report published."
+          : "The report does not publish the sd of trial Sharpes, so it is backed out of the report's luck benchmark (luck Sharpe ÷ expected-maximum factor for that many trials)."}{" "}
+        Formulas: Bailey &amp; López de Prado (2012, 2014), as implemented in <code>backend/app/backtest/stats.py</code>.
       </p>
     </section>
   );

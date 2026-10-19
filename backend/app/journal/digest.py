@@ -33,7 +33,14 @@ import json
 import os
 import sys
 import threading
+import time
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
+
+try:  # Linux (the api container): advisory lock shared by every process on the host/volume
+    import fcntl
+except ImportError:  # e.g. Windows: O_CREAT|O_EXCL lock file instead
+    fcntl = None
 
 from sqlalchemy.orm import Session
 
@@ -48,7 +55,11 @@ RECORD_FIELDS = (
     "id", "article_id", "ticker", "cik", "form", "signals", "primary_signal", "direction", "severity",
     "size_bucket", "public_float", "filed_at", "created_at", "borrow_fee", "borrow_available", "borrow_snapshot",
 )
-_LOCK = threading.Lock()  # one writer per process (scheduler + API share it)
+_LOCK = threading.Lock()  # threads of one process (scheduler + API); _chain_lock adds the cross-process lock
+LOCK_SUFFIX = ".lock"  # fcntl.flock target next to the chain file; the file stays, the lock is released
+EXCL_LOCK_SUFFIX = ".lock.excl"  # fallback without fcntl: exists only while held
+STALE_LOCK_SECONDS = 300  # fallback: a lock file older than this is from a crashed writer and is removed
+LOCK_TIMEOUT_SECONDS = 120  # fallback: give up (ChainError) after waiting this long
 
 
 class ChainError(RuntimeError):
@@ -124,6 +135,56 @@ def _read(data_dir: str) -> tuple[list[dict], str | None]:
     return out, None
 
 
+@contextmanager
+def _chain_lock(data_dir: str):
+    """Exclusive writer lock across threads AND processes (scheduler's seal_cycle vs a CLI `seal`).
+
+    fcntl.flock on `{chain file}.lock` where available (released by the kernel even if the process dies);
+    otherwise an O_CREAT|O_EXCL `{chain file}.lock.excl` file, removed on release and treated as stale after
+    STALE_LOCK_SECONDS.
+    """
+    os.makedirs(data_dir, exist_ok=True)
+    with _LOCK:
+        if fcntl is not None:
+            fd = os.open(chain_path(data_dir) + LOCK_SUFFIX, os.O_RDWR | os.O_CREAT, 0o644)
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+            finally:
+                os.close(fd)
+            return
+        path = chain_path(data_dir) + EXCL_LOCK_SUFFIX
+        deadline = time.monotonic() + LOCK_TIMEOUT_SECONDS
+        while True:
+            try:
+                fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+                break
+            except FileExistsError:
+                try:
+                    if time.time() - os.path.getmtime(path) > STALE_LOCK_SECONDS:
+                        os.remove(path)  # left by a crashed writer
+                        continue
+                except FileNotFoundError:
+                    continue  # released between the two calls
+                if time.monotonic() > deadline:
+                    raise ChainError(f"{path}: another writer holds the chain lock; giving up")
+                time.sleep(0.05)
+        try:
+            try:
+                os.write(fd, str(os.getpid()).encode("ascii"))  # for a human looking at a stuck lock
+            finally:
+                os.close(fd)
+            yield
+        finally:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
+
 def _append(data_dir: str, rec: dict) -> None:
     os.makedirs(data_dir, exist_ok=True)
     with open(chain_path(data_dir), "a", encoding="utf-8", newline="\n") as f:
@@ -150,7 +211,9 @@ def seal_through(session: Session, data_dir: str, through_day: date, now: dateti
     now = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
     last_allowed = now.astimezone(timezone.utc).date() - timedelta(days=1)
     through_day = min(through_day, last_allowed)
-    with _LOCK:
+    with _chain_lock(data_dir):
+        # Read (and so decide which days are unsealed) only under the cross-process lock: a writer that held it
+        # before us may have sealed some or all of these days, and those are skipped instead of appended twice.
         records, err = _read(data_dir)
         if err:
             raise ChainError(f"{chain_path(data_dir)}: {err}; refusing to append")

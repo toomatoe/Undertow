@@ -15,7 +15,7 @@ Double-opt-in email list plus idempotent fan-out of the weekly "Small-Cap Filing
 | `digest.py` | `build_daily_digest(session, data_dir, day_et)` -> dict with `markdown`, `html`, `flagged_words`; `subject`, `is_empty` |
 | `routes.py` | `make_router(get_session, get_settings=None, make_transport=None)` and the default `router` |
 
-## Env vars (all optional; documented here until they move into `app.config.Settings`)
+## Env vars (all optional; also in `.env.example` and passed through by `docker-compose.prod.yml`)
 
 These fields live in `DeliverySettings` only because this module was built in parallel with the config owner.
 **They should move into `app.config.Settings` later** (same env names). `PUBLIC_BASE_URL` is read via `app.config.get_settings()`.
@@ -35,24 +35,6 @@ These fields live in `DeliverySettings` only because this module was built in pa
 | `EMAIL_LINK_BASE_URL` | `PUBLIC_BASE_URL` | public origin where the API's `/api/...` routes are reachable (confirm/unsubscribe links). Set it to the API origin unless the site proxies `/api` to the backend |
 | `EMAIL_TOKEN_SECRET` | auto | key for unsubscribe tokens. Unset: a random key is created once at `{DATA_DIR}/delivery/token_key` (volume, never in git). Changing/losing it invalidates every unsubscribe link already sent |
 
-Suggested `.env.example` block (for the docs item; this module does not own that file):
-
-```
-# Email delivery (off unless SMTP_HOST, EMAIL_FROM and EMAIL_POSTAL_ADDRESS are all set)
-# SMTP_HOST=smtp.yourprovider.com
-# SMTP_PORT=587
-# SMTP_USERNAME=
-# SMTP_PASSWORD=
-# SMTP_STARTTLS=true
-# EMAIL_FROM=QuantDesk <radar@yourdomain.com>
-# EMAIL_REPLY_TO=hello@yourdomain.com
-# EMAIL_POSTAL_ADDRESS=Street, City, State ZIP, Country
-# EMAIL_DAILY_DIGEST_HOUR_ET=7
-# EMAIL_MAX_PER_RUN=500
-# EMAIL_LINK_BASE_URL=https://api.yourdomain.com
-# EMAIL_TOKEN_SECRET=
-```
-
 ## Data kept (tables in `app/models.py`, created by `create_all`; no existing columns touched)
 
 - `subscribers`: `email` (unique, lowercased, stripped), `status` pending|active|unsubscribed, `wants_daily`,
@@ -65,7 +47,8 @@ Suggested `.env.example` block (for the docs item; this module does not own that
   (`CONFIRM_TTL_DAYS`, measured from the last sent confirm). The manage token (unsubscribe, daily toggle) is
   `base64url(HMAC-SHA256(key, "manage:" + email))`, so every message carries a working link while the DB stores only
   its SHA-256. Raw tokens appear only in emailed links.
-- `purge_pending(session, days=30)` deletes never-confirmed rows (call it daily from the scheduler if wanted).
+- `purge_pending(session, days=30)` deletes never-confirmed rows older than 30 days. `purge_cycle()` in `main.py` runs it
+  from the slow scheduler loop at most once per UTC day (even while delivery is off; test `test_purge_cycle_*` in `test_api.py`).
 
 ## Behaviour
 
@@ -117,7 +100,7 @@ No prices or float figures. It reuses `app.newsletter.service` helpers (`_filing
 - [x] Physical postal address in every message (`EMAIL_POSTAL_ADDRESS` is required for `enabled`).
 - [x] No purchased, scraped or imported lists: the only way onto the list is `POST /api/subscribe` + confirm. Never bulk-insert subscribers.
 - [x] Accurate From/Subject; impersonal content only, advice-word check before every newsletter/digest send.
-- [x] Privacy-minimal: no IPs, user agents or tracking pixels/click tracking; tokens stored hashed; pending rows purgeable.
+- [x] Privacy-minimal: no IPs, user agents or tracking pixels/click tracking; tokens stored hashed; unconfirmed sign-ups purged daily after 30 days.
 - [ ] Operator: verified sending domain (SPF/DKIM/DMARC), a published privacy policy, and keep the unsubscribe working
       for at least 30 days after a send (don't rotate `EMAIL_TOKEN_SECRET` casually).
 
@@ -176,13 +159,7 @@ def digest_cycle() -> None:                     # call from the slow loop in a t
 - If a run hits `EMAIL_MAX_PER_RUN`, calling it again later sends the deferred remainder (idempotent). For the
   newsletter, `ensure_latest` returns the id only once, so re-call `send_newsletter` with the latest issue id
   (e.g. `newsletter.list_issues(...)[0]["id"]`) on later cycles if the list ever exceeds the cap.
-- Optionally call `delivery.purge_pending(session)` once a day.
-
-## For the docs item
-
-- Add the `.env.example` block above.
-- New module for `docs/agent-graph.json`: `delivery`, paths `backend/app/delivery/`, AGENTS.md
-  `backend/app/delivery/AGENTS.md`, depends on `config_db` (models `Subscriber`, `EmailSend`), `newsletter`, `research`
-  (ET), tests `backend/tests/test_delivery.py`, shared resource: SMTP provider.
+- `purge_cycle()` calls `delivery.purge_pending(session)` once per UTC day (in a thread, failures logged and retried next cycle).
 
 Tests: `bash scripts/pytest.sh tests/test_delivery.py` (in-memory SQLite, `FakeTransport`, a minimal FastAPI app with only this router).
+Repo graph: module `delivery` in `docs/agent-graph.json` (shared resource: the SMTP provider).

@@ -7,8 +7,8 @@
 # Set for any real deployment (the defaults are local-only): PUBLIC_BASE_URL (public site origin, also the
 # frontend canonical URL), CORS_ORIGINS (JSON list, e.g. ["https://example.com"]), NEXT_PUBLIC_API_URL (API origin as
 # browsers see it; baked into the web image at build time).
-# Optional: SEC_USER_AGENT, ANTHROPIC_API_KEY, DISCORD_WEBHOOK_URL, RATE_LIMIT_PER_MINUTE, RATE_LIMIT_WRITE_PER_MINUTE,
-# TRUST_PROXY_HEADERS, SMTP_* / EMAIL_* (email delivery; see backend/app/delivery/AGENTS.md).
+# Optional: every other backend setting in .env.example is passed through below (app/config.py, app/security.py flags
+# RESEARCH_JOBS_ENABLED / MUTATIONS_ENABLED, SMTP_* / EMAIL_* email delivery: see backend/app/delivery/AGENTS.md).
 #
 # The API (8000) and web (3000) ports bind to 127.0.0.1: put a TLS reverse proxy (Caddy, nginx) in front and set
 # TRUST_PROXY_HEADERS=true so rate limits see real client IPs. The database is never published.
@@ -35,11 +35,27 @@ services:
       DATABASE_URL: postgresql+psycopg://quantdesk:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}@db:5432/quantdesk
       DATA_DIR: /app/data
       ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in the env file}
+      # Blank values are ignored by the backend (env_ignore_empty), so `:-` falls back to the code default.
+      RESEARCH_JOBS_ENABLED: ${RESEARCH_JOBS_ENABLED:-}
+      MUTATIONS_ENABLED: ${MUTATIONS_ENABLED:-}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:3000}
       CORS_ORIGINS: ${CORS_ORIGINS:-["http://localhost:3000"]}
       SEC_USER_AGENT: ${SEC_USER_AGENT:-}
+      RSS_FEEDS: ${RSS_FEEDS:-}
+      EDGAR_ENABLED: ${EDGAR_ENABLED:-true}
+      ALPACA_API_KEY_ID: ${ALPACA_API_KEY_ID:-}
+      ALPACA_API_SECRET_KEY: ${ALPACA_API_SECRET_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ENRICH_MODEL: ${ENRICH_MODEL:-}
+      ENRICH_MAX_PER_CYCLE: ${ENRICH_MAX_PER_CYCLE:-25}
+      FILING_TEXT_MAX_PER_CYCLE: ${FILING_TEXT_MAX_PER_CYCLE:-40}
+      INGEST_INTERVAL_SECONDS: ${INGEST_INTERVAL_SECONDS:-300}
+      INGEST_ON_STARTUP: ${INGEST_ON_STARTUP:-true}
+      EDGAR_POLL_SECONDS: ${EDGAR_POLL_SECONDS:-30}
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
+      ALERT_MIN_SEVERITY: ${ALERT_MIN_SEVERITY:-2}
+      ALERT_SIZES: ${ALERT_SIZES:-}
+      ALERT_MAX_AGE_MINUTES: ${ALERT_MAX_AGE_MINUTES:-15}
       RATE_LIMIT_PER_MINUTE: ${RATE_LIMIT_PER_MINUTE:-120}
       RATE_LIMIT_WRITE_PER_MINUTE: ${RATE_LIMIT_WRITE_PER_MINUTE:-10}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
@@ -47,9 +63,13 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USERNAME: ${SMTP_USERNAME:-}
       SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-true}
+      SMTP_TIMEOUT_SECONDS: ${SMTP_TIMEOUT_SECONDS:-20}
       EMAIL_FROM: ${EMAIL_FROM:-}
       EMAIL_REPLY_TO: ${EMAIL_REPLY_TO:-}
       EMAIL_POSTAL_ADDRESS: ${EMAIL_POSTAL_ADDRESS:-}
+      EMAIL_DAILY_DIGEST_HOUR_ET: ${EMAIL_DAILY_DIGEST_HOUR_ET:-7}
+      EMAIL_MAX_PER_RUN: ${EMAIL_MAX_PER_RUN:-500}
       EMAIL_LINK_BASE_URL: ${EMAIL_LINK_BASE_URL:-}
       EMAIL_TOKEN_SECRET: ${EMAIL_TOKEN_SECRET:-}
     ports:

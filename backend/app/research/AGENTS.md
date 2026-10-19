@@ -76,13 +76,18 @@ overlapping events overstate t, one sample period, clustered t-stats are reporti
   cache file read (registry in `snapshot.py`, active only while a study CLI runs), the frame file, `GIT_SHA`
   (or `unknown`) and the sha256 of the canonical results (sort_keys, without `generated_at`, timing fields
   and `inputs_manifest`). No cached content goes into it; cached Yahoo data is never committed or published.
-- `python -m app.research.snapshot write [--study PATH]` (hashes all cache files when there is no registry),
+- `python -m app.research.snapshot write [--study PATH]` (hashes all cache files when there is no registry:
+  `*.json`, `*.zip` and `*.xml` under `CACHE_SUBDIRS` = `submissions/`, `prices/`, `insider_datasets/`, `insider_xml/`,
+  plus `public_float_*`; keep the insider names in sync with `insiders.datasets.CACHE_SUBDIR` / `insiders.study.XML_CACHE_SUBDIR`),
   `verify MANIFEST` (exit 1 on a changed/missing input or results file), `compare A B [--ignore-added]`
   (prints `IDENTICAL` or `DIFF` with key paths; rows keyed `signal/bucket/horizon`; `-` reads stdin).
 - `make reproduce` / `scripts/reproduce.sh main` replays the in-sample study offline in the api image and
   compares it with the newest `docs/results/event_study_*.json` (`--ignore-added`, since published files
   predate the additive fields). `--ignore-added` skips keys only in B and items appended to the end of a
-  list in B whose leading items match A (the clustered-t caveat is the 7th caveat after the published 6). `make reproduce-oos` does the same for the OOS study.
+  list in B whose leading items match A (the clustered-t caveat is the 7th caveat after the published 6). `make reproduce-oos` / `make reproduce-insiders`
+  (`scripts/reproduce.sh oos|insiders`) replay the OOS / Form 4 insider study offline to `snapshots/replay_*.json` and
+  compare it with the online run's `event_study_oos.json` / `event_study_insider_purchases.json` when one exists
+  (`--ignore-added`, because an offline replay adds `offline_misses`).
 
 ## Out-of-sample study (`oos.py`)
 
@@ -139,5 +144,6 @@ docker compose restart api        # lifespan -> load_study() picks up the new fi
 `run()` matching a golden hash of the pre-refactor output (minus additive fields), `run_design` with a stub
 `event_source`, clustered t-stats, `sample_universe` exclusion/determinism, and offline mode with httpx
 patched to raise. `test_oos.py` asserts `OOS_DESIGN` matches the pre-registration and checks the verdicts;
-`test_snapshot.py` covers manifest round-trip/tamper detection and `compare_results`.
+`test_snapshot.py` covers manifest round-trip/tamper detection, `compare_results` and that `CACHE_SUBDIRS` includes
+(and the CLI `write` hashes) the insider caches.
 Use synthetic `PriceSeries`; never hit SEC or Yahoo in tests.

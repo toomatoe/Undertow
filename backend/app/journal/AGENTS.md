@@ -53,8 +53,12 @@ Routes and the scheduler hook are wired elsewhere (main.py is not owned by this 
 
 **Chain file** `{data_dir}/journal_chain.jsonl`: one compact JSON line per sealed day
 `{day, prev_hash, hash, count, sealed_at, sealed_late}`. Genesis `prev_hash` is 64 zeros. Append-only (opened in `a`
-mode, flush + fsync per line), never rewritten. One writer per process (module lock); don't run the CLI `seal` and the
-scheduler at the same moment.
+mode, flush + fsync per line), never rewritten. One writer at a time across threads and processes (`_chain_lock`):
+the module thread lock plus `fcntl.flock` on `journal_chain.jsonl.lock` next to the chain file (Linux/the container;
+the file stays, the lock is released, also by the kernel if the process dies). Without fcntl it falls back to an
+`O_CREAT|O_EXCL` `journal_chain.jsonl.lock.excl` file, removed on release, treated as stale after `STALE_LOCK_SECONDS`
+(300), `ChainError` after waiting `LOCK_TIMEOUT_SECONDS` (120). `seal_through` reads the chain only under that lock,
+so a CLI `seal` racing the scheduler's `seal_cycle` skips days the other writer already sealed instead of appending them twice.
 
 **Canonical form.** A day = the entries whose `created_at` falls on that UTC day, sorted by `id`, each reduced to the
 record-time fields `RECORD_FIELDS`: `id, article_id, ticker, cik, form, signals, primary_signal, direction, severity,
@@ -83,7 +87,9 @@ assert h == d["hash"]   # and d["prev_hash"] must equal the previous day's hash;
 ```
 
 Tests: `tests/test_journal_digest.py` (links, idempotence, today never sealed, late flag, record-field tampering,
-mark updates, removed lines, torn file, independent hashlib recompute).
+mark updates, removed lines, torn file, independent hashlib recompute, writer lock: sequential seals idempotent and
+lock released, the no-fcntl fallback incl. stale/held lock files, and a seal blocked on another writer's lock re-checking
+which days are sealed).
 
 ## API
 

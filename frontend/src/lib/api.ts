@@ -379,7 +379,11 @@ export interface BacktestReport {
     chosen: Record<string, unknown>;
     test: Record<string, number>;
   };
-  overfitting: Record<string, number>;
+  /**
+   * trials, dsr_<period>, luck_sharpe_<period>; newer reports also n_returns_<period> (daily returns the DSR used)
+   * and trial_sharpe_std (sd of the trial Sharpes, annual). Older reports lack the last two.
+   */
+  overfitting: Record<string, number> & { trials?: number; trial_sharpe_std?: number };
   borrow_check: Record<string, unknown>;
   readiness: ReadinessGate[];
   verdict: { level: "not_ready" | "paper_next"; headline: string; detail: string };

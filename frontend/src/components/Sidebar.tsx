@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
-import { api, type Status, type TrendingTicker } from "@/lib/api";
+import { api, isAdminApiError, type Status, type TrendingTicker } from "@/lib/api";
 import { formatScore, sentimentClass, timeAgo } from "@/lib/format";
 
 export default function Sidebar({ refreshKey }: { refreshKey: number }) {
@@ -11,6 +11,7 @@ export default function Sidebar({ refreshKey }: { refreshKey: number }) {
   const [status, setStatus] = useState<Status | null>(null);
   const [hours, setHours] = useState(24);
   const [ingesting, setIngesting] = useState(false);
+  const [ingestError, setIngestError] = useState<{ text: string; toStatus: boolean } | null>(null);
 
   const load = useCallback(() => {
     api.trending(hours).then(setTrending).catch(() => setTrending([]));
@@ -21,8 +22,13 @@ export default function Sidebar({ refreshKey }: { refreshKey: number }) {
 
   const ingestNow = async () => {
     setIngesting(true);
+    setIngestError(null);
     try {
       await api.ingest();
+    } catch (e) {
+      // 401 (token), 403 (disabled), 429 (rate limit) carry a clear message from api.ts; strip the status prefix as Footer does.
+      if (isAdminApiError(e)) setIngestError({ text: e.message.replace(/^\d{3}\s+/, ""), toStatus: e.status !== 429 });
+      else setIngestError({ text: `Fetch failed. ${String(e instanceof Error ? e.message : e)}`, toStatus: false });
     } finally {
       setIngesting(false);
       load();
@@ -65,6 +71,11 @@ export default function Sidebar({ refreshKey }: { refreshKey: number }) {
             {ingesting ? "Fetching…" : "Fetch now"}
           </button>
         </div>
+        {ingestError && (
+          <p className="error small" role="alert">
+            {ingestError.text} {ingestError.toStatus && <Link href="/status">Open Status</Link>}
+          </p>
+        )}
         {!status ? (
           <p className="error">API unreachable. Is the backend running on :8000?</p>
         ) : (

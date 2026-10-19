@@ -34,7 +34,7 @@ Read this file, then only the AGENTS.md of the folder you are working in.
 | `frontend/` | Next.js 15 App Router UI (server-rendered SEO pages for tickers, newsletter issues and Learn lessons, sitemap, robots, `/status`); `Dockerfile` = standalone production image | [frontend/AGENTS.md](frontend/AGENTS.md) |
 | `docs/` | Feasibility research, product research, published event-study results, batch plans, agent graph + process | [docs/AGENTS.md](docs/AGENTS.md) |
 | `scripts/pytest.sh` | Backend tests against mounted source in the `quantdesk-api-test` image (no image rebuild, parallel-safe) | [docs/AGENT_PROCESS.md](docs/AGENT_PROCESS.md) |
-| `scripts/reproduce.sh`, `Makefile` | Offline replay of the in-sample / OOS study and canonical compare with `docs/results/` (`make reproduce`, `make reproduce-oos`); also `make test`, `make test-file F=...`, `make snapshot` | [research/AGENTS.md](backend/app/research/AGENTS.md) |
+| `scripts/reproduce.sh`, `Makefile` | Offline replay of the in-sample / OOS / insider study and canonical compare (`make reproduce`, `make reproduce-oos`, `make reproduce-insiders`); also `make test`, `make test-file F=...`, `make snapshot` | [research/AGENTS.md](backend/app/research/AGENTS.md) |
 | `.github/workflows/ci.yml` | CI on every push/PR: backend pytest, frontend tsc + lint + build, both Docker images built (never pushed). Needs no secrets | |
 | `.claude/workflows/feature-graph.js` | Multi-agent Plan/Build/Review/Verify/Critic workflow | [docs/AGENT_PROCESS.md](docs/AGENT_PROCESS.md) |
 | `docker-compose.yml` | Dev: `db` (pgvector/pgvector:pg17) + `api` (built from `backend/`), both bound to 127.0.0.1 | |

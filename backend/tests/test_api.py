@@ -2,6 +2,7 @@ import json
 from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app import main
@@ -259,6 +260,56 @@ def test_seal_cycle_runs_once_per_day(monkeypatch):
 
 
 # --- Delivery wiring ----------------------------------------------------------------------------
+
+
+def test_purge_cycle_runs_once_per_utc_day_and_retries_after_failure(monkeypatch):
+    monkeypatch.setattr(state, "last_purge_day", None)
+    calls = []
+
+    def fake_purge(session, now=None):
+        calls.append(now)
+        return 2
+
+    monkeypatch.setattr(main.delivery, "purge_pending", fake_purge)
+    now = datetime(2026, 10, 19, 0, 10, tzinfo=timezone.utc)
+    main.purge_cycle(now)
+    main.purge_cycle(now + timedelta(hours=20))  # same UTC day: skipped
+    assert calls == [now] and state.last_purge_day == date(2026, 10, 19)
+
+    def boom(session, now=None):
+        raise RuntimeError("db down")
+
+    monkeypatch.setattr(main.delivery, "purge_pending", boom)
+    with pytest.raises(RuntimeError):  # the scheduler catches and logs this; the day stays unpurged
+        main.purge_cycle(now + timedelta(days=1))
+    assert state.last_purge_day == date(2026, 10, 19)
+    monkeypatch.setattr(main.delivery, "purge_pending", fake_purge)
+    main.purge_cycle(now + timedelta(days=1, hours=1))  # retried on the next cycle
+    assert len(calls) == 2 and state.last_purge_day == date(2026, 10, 20)
+
+
+def test_purge_cycle_deletes_only_stale_pending_rows(monkeypatch):
+    from app.models import Subscriber
+
+    monkeypatch.setattr(state, "last_purge_day", None)
+    now = datetime(2026, 10, 19, 12, 0, tzinfo=timezone.utc)
+    with SessionLocal() as s:
+        s.add_all([
+            Subscriber(email="old-pending@example.com", status="pending", created_at=now - timedelta(days=31)),
+            Subscriber(email="new-pending@example.com", status="pending", created_at=now - timedelta(days=2)),
+            Subscriber(email="old-active@example.com", status="active", created_at=now - timedelta(days=90)),
+        ])
+        s.commit()
+    try:
+        main.purge_cycle(now)
+        with SessionLocal() as s:
+            left = {e for (e,) in s.query(Subscriber.email).filter(Subscriber.email.like("%@example.com"))}
+        assert {"new-pending@example.com", "old-active@example.com"} <= left
+        assert "old-pending@example.com" not in left
+    finally:
+        with SessionLocal() as s:
+            s.query(Subscriber).filter(Subscriber.email.in_(["new-pending@example.com", "old-active@example.com"])).delete()
+            s.commit()
 
 
 def test_delivery_router_mounted_and_disabled(monkeypatch):

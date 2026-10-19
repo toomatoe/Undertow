@@ -93,6 +93,7 @@ class AppState:
     last_halts_poll: datetime | None = None
     sealed_through: date | None = None
     last_digest_day: date | None = None
+    last_purge_day: date | None = None  # UTC day of the last pending-subscriber purge
     verify_cache: tuple[float, dict] | None = None  # (monotonic time, verify_chain result)
     study_cache: dict[str, tuple[float, dict]] = {}  # study name -> (file mtime, parsed JSON)
 
@@ -173,6 +174,10 @@ async def scheduler() -> None:
             await asyncio.to_thread(digest_cycle)
         except Exception:
             log.exception("Daily digest failed")
+        try:  # delete never-confirmed sign-ups older than 30 days, once per UTC day
+            await asyncio.to_thread(purge_cycle)
+        except Exception:
+            log.exception("Pending subscriber purge failed")
         state.last_slow_cycle = utcnow()
         try:  # uptime history for /api/health/history
             await asyncio.to_thread(uptime_cycle)
@@ -250,6 +255,19 @@ def digest_cycle(now: datetime | None = None) -> None:
             state.last_digest_day = day
         except Exception:
             log.exception("Daily digest email failed")
+
+
+def purge_cycle(now: datetime | None = None) -> None:
+    """Delete never-confirmed sign-ups (delivery.purge_pending) at most once per UTC day. Runs even when delivery is
+    off now, so pending rows from an earlier configuration still expire. A failed purge is retried next cycle."""
+    now = now or utcnow()
+    today = now.astimezone(timezone.utc).date()
+    if state.last_purge_day == today:
+        return
+    with SessionLocal() as session:
+        if n := delivery.purge_pending(session, now=now):
+            log.info("Delivery: purged %d unconfirmed sign-up(s)", n)
+    state.last_purge_day = today
 
 
 def seal_cycle(now: datetime | None = None) -> None:
