@@ -351,3 +351,15 @@
     flex: 1 1 140px;
   }
 }
+
+/* Phone widths: long repo paths wrap, and scroll wrappers never widen their grid/flex parent */
+.code,
+.tableScroll {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.code,
+.code * {
+  overflow-wrap: anywhere;
+}

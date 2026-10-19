@@ -1875,3 +1875,8 @@ table.data td.tr-early {
     --learn-hypo: #a35f00;
   }
 }
+
+/* Long inline paths and identifiers wrap instead of widening the page on phones */
+main code {
+  overflow-wrap: anywhere;
+}

@@ -37,6 +37,12 @@ from app.research import snapshot
 log = logging.getLogger("insiders.datasets")
 
 DATASET_URL = "https://www.sec.gov/files/structureddata/data/insider-transactions-data-sets/{year}q{q}_form345.zip"
+# SEC moved newer quarters (2026q2 onward, as of Oct 2026) to a different folder; older ones stay put.
+# Same files, same format: only the location differs, so trying both doesn't change the study design.
+DATASET_URLS = (
+    DATASET_URL,
+    "https://www.sec.gov/files/datastandardsinnovation/data/insider-transactions-data-sets/{year}q{q}_form345.zip",
+)
 CACHE_SUBDIR = "insider_datasets"
 MIN_INTERVAL = 0.125  # seconds between SEC requests: at most 8 per second
 README_URL = "https://www.sec.gov/files/structureddata/data/insider-transactions-data-sets/insider_transactions_readme.pdf"
@@ -130,27 +136,28 @@ def download_quarter(year: int, q: int, data_dir: str, user_agent: str, *, offli
     if offline:
         snapshot.record_miss(path)
         return None
-    url = DATASET_URL.format(year=year, q=q)
-    for attempt in range(3):
-        throttle()
-        try:
-            resp = httpx.get(url, headers={"User-Agent": user_agent}, timeout=120, follow_redirects=True)
-            if resp.status_code == 404:
-                log.warning("No data set for %sq%s (404)", year, q)
-                return None
-            resp.raise_for_status()
-            if not resp.content.startswith(b"PK"):
-                raise httpx.HTTPError(f"{url} did not return a zip")
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            tmp = path + ".part"
-            with open(tmp, "wb") as f:
-                f.write(resp.content)
-            os.replace(tmp, path)
-            snapshot.record_read(path)
-            return path
-        except httpx.HTTPError as exc:
-            log.warning("Retry %s for %s: %s", attempt, url, exc)
-            time.sleep(5 * (attempt + 1))
+    for template in DATASET_URLS:
+        url = template.format(year=year, q=q)
+        for attempt in range(3):
+            throttle()
+            try:
+                resp = httpx.get(url, headers={"User-Agent": user_agent}, timeout=120, follow_redirects=True)
+                if resp.status_code == 404:
+                    break  # not at this location: try the next one
+                resp.raise_for_status()
+                if not resp.content.startswith(b"PK"):
+                    raise httpx.HTTPError(f"{url} did not return a zip")
+                os.makedirs(os.path.dirname(path), exist_ok=True)
+                tmp = path + ".part"
+                with open(tmp, "wb") as f:
+                    f.write(resp.content)
+                os.replace(tmp, path)
+                snapshot.record_read(path)
+                return path
+            except httpx.HTTPError as exc:
+                log.warning("Retry %s for %s: %s", attempt, url, exc)
+                time.sleep(5 * (attempt + 1))
+    log.warning("No data set for %sq%s at any known SEC location", year, q)
     return None
 
 

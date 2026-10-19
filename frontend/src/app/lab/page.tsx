@@ -476,7 +476,8 @@ export default function LabPage() {
 
       <section className="panel">
         <h2>Coverage and survivorship</h2>
-        <table className="data">
+        <div className="table-scroll">
+          <table className="data">
           <thead>
             <tr>
               <th>Size</th>
@@ -507,7 +508,8 @@ export default function LabPage() {
               );
             })}
           </tbody>
-        </table>
+          </table>
+        </div>
         <p className="muted small">
           &quot;No ticker now&quot; is mostly companies that delisted, went bankrupt or were acquired since the size frame was taken. They are
           missing from the returns, so results lean optimistic, especially for small companies (<Link href="/learn/survivorship-bias">why</Link>).
