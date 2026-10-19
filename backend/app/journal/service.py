@@ -18,7 +18,7 @@ import os
 import statistics
 from datetime import date, datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.backtest import borrow
@@ -37,6 +37,31 @@ DATA_ENDED_AFTER_DAYS = 10  # calendar days without a print before an open entry
 
 def _aware(dt: datetime) -> datetime:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def recorded_day(entry: JournalEntry) -> date:
+    """UTC calendar day the entry was recorded (`created_at`). Naive timestamps (SQLite) are UTC."""
+    return _aware(entry.created_at).astimezone(timezone.utc).date()
+
+
+def entries_recorded_on(session: Session, day: date) -> list[JournalEntry]:
+    """Entries whose `created_at` falls on UTC `day`, sorted by id (used by the track-record seal, journal/digest.py).
+
+    The SQL range is widened by a day on each side and the exact UTC day is checked in Python, so the
+    result is the same whether the backend stores aware (Postgres) or naive (SQLite) timestamps.
+    """
+    lo = datetime.combine(day - timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+    hi = datetime.combine(day + timedelta(days=2), datetime.min.time(), tzinfo=timezone.utc)
+    rows = session.scalars(
+        select(JournalEntry).where(JournalEntry.created_at >= lo, JournalEntry.created_at < hi).order_by(JournalEntry.id)
+    ).all()
+    return [e for e in rows if recorded_day(e) == day]
+
+
+def first_recorded_day(session: Session) -> date | None:
+    """UTC day of the earliest journal entry, or None when the journal is empty."""
+    first = session.scalar(select(func.min(JournalEntry.created_at)))
+    return _aware(first).astimezone(timezone.utc).date() if first else None
 
 
 def record_new(session: Session, data_dir: str) -> int:

@@ -22,6 +22,11 @@ Substack/Beehiiv. No email provider integration yet.
 3. **Dilution watch:** 2+ offering-type signals (`OFFERING_SIGNALS`) this week, or a priced offering with runway < 6 months from `fundamentals.company_profile` (max 15 lookups, priced offerings first; errors are logged and skipped). Cash figures older than 400 days are shown as stale and never qualify.
 4. **Serious halts:** `trading_halts` with a `SERIOUS` reason code; mid/large caps excluded, unknown size kept.
 5. **Track record:** `journal.summary` rows with `n_20 >= 5` (small caps), else "still collecting: N recorded, first 20-day results due ~DATE" (earliest open entry + 21 weekdays). Reflects the journal at build time.
+   `track_record.seal` = `journal.digest.chain_head(data_dir)` (`{head_hash, head_day, days}`) or `null` when no chain
+   exists. Both renderers print one line via `seal_line(issue)`: "Track-record seal through DAY: <first 16 hex>… (N days;
+   verify at PUBLIC_BASE_URL/track-record)". This makes each dated, immutable issue an outside witness of the chain head
+   (format and hand verification: journal/AGENTS.md). Issues archived before this field have no `seal` key and render
+   without the line; they are never regenerated to add it. All other `track_record` keys are unchanged (the frontend reads them).
 6. **Research note:** `key_finding.text` from `{data_dir}/backtests/report_latest.json`, trimmed to ~520 chars, sentences with banned words dropped. Omitted if the file is missing.
 7. **Coverage note** when live filing collection began after the week started (an empty week is then not a quiet week), links (`PUBLIC_BASE_URL`) and the disclaimer, including the 48-hour no-trading policy from `/legal/disclaimer`.
 

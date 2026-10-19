@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import JournalTable from "@/components/track/JournalTable";
 import LiveVsExpected from "@/components/track/LiveVsExpected";
 import OfferingSpotlight from "@/components/track/OfferingSpotlight";
+import SealPanel from "@/components/track/SealPanel";
 import { STATUS_INFO } from "@/components/track/parts";
 import { api, type JournalPage, type JournalStatus, type JournalSummary } from "@/lib/api";
 
@@ -88,6 +89,8 @@ export default function TrackRecordPage() {
           </p>
         </section>
       )}
+
+      <SealPanel />
 
       <LiveVsExpected summary={summary} error={summaryError} />
       <OfferingSpotlight entries={entries} summary={summary} />

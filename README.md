@@ -8,7 +8,7 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - SEC filings are free and public domain, so a product built on them avoids most news-licensing costs.
 - Small-cap traders are badly served: Bloomberg is priced for institutions, and retail apps focus on large caps.
 
-**Status:** News, Signals, Track record, Newsletter, Edge Lab and Backtest tabs work, with real-time Discord alerts, server-rendered ticker pages (dilution/runway, SEO metadata, sitemap) and an automatic weekly newsletter. Research (AI assistant) and Trading (paper trading) are planned.
+**Status:** News, Signals, Track record, Newsletter, Edge Lab, Backtest and Learn tabs work, with real-time Discord alerts, server-rendered ticker pages (dilution/runway, SEO metadata, sitemap), an automatic weekly newsletter with optional email delivery, a hash-sealed track record, a `/status` page, admin-protected writes with rate limits, and a production Docker setup with CI. The out-of-sample and Form 4 insider studies are built and pre-registered; their results are not published yet. Research (AI assistant) and Trading (paper trading) are planned.
 
 > Research and education only. Nothing here is financial advice.
 
@@ -26,6 +26,12 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - Event study (`backend/app/research/eventstudy.py`): after each signal type, did the stock beat or lag the index over 5 and 20 trading days, by size bucket, after realistic trading costs?
 - The design is fixed up front: size measured before the window, timing by EDGAR acceptance time, market-adjusted returns, winsorized outliers, a Bonferroni correction across every test, and trade direction chosen before seeing results.
 - Reports survivorship coverage, meaning how many sampled companies have since delisted.
+- Firm-clustered t-stats (clusters = companies) are reported next to the plain ones, because events from the same company are not independent. In the main study they are for reporting only.
+- Three studies, picked with a selector on the page (`GET /api/research/event-study?study=main|oos|insider_purchases`):
+  - **In-sample (main):** the live evidence behind every signal card.
+  - **Out-of-sample 2020-23** (`backend/app/research/oos.py`): pre-registered on 2026-10-19 in [PREREGISTRATION_OOS.md](backend/app/research/PREREGISTRATION_OOS.md) before any run. Fresh companies (every in-sample candidate excluded), three confirmatory hypotheses (nano offerings, micro+nano unregistered sales, nano material agreements; 20 days, short) tested with clustered t against a Bonferroni cutoff of 2.394. Each gets a verdict: replicated, not replicated or underpowered.
+  - **Insider purchases (Form 4)** (`backend/app/insiders/`): pre-registered in [PREREGISTRATION.md](backend/app/insiders/PREREGISTRATION.md). Open-market purchases of at least $10,000 by directors and officers of nano, micro and small caps (large caps as a control), 2023Q4-2026Q2, from the SEC insider data sets, with "opportunistic" vs "routine" insiders (Cohen, Malloy & Pomorski 2012). A separate taxonomy that never changes the main study's test count.
+- Runs are reproducible: `--offline` replays a study from cached inputs only, every CLI run writes a hash-only input manifest, and `make reproduce` replays the in-sample study and compares it with the published `docs/results/` file (prints `IDENTICAL` or `DIFF`).
 
 ### First results (Oct 2026 run)
 
@@ -44,7 +50,7 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - The 302 events come from only 74 serial-diluting companies, so they are not independent.
 - About a quarter of sampled nano caps have since delisted and are missing from the data.
 - Nano caps right after an offering are often hard or impossible to borrow.
-- It is one sample from one period. The next step is an out-of-sample rerun (2020–2023, fresh companies) before anything goes near paper trading.
+- It is one sample from one period. The out-of-sample rerun (2020–2023, fresh companies) is now pre-registered and built; its verdicts will be reported here once the run is published, before anything goes near paper trading.
 
 **Real-time alerts** (`backend/app/alerts/`)
 - EDGAR is polled every 30 seconds on its own loop.
@@ -58,6 +64,7 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - Results sit next to what the Edge Lab expected.
 - The IBKR borrow fee at record time is captured, which is the data a fee-aware strategy needs.
 - It started on Oct 13, 2026, with 141 signals recorded on day one.
+- **Tamper-evident seal** (`backend/app/journal/digest.py`): every completed UTC day of journal entries is hashed (SHA-256) into an append-only chain, sealed a few minutes after midnight. The chain head is printed in each weekly newsletter issue, so the dated archive witnesses it. The page shows the head and a full re-verification, and anyone can recompute a day's hash from `GET /api/journal/chain/{day}` with the Python standard library. The launch week (Oct 13-19) was sealed after the fact and is flagged `sealed_late`.
 
 **Dilution, runway, short interest and halts on ticker pages** (`backend/app/fundamentals/`, `backend/app/sources/halts.py`)
 - Cash (plus same-day short-term investments), trailing-12-month operating burn and months of runway, from SEC XBRL.
@@ -78,9 +85,27 @@ Why this niche (details in [docs/FEASIBILITY.md](docs/FEASIBILITY.md)):
 - Built automatically after each slow ingest cycle once a week is complete (Monday-Sunday, US Eastern), from our own data only.
 - Sections: headline counts, top signal filings with the matching historical Edge Lab stat, dilution watch, serious halts, track-record progress, a research note from the latest backtest report, and the disclaimer.
 - Archived as JSON, Markdown and email-safe HTML under `{DATA_DIR}/newsletters/`. An issue is never overwritten unless rebuilt with `--force`.
-- `/newsletter` shows the archive and the latest issue; `/newsletter/{id}` (e.g. `2026-W41`) is a server-rendered issue page. Copy the Markdown or download the HTML to paste into Substack/Beehiiv; "Preview this week so far" builds the current week without saving it. No email sending yet.
+- `/newsletter` shows the archive and the latest issue; `/newsletter/{id}` (e.g. `2026-W41`) is a server-rendered issue page. Copy the Markdown or download the HTML to paste into Substack/Beehiiv; "Preview this week so far" builds the current week without saving it.
 - Impersonal facts and historical statistics only; every Edge Lab, backtest and journal number is labelled historical or hypothetical, and the rendered text is checked for advice words.
 - Links in the issue use `PUBLIC_BASE_URL` (root `.env`).
+- Each issue also prints the track-record seal (chain head) at build time.
+
+**Email delivery** (`backend/app/delivery/`, see its [AGENTS.md](backend/app/delivery/AGENTS.md))
+- Off until `SMTP_HOST`, `EMAIL_FROM` and `EMAIL_POSTAL_ADDRESS` are set in `.env`. Until then the subscribe form says email isn't set up and nothing is stored.
+- Double opt-in signup on `/newsletter`: a confirmation link (valid 7 days), always the same generic reply (no address enumeration), at most one confirmation email per address per day.
+- Each new weekly issue is emailed to confirmed subscribers. Subscribers who opt in also get a daily digest of the previous US Eastern day's small-cap signal filings and halts, sent after `EMAIL_DAILY_DIGEST_HOUR_ET` (default 7).
+- Sends are idempotent per subscriber and issue/day. Every email has a one-click unsubscribe (RFC 8058 header and footer link), the postal address and the disclaimer. Issues or digests that trip the advice-word check are not sent.
+- Stores no IP addresses, user agents, opens or clicks; tokens are stored hashed.
+
+**Learn tab** (`frontend/src/app/learn/`)
+- Six free, server-rendered lessons: event studies, baselines, multiple testing, clustered errors, survivorship bias, and the Sharpe ratio / Deflated Sharpe with backtest pitfalls. Plus an 8-week curriculum at `/learn/curriculum` with code exercises.
+- Each lesson pulls QuantDesk's own study and backtest numbers from the API (labelled historical, with their date), points at the code that produces them, and cites the papers.
+- Interactive simulators (pure-noise signals vs Bonferroni, clustered vs plain t, survivorship, a DSR calculator) run in the browser with a fixed seed and are labelled hypothetical.
+
+**Status page and platform** (`/status`, `backend/app/health.py`, `backend/app/security.py`)
+- `/status` shows each component (database, ingest, EDGAR and halts pollers, journal, newsletter, alerts, email, research runs), 7-day uptime, recent incidents and the seal verification.
+- Every change to server state (research runs, manual ingest, test alerts, watchlist) goes through one admin policy: with `ADMIN_TOKEN` set it needs that Bearer token (enter it on `/status`); otherwise it is open only on a localhost `PUBLIC_BASE_URL`.
+- Per-client rate limits: 120 requests/min and 10 writes/min by default, 429 with `Retry-After`.
 
 **Backtest tab** (`backend/app/backtest/`, see its [AGENTS.md](backend/app/backtest/AGENTS.md))
 - Launch or rerun the fixed strategy from the page without a terminal command. Cached data is reused automatically; first runs take longer.
@@ -148,9 +173,13 @@ sources (EDGAR, RSS, Alpaca) → dedupe → ticker tagging → Postgres → LLM 
 |---|---|
 | `backend/app/sources/` | One adapter per source, each returning `RawArticle` |
 | `backend/app/pipeline/` | `dedupe`, `tickers`, `enrich`, `ingest` (one cycle), `events` (SSE pub/sub) |
-| `backend/app/research/`, `backtest/`, `journal/`, `alerts/`, `fundamentals/`, `newsletter/` | Event study, backtester, track record, alerts, dilution/runway, weekly newsletter |
-| `backend/app/main.py` | API + background scheduler (ingest, borrow snapshot, journal, newsletter) and fast EDGAR/halts poller |
-| `frontend/src/` | Next.js App Router UI; ticker and newsletter pages are server-rendered for SEO |
+| `backend/app/research/`, `backtest/`, `journal/`, `alerts/`, `fundamentals/`, `newsletter/` | Event study (+ OOS study, replay manifests), backtester, track record (+ hash chain), alerts, dilution/runway, weekly newsletter |
+| `backend/app/insiders/` | Form 4 insider-purchase study |
+| `backend/app/delivery/` | Email list, newsletter and daily-digest delivery |
+| `backend/app/security.py`, `health.py` | Admin policy + rate limits; health checks + uptime history |
+| `backend/app/main.py` | API + background scheduler (ingest, borrow snapshot, journal, seal, newsletter + email, daily digest, uptime) and fast EDGAR/halts poller |
+| `frontend/src/` | Next.js App Router UI; ticker, newsletter and Learn pages are server-rendered for SEO |
+| `docker-compose.prod.yml`, `frontend/Dockerfile`, `.github/workflows/ci.yml` | Production stack (db + api + web) and CI |
 | `docs/FEASIBILITY.md` | Research: strategies, languages, system design, data APIs |
 
 ## Run it
@@ -170,11 +199,20 @@ you can navigate away and return. Results refresh automatically, including filin
 after an Edge Lab run. Only one research job runs at a time. Rerunning uses cached inputs and the
 same fixed research design; it does not extend the historical date range or tune the strategy.
 
-**Research launch security.** Run buttons start backend subprocesses, so they are gated:
-- By default, runs are allowed only while `PUBLIC_BASE_URL` is a localhost origin. Compose also binds the API and Postgres to `127.0.0.1`, so nothing on your network can reach them.
-- On a public server, set `RESEARCH_ADMIN_TOKEN` in the root `.env`. The UI then asks for it and sends it as a Bearer header.
-- Or set `RESEARCH_JOBS_ENABLED=false` to turn runs off.
+**Write security.** Run buttons start backend subprocesses, and ingest, test alerts and the watchlist change server state, so all of them are gated by one policy (`backend/app/security.py`):
+- By default, they are allowed only while `PUBLIC_BASE_URL` is a localhost origin. Compose also binds the API and Postgres to `127.0.0.1`, so nothing on your network can reach them.
+- On a public server, set `ADMIN_TOKEN` in the root `.env` (`RESEARCH_ADMIN_TOKEN` still works). Enter it on `/status` or in a Run panel; the browser keeps it for that tab only and sends it as a Bearer header.
+- Or, without a token, set `RESEARCH_JOBS_ENABLED=false` (research runs) or `MUTATIONS_ENABLED=false` (everything else) to turn them off.
+- Rate limits apply per client (`RATE_LIMIT_PER_MINUTE`, `RATE_LIMIT_WRITE_PER_MINUTE`); behind your own reverse proxy set `TRUST_PROXY_HEADERS=true`.
 - **Don't deploy publicly with `PUBLIC_BASE_URL` left at its localhost default.**
+
+**Production.** `docker-compose.prod.yml` runs Postgres, the API and the Next.js frontend (`frontend/Dockerfile`, standalone build). Keep its env file outside git: it must set `POSTGRES_PASSWORD` and `ADMIN_TOKEN`, and for a real deployment `PUBLIC_BASE_URL`, `CORS_ORIGINS` and `NEXT_PUBLIC_API_URL`:
+
+```bash
+docker compose -f docker-compose.prod.yml --env-file /etc/quantdesk/prod.env up -d --build
+```
+
+Ports bind to `127.0.0.1`; put a TLS reverse proxy in front. CI (`.github/workflows/ci.yml`) runs the backend tests, the frontend type check, lint and build, and builds both images on every push and pull request.
 
 The following terminal commands remain available for maintenance. Do not run them concurrently
 with a run launched from the UI. For a CLI event study (about 15 minutes initially), restart the
@@ -192,6 +230,16 @@ docker compose run --rm api python -m app.backtest.warm
 docker compose run --rm api python -m app.backtest.report
 ```
 
+The out-of-sample and insider studies (also launchable from the Edge Lab), the journal seal and offline replays:
+
+```bash
+docker compose run --rm api python -m app.research.oos                 # pre-registered OOS study -> event_study_oos.json
+docker compose run --rm api python -m app.insiders.study              # Form 4 insider study (~1-2 h first run, cached after)
+docker compose run --rm api python -m app.journal.digest verify       # re-verify the track-record hash chain (also: seal, export YYYY-MM-DD)
+make reproduce                                                        # offline replay of the in-sample study vs docs/results
+make reproduce-oos                                                    # offline replay of the OOS study
+```
+
 Build a newsletter issue by hand (the scheduler does this automatically):
 
 ```bash
@@ -205,6 +253,7 @@ Backend tests:
 ```bash
 docker compose run --rm api pytest -q
 bash scripts/pytest.sh tests/test_api.py   # against the current source, no image rebuild
+make test                                  # the same script, whole suite
 ```
 
 No Docker? The backend falls back to SQLite: `cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload`.
@@ -218,26 +267,35 @@ No Docker? The backend falls back to SQLite: `cd backend && pip install -r requi
 | `GET /api/tickers/trending?hours=24` | Most-mentioned tickers with average sentiment |
 | `GET /api/tickers/{symbol}?days=30` | Ticker detail + daily coverage |
 | `GET /api/tickers/sitemap?days=180` | Tickers with a known company (SEC company list) and an article or filing in the window, most recent first (`symbol`, `last_activity`, `items`, `size_bucket`) |
-| `GET /api/status` | Counts, enabled features, last run per source |
-| `POST /api/ingest` | Run a cycle now |
+| `GET /api/status` | Counts, enabled features, last run per source, `admin` (`protected`, `mutations_enabled`) |
+| `POST /api/ingest` | Run a cycle now (admin-protected) |
 | `GET /api/stream` | SSE: `article`, `article_updated` |
 | `GET /api/signals?size=nano,micro,small&min_severity=&signal=&watchlist=` | Filing signals with historical evidence |
 | `GET /api/signals/catalog` | Signal taxonomy |
-| `GET /api/research/event-study` | Latest event-study results |
+| `GET /api/research/event-study?study=main\|oos\|insider_purchases` | Event-study results (default `main`, the live evidence; 404 when that study has not been run) |
+| `GET /api/research/studies` | Each study: available, `generated_at`, `n_tests`, design name |
 | `GET /api/research/jobs` | Active + latest research job per kind, plus `enabled` / `requires_token` |
-| `POST /api/research/jobs/{kind}` | Start `backtest` or `event_study` (202; 409 busy; 401/403 per launch gate) |
-| `GET/PUT/DELETE /api/watchlist[/{symbol}]` | Watchlist |
+| `POST /api/research/jobs/{kind}` | Start `backtest`, `event_study`, `event_study_oos` or `insider_study` (202; 409 busy; 401/403 admin policy; 422 unknown kind) |
+| `GET/PUT/DELETE /api/watchlist[/{symbol}]` | Watchlist (PUT/DELETE admin-protected) |
 | `GET /api/backtest/report` | Latest backtest report (metrics, curves, trades, stress, readiness, verdict) |
 | `GET /api/backtest/runs?limit=` | Run log: every simulation, newest first |
 | `GET /api/backtest/borrow` | IBKR borrow archive status |
 | `GET /api/journal?signal=&size=&status=` · `GET /api/journal/summary` | Forward track record |
-| `GET /api/alerts` · `POST /api/alerts/test` | Alert config, latency, delivery log · test message |
+| `GET /api/journal/chain` · `GET /api/journal/chain/{YYYY-MM-DD}` · `GET /api/journal/verify` | Seal: chain head + last 30 sealed days · one day's entries and hashes · full re-verification (cached 10 min) |
+| `GET /api/alerts` · `POST /api/alerts/test` | Alert config, latency, delivery log · test message (admin-protected) |
 | `GET /api/tickers/{symbol}/fundamentals` | Cash runway, share dilution, offering history, short interest |
 | `GET /api/halts?symbol=&size=&hours=` | Trading halts with plain-English reasons |
 | `GET /api/newsletter/issues` | Newsletter archive, newest first (id, week, headline counts) |
 | `GET /api/newsletter/{id}` · `GET /api/newsletter/{id}.html` | One issue as JSON (+ `markdown`) · its email-safe HTML |
 | `POST /api/newsletter/preview` | Current week so far (+ `markdown`, `html`), never saved |
-| `GET /api/health` | Liveness check |
+| `POST /api/subscribe` `{email, daily}` | Double opt-in signup (202 generic message; 503 when email is not configured) |
+| `GET /api/subscribe/confirm?token=` | Confirmation page |
+| `GET /api/unsubscribe?token=` · `POST /api/unsubscribe?token=` | Unsubscribe page · one-click unsubscribe (RFC 8058) |
+| `POST /api/subscription/daily?token=&on=` | Turn the daily digest on/off |
+| `GET /api/delivery/status` | `{enabled}` |
+| `GET /api/health` | Liveness check (no DB, not rate-limited) |
+| `GET /api/health/details` | Per-component health with thresholds (`ok` / `degraded` / `down`) |
+| `GET /api/health/history?days=7` | Uptime % per component and day, incidents (up to 30 days) |
 
 ## Roadmap
 
@@ -252,7 +310,13 @@ Product priorities come from [docs/PRODUCT_RESEARCH.md](docs/PRODUCT_RESEARCH.md
 6. ~~Ticker page: dilution history, cash runway, short interest, halts~~ (roadmap item 4)
 7. ~~Legal pack drafts + Methodology page + site footer~~ (roadmap item 8, pending lawyer review)
 8. ~~Server-rendered SEO ticker pages, sitemap.xml, robots.txt~~ (part of roadmap item 9)
-9. ~~Weekly newsletter: automatic build, archive, Markdown/HTML export, Newsletter tab~~ (part of roadmap item 9; email delivery not built)
+9. ~~Weekly newsletter: automatic build, archive, Markdown/HTML export, Newsletter tab~~ (part of roadmap item 9)
+10. ~~Out-of-sample Edge Lab study (pre-registered), firm-clustered t-stats, offline replay + input manifests~~ (research; results not published yet)
+11. ~~Tamper-evident track-record seal (daily hash chain, printed in each newsletter)~~ (roadmap item 5)
+12. ~~Email delivery: double opt-in list, weekly newsletter emails, daily digest~~ (email part of roadmap item 2)
+13. ~~Form 4 insider-purchase study (pre-registered)~~ (research; results not published yet)
+14. ~~Admin token for every write, rate limits, health checks + `/status` page, production compose + frontend image, CI~~ (part of roadmap item 10)
+15. ~~Learn section: six lessons with live numbers and simulators, 8-week curriculum~~ (distribution / SEO)
 
 **Product: path to first paying users**
 
@@ -272,8 +336,8 @@ DilutionTracker owns basic dilution alerts. The gap is *what happens next*: Edge
 | 10 | Monitoring, uptime alerts, licensed price data before showing prices publicly | Yahoo is personal-use only; licensed display data starts around $1.75k/mo. |
 
 **Research**
-- Out-of-sample rerun of the Edge Lab on 2020–2023 (the backtest's period A covers the offering signal).
-- Insider purchases (Form 4): the best-documented small-cap filing signal (Lakonishok & Lee 2001; Cohen, Malloy & Pomorski 2012).
+- Run and publish the pre-registered out-of-sample study (built; `python -m app.research.oos`) and report its verdicts.
+- Run and publish the pre-registered Form 4 insider-purchase study (built; `python -m app.insiders.study`), the best-documented small-cap filing signal (Lakonishok & Lee 2001; Cohen, Malloy & Pomorski 2012).
 - Refit the borrow model from the IBKR archive after 90+ days of snapshots.
 - Signal × AI-flag studies (e.g. offerings with "ATM program" vs priced deals). Needs an API key and point-in-time scoring.
 - Research agent: Claude with read-only tools over news, filings and backtests. It never trades.

@@ -22,6 +22,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.fundamentals import service as fundamentals
+from app.journal import digest as journal_digest
 from app.journal import service as journal
 from app.models import Article, Company, JournalEntry, TradingHalt
 from app.pipeline.signals import ALL_SIGNALS
@@ -271,7 +272,7 @@ def _halts(session: Session, start: datetime, end: datetime) -> list[dict]:
     ]
 
 
-def _track_record(session: Session, study: dict | None) -> dict:
+def _track_record(session: Session, study: dict | None, data_dir: str) -> dict:
     expected = {(r["signal"], r["bucket"], r["horizon_days"]): r for r in (study or {}).get("results", [])}
     rows = [r for r in journal.summary(session, expected) if r["bucket"] in SMALL]
     keep = ("signal", "label", "direction", "bucket", "n", "n_20", "mean_20", "median_20", "hit_20", "expected_20")
@@ -286,7 +287,8 @@ def _track_record(session: Session, study: dict | None) -> dict:
         due = _add_weekdays(_aware(first).astimezone(ET).date(), journal.ENTRY_DELAY + EVIDENCE_HORIZON).isoformat() if first else None
         collecting = {"recorded": recorded, "first_due": due}
     return {"recorded": recorded, "complete_20d": complete, "min_n": MIN_TRACK_N,
-            "rows": sorted(mature, key=lambda r: -r["n_20"]), "collecting": collecting}
+            "rows": sorted(mature, key=lambda r: -r["n_20"]), "collecting": collecting,
+            "seal": journal_digest.chain_head(data_dir)}  # {head_hash, head_day, days} of the journal hash chain, or None
 
 
 def _coverage_note(session: Session, start: datetime, end: datetime) -> str | None:
@@ -371,7 +373,7 @@ def build_issue(
         "runway_lookups": lookups,
         "serious_halts": halts[:HALT_LIMIT],
         "serious_halts_total": len(halts),
-        "track_record": _track_record(session, study),
+        "track_record": _track_record(session, study, data_dir),
         "research_note": _research_note(data_dir),
         "links": {
             "methodology": f"{base}/methodology",
@@ -476,6 +478,15 @@ def track_lines(issue: dict) -> list[str]:
     return lines
 
 
+def seal_line(issue: dict) -> str | None:
+    """One line naming the journal hash-chain head at build time (None when no chain, or an issue archived before seals)."""
+    seal = (issue.get("track_record") or {}).get("seal")
+    if not seal:
+        return None
+    return (f"Track-record seal through {seal['head_day']}: {seal['head_hash'][:16]}… "
+            f"({seal['days']} days; verify at {issue['links']['track_record']})")
+
+
 # --- Markdown ----------------------------------------------------------------------
 
 
@@ -535,6 +546,8 @@ def render_markdown(issue: dict) -> str:
     out += ["## Track record update", "", "*Simulated forward tracking of every signal as filed; no trades. "
             f"[Full track record]({L['track_record']}).*", ""]
     out += [f"- {line}" for line in track_lines(issue)]
+    if seal := seal_line(issue):
+        out += ["", f"*{_md_escape(seal)}*"]
     out.append("")
 
     if note := issue.get("research_note"):
@@ -650,6 +663,8 @@ def render_html(issue: dict) -> str:
     rows.append(_row(_p(f"Simulated forward tracking of every signal as filed; no trades. {_a(L['track_record'], 'Full track record')}.", muted=True, size=12)))
     for line in track_lines(issue):
         rows.append(_row(_p(_e(line), size=13), "0 24px 6px"))
+    if seal := seal_line(issue):
+        rows.append(_row(_p(_e(seal), muted=True, size=12), "0 24px 6px"))
 
     if note := issue.get("research_note"):
         src = f" (“{note['strategy']}”, report of {_day(note['report_date'])})" if note.get("strategy") and note.get("report_date") else ""

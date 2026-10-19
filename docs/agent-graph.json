@@ -5,15 +5,16 @@
     "docker_api_image": "Building/running the api image (`docker compose build api`, `docker compose run --rm api ...`). One agent at a time: parallel builds collide.",
     "next_dot_dir": "frontend/.next. `next build` clobbers the running dev server; only the serialized verify step may build, after stopping the dev server.",
     "postgres_db": "The live dev database (docker volume pgdata). Schema changes go through db._add_missing_columns (nullable columns only).",
-    "shared_hotspots": "Files many features touch: backend/app/main.py, backend/app/models.py, backend/app/config.py, frontend/src/lib/api.ts, frontend/src/components/Nav.tsx, frontend/src/app/globals.css. At most one builder per wave may edit each; globals.css may be appended by several only under their own /* --- Section --- */ header."
+    "shared_hotspots": "Files many features touch: backend/app/main.py, backend/app/models.py, backend/app/config.py, frontend/src/lib/api.ts, frontend/src/components/Nav.tsx, frontend/src/app/globals.css. At most one builder per wave may edit each; globals.css may be appended by several only under their own /* --- Section --- */ header.",
+    "smtp_provider": "The SMTP account behind email delivery (SMTP_* env). Tests never send (FakeTransport); never point a dev or test run at a real list."
   },
   "modules": [
     {
       "id": "api",
       "paths": ["backend/app/main.py", "backend/app/schemas.py", "backend/app/research_jobs.py", "backend/tests/test_api.py", "backend/tests/test_research_jobs.py"],
       "agents_md": "backend/AGENTS.md",
-      "summary": "FastAPI routes (incl. /api/newsletter/*, /api/tickers/sitemap), lifespan, scheduler loops (slow: ingest, borrow snapshot, journal, newsletter_cycle; fast: EDGAR+halts poller), AppState.",
-      "depends_on": ["config_db", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter"],
+      "summary": "FastAPI routes (incl. /api/newsletter/*, /api/tickers/sitemap, /api/research/studies, /api/journal/chain|verify, /api/health/details|history; mounts the delivery router), rate-limit middleware + admin dependency wiring, lifespan, scheduler loops (slow: ingest, borrow snapshot, journal, seal_cycle, newsletter_cycle (+ email), digest_cycle, uptime_cycle; fast: EDGAR+halts poller), AppState. research_jobs.MODULES: backtest, event_study, event_study_oos, insider_study.",
+      "depends_on": ["config_db", "platform", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter", "delivery", "insiders"],
       "tests": ["backend/tests/test_api.py", "backend/tests/test_research_jobs.py"],
       "hotspot": true
     },
@@ -21,7 +22,7 @@
       "id": "config_db",
       "paths": ["backend/app/config.py", "backend/app/db.py", "backend/app/models.py", "backend/app/__init__.py"],
       "agents_md": "backend/AGENTS.md",
-      "summary": "Settings (env), engine/session, stopgap column migration, all ORM tables.",
+      "summary": "Settings (env) incl. AdminSettings (ADMIN_TOKEN, RESEARCH_JOBS_ENABLED, MUTATIONS_ENABLED) and rate-limit settings, engine/session, stopgap column migration, all ORM tables (incl. subscribers, email_sends).",
       "depends_on": [],
       "tests": ["backend/tests"],
       "hotspot": true
@@ -44,11 +45,11 @@
     },
     {
       "id": "research",
-      "paths": ["backend/app/research/", "backend/tests/test_eventstudy.py"],
+      "paths": ["backend/app/research/", "backend/tests/test_eventstudy.py", "backend/tests/test_oos.py", "backend/tests/test_snapshot.py"],
       "agents_md": "backend/app/research/AGENTS.md",
-      "summary": "Edge Lab event study and Yahoo price loader (raw/adjusted prices, split unadjusting).",
+      "summary": "Edge Lab event study (StudyDesign/run_design, firm-clustered t, --offline replay), pre-registered out-of-sample study (oos.py, PREREGISTRATION_OOS.md), hash-only input manifests and canonical compare (snapshot.py), Yahoo price loader (raw/adjusted prices, split unadjusting).",
       "depends_on": ["pipeline"],
-      "tests": ["backend/tests/test_eventstudy.py"]
+      "tests": ["backend/tests/test_eventstudy.py", "backend/tests/test_oos.py", "backend/tests/test_snapshot.py"]
     },
     {
       "id": "backtest",
@@ -60,11 +61,11 @@
     },
     {
       "id": "journal",
-      "paths": ["backend/app/journal/", "backend/tests/test_journal.py"],
+      "paths": ["backend/app/journal/", "backend/tests/test_journal.py", "backend/tests/test_journal_digest.py"],
       "agents_md": "backend/app/journal/AGENTS.md",
-      "summary": "Forward signal journal (track record), daily marking, live-vs-expected summary.",
+      "summary": "Forward signal journal (track record), daily marking, live-vs-expected summary, tamper-evident daily SHA-256 hash chain (digest.py, {data_dir}/journal_chain.jsonl).",
       "depends_on": ["config_db", "research", "backtest"],
-      "tests": ["backend/tests/test_journal.py"]
+      "tests": ["backend/tests/test_journal.py", "backend/tests/test_journal_digest.py"]
     },
     {
       "id": "alerts",
@@ -86,15 +87,39 @@
       "id": "newsletter",
       "paths": ["backend/app/newsletter/", "backend/tests/test_newsletter.py"],
       "agents_md": "backend/app/newsletter/AGENTS.md",
-      "summary": "Weekly Small-Cap Filing Radar: build, render Markdown/HTML, immutable file archive ({data_dir}/newsletters/), CLI (python -m app.newsletter.build).",
+      "summary": "Weekly Small-Cap Filing Radar: build, render Markdown/HTML, immutable file archive ({data_dir}/newsletters/), journal seal line (track_record.seal), CLI (python -m app.newsletter.build).",
       "depends_on": ["config_db", "journal", "fundamentals", "alerts", "research", "backtest"],
       "tests": ["backend/tests/test_newsletter.py"]
+    },
+    {
+      "id": "delivery",
+      "paths": ["backend/app/delivery/", "backend/tests/test_delivery.py"],
+      "agents_md": "backend/app/delivery/AGENTS.md",
+      "summary": "Email delivery, off unless SMTP_HOST + EMAIL_FROM + EMAIL_POSTAL_ADDRESS: double opt-in list (subscribers, email_sends), idempotent newsletter fan-out and daily digest, SMTP/Fake transports, public /api/subscribe|unsubscribe|subscription/daily|delivery/status router. Own DeliverySettings (SMTP_*, EMAIL_*).",
+      "depends_on": ["config_db", "newsletter", "research"],
+      "tests": ["backend/tests/test_delivery.py"]
+    },
+    {
+      "id": "insiders",
+      "paths": ["backend/app/insiders/", "backend/tests/test_insiders.py", "backend/tests/fixtures/form4/"],
+      "agents_md": "backend/app/insiders/AGENTS.md",
+      "summary": "Separate pre-registered Form 4 insider-purchase event study: SEC insider data sets, safe Form 4 XML parser, CMP routine/opportunistic classifier, writes {data_dir}/event_study_insider_purchases.json (python -m app.insiders.study). Never touches pipeline/signals.py.",
+      "depends_on": ["research", "config_db"],
+      "tests": ["backend/tests/test_insiders.py"]
+    },
+    {
+      "id": "platform",
+      "paths": ["backend/app/security.py", "backend/app/health.py", "backend/tests/test_security.py", "backend/tests/test_health.py"],
+      "agents_md": "backend/AGENTS.md",
+      "summary": "Admin policy for every mutating endpoint (token > env flag > local-only) and per-client sliding-window rate limiter (security.py); deep health evaluation and uptime history in {data_dir}/uptime.jsonl (health.py). main.py wires both.",
+      "depends_on": ["config_db"],
+      "tests": ["backend/tests/test_security.py", "backend/tests/test_health.py", "backend/tests/test_api.py"]
     },
     {
       "id": "fe_core",
       "paths": ["frontend/src/lib/api.ts", "frontend/src/lib/format.ts", "frontend/src/components/Nav.tsx", "frontend/src/components/Footer.tsx", "frontend/src/app/layout.tsx", "frontend/src/app/globals.css", "frontend/src/app/favicon.ico", "frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig.json", "frontend/next.config.ts", "frontend/eslint.config.mjs", "frontend/.gitignore"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Browser API client + types (mirror backend), formatting helpers, nav, layout, global styles/tokens. server-api.ts belongs to fe_ticker.",
+      "summary": "Browser API client + types (mirror backend; ApiError, admin token helpers, send() for writes), formatting helpers, nav (incl. Learn tab), footer (Subscribe/Status links, admin-error notice), layout, global styles/tokens. next.config.ts sets output: standalone. server-api.ts belongs to fe_ticker.",
       "depends_on": ["api"],
       "tests": ["frontend: npx tsc --noEmit"],
       "hotspot": true
@@ -111,24 +136,40 @@
       "id": "fe_ticker",
       "paths": ["frontend/src/app/ticker/", "frontend/src/components/DilutionPanel.tsx", "frontend/src/lib/server-api.ts", "frontend/src/app/sitemap.ts", "frontend/src/app/robots.ts"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Server-rendered SEO ticker pages ((view)/ route group, 404 gate, summary.ts), server-side fetch helpers + SITE_URL (server-api.ts, also used by the newsletter pages), sitemap.xml, robots.txt.",
-      "depends_on": ["fe_core", "fe_content", "api"],
+      "summary": "Server-rendered SEO ticker pages ((view)/ route group, 404 gate, summary.ts), server-side fetch helpers + SITE_URL (server-api.ts, also used by the newsletter and Learn pages: getEventStudy, getBacktestReport), sitemap.xml (incl. /learn pages from lib/learn/lessons.ts), robots.txt.",
+      "depends_on": ["fe_core", "fe_content", "fe_learn", "api"],
       "tests": ["frontend: npx tsc --noEmit", "curl raw HTML of /ticker/OCGN", "curl /ticker/NOPE123 -> 404", "curl /sitemap.xml and /robots.txt"]
     },
     {
       "id": "fe_research",
       "paths": ["frontend/src/app/lab/", "frontend/src/app/backtest/", "frontend/src/components/backtest/", "frontend/src/app/track-record/", "frontend/src/components/track/", "frontend/src/components/ResearchRunPanel.tsx", "frontend/src/components/ResearchRunPanel.module.css"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Edge Lab, Backtest and Track record pages and their charts.",
-      "depends_on": ["fe_core"],
+      "summary": "Edge Lab (study selector main/oos/insider_purchases, OOS comparison + confirmatory verdicts), Backtest and Track record pages (incl. SealPanel) and their charts.",
+      "depends_on": ["fe_core", "fe_learn"],
       "tests": ["frontend: npx tsc --noEmit"]
     },
     {
       "id": "fe_content",
-      "paths": ["frontend/src/app/methodology/", "frontend/src/app/legal/", "frontend/src/components/DraftNotice.tsx", "frontend/src/app/newsletter/", "frontend/src/components/newsletter/", "frontend/src/app/research/", "frontend/src/app/trading/"],
+      "paths": ["frontend/src/app/methodology/", "frontend/src/app/legal/", "frontend/src/components/DraftNotice.tsx", "frontend/src/app/newsletter/", "frontend/src/components/newsletter/", "frontend/src/app/research/", "frontend/src/app/trading/", "frontend/src/components/SubscribeForm.tsx", "frontend/src/components/SubscribeForm.module.css"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Methodology, legal drafts, server-rendered newsletter archive and issue pages (/newsletter, /newsletter/[issue]), placeholder pages.",
+      "summary": "Methodology, legal drafts, server-rendered newsletter archive and issue pages (/newsletter, /newsletter/[issue]) with the SubscribeForm client island, placeholder pages.",
       "depends_on": ["fe_core", "fe_ticker"],
+      "tests": ["frontend: npx tsc --noEmit"]
+    },
+    {
+      "id": "fe_learn",
+      "paths": ["frontend/src/app/learn/", "frontend/src/components/learn/", "frontend/src/lib/learn/"],
+      "agents_md": "frontend/AGENTS.md",
+      "summary": "Server-rendered Learn section: /learn index, /learn/[slug] (6 lessons, static params, ISR 1 h, live numbers via server-api), /learn/curriculum (8 weeks); client widgets/simulators with seeded PRNG (lib/learn/stats.ts, simulations.ts), lesson registry (lessons.ts), live-number helpers (live.ts). ConfirmatoryBlock/parts are also used by the Edge Lab.",
+      "depends_on": ["fe_core", "fe_ticker"],
+      "tests": ["frontend: npx tsc --noEmit", "curl /learn, /learn/event-study, /learn/curriculum; /learn/nope -> 404"]
+    },
+    {
+      "id": "fe_status",
+      "paths": ["frontend/src/app/status/"],
+      "agents_md": "frontend/AGENTS.md",
+      "summary": "/status: health components, 7-day uptime, incidents, journal seal verification, and the admin-token box (session storage, shared with ResearchRunPanel via api.ts get/setAdminToken).",
+      "depends_on": ["fe_core"],
       "tests": ["frontend: npx tsc --noEmit"]
     },
     {
@@ -141,9 +182,9 @@
     },
     {
       "id": "tooling",
-      "paths": ["scripts/", ".claude/workflows/", ".claude/launch.json", "docker-compose.yml", ".gitignore", "backend/Dockerfile", "backend/.dockerignore", "backend/requirements.txt", "backend/requirements-dev.txt", "backend/pytest.ini", "backend/tests/conftest.py"],
+      "paths": ["scripts/", ".claude/workflows/", ".claude/launch.json", "docker-compose.yml", ".gitignore", "backend/Dockerfile", "backend/.dockerignore", "backend/requirements.txt", "backend/requirements-dev.txt", "backend/pytest.ini", "backend/tests/conftest.py", "Makefile", "docker-compose.prod.yml", ".github/", "frontend/Dockerfile", "frontend/.dockerignore", ".gitattributes", ".vscode/"],
       "agents_md": "docs/AGENT_PROCESS.md",
-      "summary": "Agent tooling and dev infra: scripts/pytest.sh (parallel-safe tests on mounted source), feature-graph workflow, preview config, compose file, ignore rules, api Dockerfile/requirements, pytest config and conftest.",
+      "summary": "Agent tooling and dev/deploy infra: scripts/pytest.sh (parallel-safe tests on mounted source), scripts/reproduce.sh (offline study replay + compare), Makefile shortcuts, feature-graph workflow, preview config, dev and prod compose files, api and web Dockerfiles, CI workflow (.github/workflows/ci.yml), ignore/attributes rules, api requirements, pytest config and conftest.",
       "depends_on": [],
       "tests": ["bash scripts/pytest.sh tests/test_api.py"]
     }

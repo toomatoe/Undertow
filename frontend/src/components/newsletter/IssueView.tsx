@@ -262,6 +262,13 @@ export default function IssueView({ issue }: { issue: NewsletterIssue }) {
             </table>
           </div>
         )}
+        {tr.seal && (
+          <p className="muted small">
+            Track-record seal through {tr.seal.head_day}: <code title={tr.seal.head_hash}>{tr.seal.head_hash.slice(0, 16)}…</code> (
+            {tr.seal.days.toLocaleString("en-US")} days). A daily hash of the journal recorded when this issue was built; check it on the{" "}
+            <Link href="/status" className="nl-link">Status page</Link> or the <Link href="/track-record" className="nl-link">track record</Link>.
+          </p>
+        )}
       </section>
 
       {note && (

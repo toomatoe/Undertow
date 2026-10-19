@@ -20,14 +20,41 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from pydantic import ValidationError
+from typing import Literal
 
-from app.schemas import ResearchJob
+from pydantic import BaseModel, ValidationError
 
 log = logging.getLogger(__name__)
-MODULES = {"backtest": "app.backtest.report", "event_study": "app.research.eventstudy"}
+# Fixed command per kind; clients choose a kind, never a command. Only a successful
+# "event_study" run reloads the live evidence (on_study_success): the OOS study writes
+# event_study_oos.json and the insider study its own file, neither is served as evidence.
+MODULES = {
+    "backtest": "app.backtest.report",
+    "event_study": "app.research.eventstudy",
+    "event_study_oos": "app.research.oos",
+    "insider_study": "app.insiders.study",
+}
+EVIDENCE_KIND = "event_study"
+RUNNING_MESSAGES = {
+    "backtest": "Loading SEC filings and cached prices; running portfolio simulations.",
+    "event_study": "Loading SEC filings and cached prices; measuring event-study results.",
+    "event_study_oos": "Loading SEC filings and cached prices; measuring the pre-registered out-of-sample study.",
+    "insider_study": "Loading insider filings and cached prices; measuring insider-study results.",
+}
 JOB_FIELDS = ("id", "kind", "status", "started_at", "finished_at", "message")
 MAX_MESSAGE = 500
+
+
+class SavedJob(BaseModel):
+    """Shape check for persisted jobs. Mirrors schemas.ResearchJob but accepts every kind in MODULES
+    (the API schema may list fewer kinds than this runner supports)."""
+
+    id: str
+    kind: str
+    status: Literal["running", "succeeded", "failed", "interrupted"]
+    started_at: datetime
+    finished_at: datetime | None
+    message: str
 
 
 def atomic_json(path, value):
@@ -111,7 +138,7 @@ class ResearchJobs:
         if not isinstance(raw, dict) or raw.get("kind") != kind:
             return None
         try:
-            ResearchJob.model_validate(raw)
+            SavedJob.model_validate(raw)
         except ValidationError:
             return None
         job = {k: raw.get(k) for k in JOB_FIELDS}
@@ -175,13 +202,11 @@ class ResearchJobs:
                     stdin=subprocess.DEVNULL,
                 )
                 process = self.process
-                job["message"] = ("Loading SEC filings and cached prices; running portfolio simulations."
-                                  if job["kind"] == "backtest" else
-                                  "Loading SEC filings and cached prices; measuring event-study results.")
+                job["message"] = RUNNING_MESSAGES[job["kind"]]
                 self._save()
             code = process.wait()
             if code == 0:
-                if job["kind"] == "event_study" and self.on_study_success:
+                if job["kind"] == EVIDENCE_KIND and self.on_study_success:
                     self.on_study_success()
                 status, message = "succeeded", "Research finished. Results are ready."
         except Exception:

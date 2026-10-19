@@ -11,6 +11,8 @@ dated and sourced. Research and education only; nothing here is financial advice
 | `PRODUCT_RESEARCH.md` | Product research (market, users, positioning) | Being written by another agent now. Don't edit it concurrently |
 | `results/event_study_YYYY-MM-DD.json` | Frozen copies of event-study runs, one file per run date. First: `event_study_2026-10-15.json` | Append-only; never edit a published file |
 | `results/backtest_YYYY-MM-DD.json` | Frozen copies of backtest reports (`report_latest.json`). First: `backtest_2026-10-16.json` | Append-only |
+| `results/event_study_oos_YYYY-MM-DD.json`, `results/event_study_insider_purchases_YYYY-MM-DD.json` | Naming for frozen copies of the out-of-sample and insider studies (`{DATA_DIR}/event_study_oos.json`, `{DATA_DIR}/event_study_insider_purchases.json`). None published yet | Append-only, same rules |
+| `plans/YYYY-MM-DD-batch.json` | Batch plans from the planning step (work items, owned paths, acceptance). First: `2026-10-19-batch.json` | Historical record; don't edit after the batch runs |
 | `agent-graph.json` | Machine-readable module graph: paths (every repo file in exactly one module), AGENTS.md, depends_on, tests, hotspots, shared resources | Update when a module or top-level file is added |
 | `AGENT_PROCESS.md` | Multi-agent process: Plan, ownership waves, Build, 2-lens Review, exclusive Verify, final Docs item, Critic | Update when `.claude/workflows/feature-graph.js` changes |
 | `AGENTS.md` | This guide | |
@@ -30,6 +32,11 @@ Written by `backend/app/research/eventstudy.py` (`run()`), unchanged when copied
   `median_abnormal`, `t_stat`, `hit_rate`, `cost`, `borrow`, `mean_net`, `baseline_mean`,
   `excess_vs_baseline`, `t_vs_baseline`, `significant`, `nominal_significant`
 - `caveats[]`
+- Added 2026-10-19 (absent from `event_study_2026-10-15.json`): `config.study` (design name), `config.design`,
+  `inputs_manifest`, per row `t_stat_clustered`, `t_vs_baseline_clustered`, `clusters`, and a 7th caveat (clustered
+  t-stats are reporting only). The OOS file adds `confirmatory`, `confirmatory_testing`, `preregistration`; the insider
+  file adds `data_quality`, `preregistration`, `preregistered_on`, `opportunistic_vs_routine`, `testing.significance_rule`.
+  `python -m app.research.snapshot compare --ignore-added OLD NEW` compares old and new files despite the additions.
 
 The frontend's `EventStudy` type (`frontend/src/lib/api.ts`) reads the same shape, so an old results file
 can be compared against a new one field by field.

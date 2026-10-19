@@ -19,3 +19,6 @@ frontend/out/
 eventstudy-run.log
 backtest-*.log
 .claude/worktrees/
+
+# Study input manifests (hashes of cached personal-use data; never commit)
+snapshots/

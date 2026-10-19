@@ -19,8 +19,14 @@ the dev database, and the hotspot files.
 
 **Keep it current:** a new module gets a node in the same PR that adds it. Every file in the repo should match exactly
 one module path (a path ending in `/` is a directory prefix), and each module lists its own test files in `paths`, so a
-planner can hand out ownership without gaps or overlaps. The `tooling` module covers `scripts/`, `.claude/workflows/`,
-the compose file, the api Dockerfile/requirements and pytest config.
+planner can hand out ownership without gaps or overlaps. The `tooling` module covers `scripts/` (incl. `reproduce.sh`),
+`.claude/workflows/`, the `Makefile`, both compose files (`docker-compose.yml`, `docker-compose.prod.yml`), the api and web
+Dockerfiles, CI (`.github/`), ignore/attributes files and pytest config. Check coverage after adding files: every path from
+`git ls-files --cached --others --exclude-standard` must match exactly one module path.
+
+`.github/workflows/ci.yml` runs on every push and PR (backend pytest, frontend tsc + lint + `next build`, both images built,
+never pushed). It runs on GitHub's machines, so it does not touch the local shared resources; it does not replace the
+Verify node.
 
 ## 2. The process graph: `.claude/workflows/feature-graph.js`
 

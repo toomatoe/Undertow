@@ -34,7 +34,68 @@ the prior's way (skipped for `"?"`), and `mean_net > 0`. `nominal_significant` i
 
 Known limits (also written into the output `caveats`): survivorship (delisted names lose ticker or prices;
 see `coverage.no_ticker` / `no_prices`), flat borrow estimate, no beta/factor model, close fills assumed,
-overlapping events overstate t, one sample period.
+overlapping events overstate t, one sample period, clustered t-stats are reporting only.
+
+## StudyDesign API (stable: the OOS and insider studies build on it)
+
+- `StudyDesign(name, window_start, window_end, float_year, seed, sizes, exclude_ciks, results_file)`
+  (frozen). `in_sample_design(sizes)` is the original design (`"in_sample"`, seed 7, CY2023Q2);
+  `run(sizes)` = `run_design(in_sample_design(sizes))`, output unchanged apart from additive fields.
+- `run_design(design, event_source=None, signal_defs=None, *, offline=False, data_dir=None, user_agent=None)`
+  = `collect()` (sample, events, prices, measure -> `(measurements, coverage)`) + `build_study()`.
+  `event_source(cik, bucket, user_agent, cache_dir, *, window, offline) -> (ticker, events, status)`,
+  default `company_events`; status `"ok"` keeps the company.
+- `sample_universe(sizes, data_dir, ua, seed, *, float_year, exclude_ciks, offline)`: excluded CIKs are
+  removed before sampling; deterministic per seed.
+- `summarize(measurements, signal_defs=ALL_SIGNALS)`: pass your own `{code: SignalDef}` map for a new
+  taxonomy. `winsor_bounds()` is the per-bucket clipping it uses.
+- Output additions: `config.study` (design name), `config.design` (`to_config()`; `exclude_ciks` is
+  summarized as count + sha256), `inputs_manifest`, and per results row `t_stat_clustered`,
+  `t_vs_baseline_clustered`, `clusters` (= `companies`).
+
+## Firm-clustered t-stats (reporting only in-sample)
+
+- `clustered_t(values, clusters)`: CR1, `se = sqrt(G/(G-1) * sum_g (sum_{i in g}(x_i - mean))^2) / n`,
+  0 when G < 2. Equals the plain t when every event is its own cluster.
+- `clustered_welch_t(a, ca, b, cb)`: mean difference over `sqrt(se_a^2 + se_b^2)` from clustered SEs.
+  Approximation: event and baseline samples share companies and their covariance is ignored.
+- Clusters are tickers. In-sample `significant` still uses the plain `t_stat` / Welch `t_vs_baseline`;
+  only the OOS confirmatory test uses the clustered versions.
+
+## Offline replay and manifests (`snapshot.py`)
+
+- `--offline` on `python -m app.research.eventstudy` and `app.research.oos`: `get_json(..., offline=True)`
+  and `load_prices(..., offline=True)` never touch the network. A cache miss returns None, is recorded
+  (`snapshot.record_miss`), counted per bucket as `coverage[bucket]["offline_miss"]` and listed at the end;
+  the run exits non-zero unless `--allow-missing` (then `offline_misses` is added to the output).
+  `--output PATH` writes elsewhere (the replay scripts use `{DATA_DIR}/snapshots/replay_*.json`).
+- 404s from `get_json` are cached as `null`, and older submissions pages are cached under
+  `submissions/pages/`, so later replays can read them. Runs made before 2026-10-19 did not cache those
+  pages, so replaying such a run may report misses for companies with very long filing histories.
+- Each CLI run writes a hash-only manifest to `{DATA_DIR}/snapshots/<study>_<UTC>.json`: SHA-256 of every
+  cache file read (registry in `snapshot.py`, active only while a study CLI runs), the frame file, `GIT_SHA`
+  (or `unknown`) and the sha256 of the canonical results (sort_keys, without `generated_at`, timing fields
+  and `inputs_manifest`). No cached content goes into it; cached Yahoo data is never committed or published.
+- `python -m app.research.snapshot write [--study PATH]` (hashes all cache files when there is no registry),
+  `verify MANIFEST` (exit 1 on a changed/missing input or results file), `compare A B [--ignore-added]`
+  (prints `IDENTICAL` or `DIFF` with key paths; rows keyed `signal/bucket/horizon`; `-` reads stdin).
+- `make reproduce` / `scripts/reproduce.sh main` replays the in-sample study offline in the api image and
+  compares it with the newest `docs/results/event_study_*.json` (`--ignore-added`, since published files
+  predate the additive fields). `--ignore-added` skips keys only in B and items appended to the end of a
+  list in B whose leading items match A (the clustered-t caveat is the 7th caveat after the published 6). `make reproduce-oos` does the same for the OOS study.
+
+## Out-of-sample study (`oos.py`)
+
+Pre-registered in [PREREGISTRATION_OOS.md](PREREGISTRATION_OOS.md) (2026-10-19): window 2020-10-01..2023-08-31,
+frame CY2020Q2, seed 2020, same sample sizes, excluding every in-sample candidate CIK (`EXCLUDE_FROM`,
+oversample included). `OOS_DESIGN` + `HYPOTHESES` (H1 `offering_priced` nano, H2 `unregistered_equity`
+micro+nano pooled, H3 `material_agreement` nano; all 20d, short) + `T_CRIT_CONFIRMATORY`
+(Bonferroni family of 3: `inv_cdf(1 - 0.05/6)` = 2.394). `confirmatory(measurements)` returns
+`replicated` / `not replicated` / `underpowered` (n < 20 or companies < 15) per hypothesis.
+`python -m app.research.oos [--offline]` writes `{DATA_DIR}/event_study_oos.json` (same schema plus
+`confirmatory`, `confirmatory_testing`, `preregistration`) and refuses to write `event_study.json`.
+`results[]` there is exploratory. Changing any OOS constant needs a new dated pre-registration first.
+Research jobs can launch it as kind `event_study_oos`; only `event_study` reloads the live evidence.
 
 ## prices.py
 
@@ -74,5 +135,9 @@ docker compose restart api        # lifespan -> load_study() picks up the new fi
 ## Tests
 
 `backend/tests/test_eventstudy.py` covers `day0_index` cut-off, market adjustment in `measure`,
-`summarize` needing to beat the baseline, `signals_for_filing`, buckets/`parse_frame`, `parse_chart`.
+`summarize` needing to beat the baseline, `signals_for_filing`, buckets/`parse_frame`, `parse_chart`,
+`run()` matching a golden hash of the pre-refactor output (minus additive fields), `run_design` with a stub
+`event_source`, clustered t-stats, `sample_universe` exclusion/determinism, and offline mode with httpx
+patched to raise. `test_oos.py` asserts `OOS_DESIGN` matches the pre-registration and checks the verdicts;
+`test_snapshot.py` covers manifest round-trip/tamper detection and `compare_results`.
 Use synthetic `PriceSeries`; never hit SEC or Yahoo in tests.

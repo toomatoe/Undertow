@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import AliasChoices, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_RSS_FEEDS = {
@@ -14,8 +15,30 @@ DEFAULT_RSS_FEEDS = {
 }
 
 
-class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+class AdminSettings(BaseSettings):
+    """Who may change server state (policy in app/security.py). Settings inherits these fields.
+
+    env_ignore_empty: a blank `ADMIN_TOKEN=` or `MUTATIONS_ENABLED=` line in .env means "unset", not a startup error.
+    """
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
+
+    # When set, every mutating endpoint requires "Authorization: Bearer <token>". RESEARCH_ADMIN_TOKEN (the older,
+    # research-only name) is still accepted as a fallback; ADMIN_TOKEN wins when both are set.
+    admin_token: SecretStr | None = Field(None, validation_alias=AliasChoices("admin_token", "research_admin_token"))
+    # Without a token: explicit on/off for research launches (falls back to MUTATIONS_ENABLED) ...
+    research_jobs_enabled: bool | None = None
+    # ... and for the other mutations (ingest, alerts/test, watchlist). Unset: on only for a local PUBLIC_BASE_URL.
+    mutations_enabled: bool | None = None
+
+    @property
+    def research_admin_token(self) -> SecretStr | None:
+        """Backwards-compatible name for admin_token."""
+        return self.admin_token
+
+
+class Settings(AdminSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     # SQLite works with zero setup; docker-compose points this at Postgres.
     database_url: str = "sqlite:///./data/quantdesk.db"
@@ -50,6 +73,12 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:3000"]
     # Public site URL used for links in the newsletter (ticker pages, methodology, track record)
     public_base_url: str = "http://localhost:3000"
+
+    # Per-client sliding-window rate limits (app/security.py). 0 disables that tier.
+    rate_limit_per_minute: int = Field(120, ge=0)  # every request except /api/stream and /api/health
+    rate_limit_write_per_minute: int = Field(10, ge=0)  # POST/PUT/DELETE (incl. newsletter preview, subscribe)
+    # Use X-Forwarded-For (right-most untrusted hop) only behind a reverse proxy you control.
+    trust_proxy_headers: bool = False
 
     @property
     def alpaca_enabled(self) -> bool:

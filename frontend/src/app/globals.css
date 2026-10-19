@@ -1861,3 +1861,17 @@ table.data td.tr-early {
     max-height: 220px;
   }
 }
+
+/* --- Learn --- */
+/* Label colors for "historical" vs "hypothetical" tags and simulator highlights (components/learn/learn.module.css). */
+:root {
+  --learn-hist: #7aa7e6;
+  --learn-hypo: #e0a84a;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --learn-hist: #1d5fb8;
+    --learn-hypo: #a35f00;
+  }
+}

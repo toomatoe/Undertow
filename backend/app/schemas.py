@@ -1,16 +1,25 @@
 from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.research_jobs import MODULES
 
 
 class ResearchJob(BaseModel):
     id: str
-    kind: Literal["backtest", "event_study"]
+    kind: str  # one of research_jobs.MODULES (validated below), e.g. backtest, event_study, event_study_oos, insider_study
     status: Literal["running", "succeeded", "failed", "interrupted"]
     started_at: datetime
     finished_at: datetime | None
     message: str
+
+    @field_validator("kind")
+    @classmethod
+    def known_kind(cls, v: str) -> str:
+        if v not in MODULES:
+            raise ValueError(f"unknown research kind {v!r}")
+        return v
 
 
 class ResearchJobsOut(BaseModel):
@@ -132,6 +141,13 @@ class SourceStatus(BaseModel):
     error: str | None
 
 
+class AdminStatus(BaseModel):
+    """Mutation protection state (app/security.py). Never includes the token."""
+
+    protected: bool  # an admin token is configured: mutations need a Bearer token
+    mutations_enabled: bool  # ingest, alerts/test and watchlist changes are possible at all
+
+
 class Status(BaseModel):
     articles: int
     enriched: int
@@ -140,3 +156,111 @@ class Status(BaseModel):
     enrich_enabled: bool
     enrich_model: str | None
     sources: list[SourceStatus]
+    admin: AdminStatus
+
+
+# --- Research studies --------------------------------------------------------------------
+
+
+class StudyInfo(BaseModel):
+    study: Literal["main", "oos", "insider_purchases"]
+    available: bool
+    generated_at: str | None = None
+    n_tests: int | None = None
+    design: str | None = None  # config.study in the result file
+
+
+# --- Journal hash chain (app/journal/digest.py) ----------------------------------------------
+
+
+class ChainLine(BaseModel):
+    day: str
+    prev_hash: str
+    hash: str
+    count: int | None = None
+    sealed_at: str | None = None
+    sealed_late: bool = False
+
+
+class ChainHead(BaseModel):
+    head_hash: str
+    head_day: str
+    days: int
+
+
+class JournalChain(BaseModel):
+    head: ChainHead | None
+    lines: list[ChainLine]  # the last 30 sealed days, oldest first
+    error: str | None = None  # the chain file is malformed
+
+
+class ChainDay(BaseModel):
+    day: str
+    prev_hash: str
+    hash: str
+    entries: list[dict]  # canonical record-time fields, enough to recompute the hash
+
+
+class ChainVerify(BaseModel):
+    ok: bool
+    days: int
+    head_hash: str | None
+    head_day: str | None
+    first_mismatch: dict | None
+    broken_link: dict | None
+    late_days: list[str]
+    checked_at: datetime  # verify_chain is cached for up to 10 minutes
+
+
+# --- Health (app/health.py) ------------------------------------------------------------------
+
+HealthState = Literal["ok", "degraded", "down", "disabled", "unknown"]
+
+
+class HealthComponent(BaseModel):
+    model_config = ConfigDict(extra="allow")  # component-specific fields (age_seconds, latest_issue, enabled, ...)
+
+    status: HealthState
+    detail: str | None = None
+
+
+class HealthDetails(BaseModel):
+    status: Literal["ok", "degraded", "down"]
+    checked_at: datetime
+    components: dict[str, HealthComponent]
+    thresholds: dict
+
+
+class UptimeStat(BaseModel):
+    uptime_pct: float | None
+    samples: int
+
+
+class UptimeDay(BaseModel):
+    day: str
+    uptime_pct: float | None
+    samples: int
+
+
+class HealthIncident(BaseModel):
+    """A status change between two consecutive uptime samples. JSON keys: at, component, from, to."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    at: str
+    component: str  # "overall" or a component name
+    from_: str = Field(alias="from")
+    to: str
+
+
+class HealthHistory(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    days: int
+    from_: str = Field(alias="from")
+    to: str
+    samples: int
+    uptime_pct: float | None
+    components: dict[str, UptimeStat]
+    daily: list[UptimeDay]
+    incidents: list[HealthIncident]

@@ -308,3 +308,34 @@ def test_research_note_logs_dropped_sentence_count(data_dir, caplog):
     with caplog.at_level(logging.INFO, logger=nl.log.name):
         build(data_dir)
     assert any("dropped 1 sentence" in r.getMessage() and r.levelno == logging.INFO for r in caplog.records)
+
+
+def test_track_record_seal_when_chain_exists(data_dir):
+    from app.journal import digest
+
+    issue = build(data_dir)
+    assert issue["track_record"]["seal"] is None  # no chain file yet
+    assert "Track-record seal" not in nl.render_markdown(issue) and "Track-record seal" not in nl.render_html(issue)
+    for key in ("recorded", "complete_20d", "min_n", "rows", "collecting"):  # existing keys unchanged
+        assert key in issue["track_record"]
+
+    with SessionLocal() as s:
+        s.query(JournalEntry).update({JournalEntry.created_at: utc(2026, 10, 6, 15)})
+        s.commit()
+        digest.seal_through(s, str(data_dir), date(2026, 10, 10), now=utc(2026, 10, 12, 1))
+    head = digest.chain_head(str(data_dir))
+    issue = build(data_dir)
+    assert issue["track_record"]["seal"] == head and head["days"] == 5 and head["head_day"] == "2026-10-10"
+    line = f"Track-record seal through 2026-10-10: {head['head_hash'][:16]}… (5 days; verify at https://quantdesk.test/track-record)"
+    assert line in nl.render_markdown(issue)
+    assert line in nl.render_html(issue)
+    assert issue["flagged_words"] == []
+    for text in (nl.render_markdown(issue), nl.render_html(issue)):
+        assert not BANNED.findall(text)
+
+
+def test_old_archived_issue_without_seal_still_renders(data_dir):
+    issue = build(data_dir)
+    del issue["track_record"]["seal"]  # issues archived before seals existed
+    assert "Track-record seal" not in nl.render_markdown(issue) and "## Track record update" in nl.render_markdown(issue)
+    assert "Track record update" in nl.render_html(issue)

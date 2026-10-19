@@ -2,7 +2,17 @@
 // Client components keep using `api` from ./api (cache: "no-store", browser base URL).
 import { cache } from "react";
 
-import type { Fundamentals, Halt, NewsletterIssue, NewsletterIssueSummary, SizeBucket, TickerDetail } from "./api";
+import type {
+  BacktestReport,
+  EventStudy,
+  Fundamentals,
+  Halt,
+  NewsletterIssue,
+  NewsletterIssueSummary,
+  SizeBucket,
+  StudyName,
+  TickerDetail,
+} from "./api";
 
 // Environment variables (server-only module, so non-NEXT_PUBLIC names are readable here):
 //   API_URL_INTERNAL      optional; API origin as seen from the Next server (e.g. http://backend:8000 in Docker).
@@ -84,3 +94,12 @@ export const getSitemapTickers = () => getJson<SitemapTicker[]>("/api/tickers/si
 export const getNewsletterIssues = cache(() => getJson<NewsletterIssueSummary[]>("/api/newsletter/issues", 600, 10_000));
 
 export const getNewsletterIssue = cache((id: string) => getJson<NewsletterIssue>(`/api/newsletter/${enc(id)}`, 86_400, 10_000));
+
+// Research documents for the server-rendered Learn lessons. They change only when a study or backtest
+// is rerun, so they are cached for an hour. Always pass the study explicitly so cache() dedupes calls.
+// A 404 (study not run yet) or status 0 (API down) is returned as ok: false; lessons render without it.
+export const getEventStudy = cache((study: StudyName) =>
+  getJson<EventStudy>(study === "main" ? "/api/research/event-study" : `/api/research/event-study?study=${enc(study)}`, 3600, 10_000),
+);
+
+export const getBacktestReport = cache(() => getJson<BacktestReport>("/api/backtest/report", 3600, 15_000));

@@ -8,7 +8,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app import main
-from app.research_jobs import JobBusy, ResearchJobs, atomic_json
+from app.research_jobs import MODULES, JobBusy, ResearchJobs, atomic_json
 
 
 class Worker:
@@ -218,6 +218,33 @@ def test_failed_study_does_not_refresh_evidence(tmp_path, worker):
     assert refreshed == []
 
 
+def test_new_study_kinds_have_fixed_modules():
+    assert MODULES["event_study_oos"] == "app.research.oos"
+    assert MODULES["insider_study"] == "app.insiders.study"
+    assert MODULES["event_study"] == "app.research.eventstudy" and MODULES["backtest"] == "app.backtest.report"
+
+
+@pytest.mark.parametrize("kind", ["event_study_oos", "insider_study", "backtest"])
+def test_only_event_study_success_reloads_evidence(tmp_path, worker, kind):
+    refreshed = []
+    manager = ResearchJobs(tmp_path, lambda: refreshed.append(True))
+    manager.start(kind)
+    assert worker.started.wait(2)
+    finish(manager, worker)
+    assert refreshed == []
+    assert manager.snapshot()["latest"][kind]["status"] == "succeeded"
+    args, _ = worker.calls[0]
+    assert args[0] == [sys.executable, "-m", MODULES[kind]]
+    # Persisted status of the new kinds survives a restart
+    assert ResearchJobs(tmp_path).snapshot()["latest"][kind]["status"] == "succeeded"
+
+
+def test_unknown_kind_still_rejected(tmp_path, worker):
+    with pytest.raises(ValueError):
+        ResearchJobs(tmp_path).start("app.research.oos")
+    assert worker.calls == []
+
+
 def test_shutdown_reaps_child_even_when_status_write_fails(tmp_path, worker, monkeypatch):
     manager = ResearchJobs(tmp_path)
     manager.start("backtest")
@@ -250,7 +277,7 @@ def test_corrupt_state_file_does_not_crash_startup(tmp_path, content):
     path = tmp_path / "research_jobs.json"
     path.write_bytes(content)
     manager = ResearchJobs(tmp_path)
-    assert manager.snapshot() == {"active": None, "latest": {"backtest": None, "event_study": None}}
+    assert manager.snapshot() == {"active": None, "latest": dict.fromkeys(MODULES)}
     assert not path.exists()
     assert len(list(tmp_path.glob("research_jobs.json.corrupt-*"))) == 1
 
@@ -258,7 +285,7 @@ def test_corrupt_state_file_does_not_crash_startup(tmp_path, content):
 def test_unreadable_state_path_does_not_crash_startup(tmp_path):
     (tmp_path / "research_jobs.json").mkdir()  # reading a directory raises OSError
     manager = ResearchJobs(tmp_path)
-    assert manager.snapshot()["latest"] == {"backtest": None, "event_study": None}
+    assert manager.snapshot()["latest"] == dict.fromkeys(MODULES)
 
 
 def test_invalid_saved_jobs_are_dropped_and_valid_ones_kept(tmp_path):
@@ -270,7 +297,7 @@ def test_invalid_saved_jobs_are_dropped_and_valid_ones_kept(tmp_path):
     manager = ResearchJobs(tmp_path)
     latest = manager.snapshot()["latest"]
     assert latest["backtest"] is None
-    assert set(latest) == {"backtest", "event_study"}
+    assert set(latest) == set(MODULES)
     assert latest["event_study"]["id"] == "ok" and "extra" not in latest["event_study"]
     assert len(latest["event_study"]["message"]) == 500
     assert json.loads((tmp_path / "research_jobs.json").read_text())["backtest"] is None
