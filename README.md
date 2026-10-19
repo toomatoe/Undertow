@@ -150,6 +150,28 @@ Next steps:
 - Pre-register a fee-aware variant.
 - Paper-trade it forward before any money is involved.
 
+### Pre-registered confirmatory studies (Oct 19, 2026)
+
+Both designs were written down and committed before any of their data was looked at: `backend/app/research/PREREGISTRATION_OOS.md` and `backend/app/insiders/PREREGISTRATION.md`. Standard errors are clustered by company. Full outputs are in `docs/results/*_2026-10-19.json`, and the Lab's study selector shows them.
+
+**Out-of-sample replication (2020–23, companies never used in discovery):**
+
+| Hypothesis | n / companies | Drift vs index | vs ordinary days | Clustered t | Net of costs | Verdict |
+|---|---|---|---|---|---|---|
+| H1 nano priced offerings (20d) | 228 / 69 | −6.9% | −7.6% | −2.64 | −0.06% | not replicated |
+| H2 unregistered share sales | 719 / 182 | −1.1% | −1.3% | −0.76 | −4.4% | not replicated |
+| H3 nano material agreements | 966 / 136 | −1.5% | −2.2% | −0.93 | −5.5% | not replicated |
+
+H1 replicates statistically (|t| ≥ 2.39), at about half the in-sample size. It does not survive costs and borrow, which matches the backtest verdict: the effect is real but not tradable.
+
+**Form 4 insider purchases (2020–26, pre-registered):**
+- Micro-cap **cluster purchases** (several insiders buying close together) are the one significant result: **+1.6% vs ordinary days over 5 trading days** (n = 662, clustered t = 3.29), and +0.11% after estimated costs.
+- Thin, but it is the first long-side signal to pass every pre-registered check.
+- Opportunistic purchases (Cohen-Malloy-Pomorski) show +2.7% excess over 20 days in micro caps, but a clustered t of 1.58, so they don't count yet.
+- Our XML parser matched SEC's structured data on 50 of 50 sampled filings.
+
+Historical and hypothetical. Not investment advice.
+
 **News tab**
 
 - **Live news feed** from free sources:
