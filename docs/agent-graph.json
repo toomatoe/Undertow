@@ -1,5 +1,5 @@
 {
-  "$comment": "Machine-readable module graph for agents (Afterfile v1.0, local-only). Planners assign work items to modules so parallel builders never share files; reviewers use depends_on/used_by to find what a change can break; the verify step uses tests + shared_resources. Keep in sync when adding a module (see docs/AGENT_PROCESS.md). Every repo file matches exactly one module path (dirs end in /); a module owns its own test files, and tests lists what to run.",
+  "$comment": "Machine-readable module graph for agents (Undertow v1.0, local-only). Planners assign work items to modules so parallel builders never share files; reviewers use depends_on/used_by to find what a change can break; the verify step uses tests + shared_resources. Keep in sync when adding a module (see docs/AGENT_PROCESS.md). Every repo file matches exactly one module path (dirs end in /); a module owns its own test files, and tests lists what to run.",
   "version": 1,
   "shared_resources": {
     "docker_api_image": "Building/running the api image (`docker compose build api`, `docker compose run --rm api ...`). One agent at a time: parallel builds collide.",

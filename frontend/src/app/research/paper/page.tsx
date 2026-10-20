@@ -18,23 +18,23 @@ export const dynamic = "force-static";
 const SOURCE = path.join(process.cwd(), "src", "content", "working-paper.md");
 const PATH = "/research/paper";
 const DESCRIPTION =
-  "Afterfile working paper: an in-sample event study of SEC filings by small US companies, a pre-registered out-of-sample replication and a pre-registered Form 4 insider-purchase study, judged after costs and borrow. Hypothetical results, not investment advice.";
+  "Undertow working paper: an in-sample event study of SEC filings by small US companies, a pre-registered out-of-sample replication and a pre-registered Form 4 insider-purchase study, judged after costs and borrow. Hypothetical results, not investment advice.";
 
 const readPaper = cache(() => readFile(SOURCE, "utf8"));
 
 function titleOf(source: string): string {
   const h1 = parseMarkdown(source).find((b) => b.type === "heading" && b.level === 1);
-  return h1 && h1.type === "heading" ? plainText(h1.text) : "Afterfile working paper";
+  return h1 && h1.type === "heading" ? plainText(h1.text) : "Undertow working paper";
 }
 
 export async function generateMetadata(): Promise<Metadata> {
-  const title = `${titleOf(await readPaper())} · Afterfile`;
+  const title = `${titleOf(await readPaper())} · Undertow`;
   return {
     metadataBase: new URL(SITE_URL),
     title: { absolute: title },
     description: DESCRIPTION,
     alternates: { canonical: PATH },
-    openGraph: { type: "article", siteName: "Afterfile", url: PATH, title, description: DESCRIPTION },
+    openGraph: { type: "article", siteName: "Undertow", url: PATH, title, description: DESCRIPTION },
     twitter: { card: "summary", title, description: DESCRIPTION },
   };
 }

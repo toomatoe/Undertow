@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import DraftNotice from "@/components/DraftNotice";
 
-export const metadata = { title: "Disclaimer · Afterfile" };
+export const metadata = { title: "Disclaimer · Undertow" };
 
 export default function DisclaimerPage() {
   return (
@@ -13,14 +13,14 @@ export default function DisclaimerPage() {
 
       <h2>Research and information only</h2>
       <p>
-        Afterfile is a personal research tool that runs on your own computer. It shows general, impersonal information about public SEC
+        Undertow is a personal research tool that runs on your own computer. It shows general, impersonal information about public SEC
         filings, trading halts and market data, along with statistical research about how stocks have historically behaved after those
-        events. Nothing in Afterfile, its alerts, newsletters or emails is investment, legal, tax or accounting advice, or a recommendation
+        events. Nothing in Undertow, its alerts, newsletters or emails is investment, legal, tax or accounting advice, or a recommendation
         to buy, sell or hold any security.
       </p>
       <p>
-        Afterfile does not know your financial situation, objectives or risk tolerance, and nothing it shows is tailored to you. Watchlists
-        and filters only narrow down the same public information. Afterfile does not manage money, take custody of funds, execute trades or
+        Undertow does not know your financial situation, objectives or risk tolerance, and nothing it shows is tailored to you. Watchlists
+        and filters only narrow down the same public information. Undertow does not manage money, take custody of funds, execute trades or
         connect to brokerage accounts.
       </p>
 
@@ -43,7 +43,7 @@ export default function DisclaimerPage() {
         </li>
       </ul>
       <p>
-        Afterfile&apos;s own backtest of the strongest signal it found concluded it was <strong>not tradable</strong> after realistic costs.
+        Undertow&apos;s own backtest of the strongest signal it found concluded it was <strong>not tradable</strong> after realistic costs.
         Losing results and drawdowns are shown alongside everything else, and simulated results are never presented as real.
       </p>
 
@@ -57,7 +57,7 @@ export default function DisclaimerPage() {
 
       <h2>No sponsors, no conflicts</h2>
       <ul>
-        <li>Afterfile is free and has no paying customers, advertisers or sponsors.</li>
+        <li>Undertow is free and has no paying customers, advertisers or sponsors.</li>
         <li>No company pays to be covered, promoted or left out.</li>
       </ul>
 

@@ -1,13 +1,13 @@
-> **Decision 2026-10-19: local-only, no paid tier.** Afterfile runs on the owner's machine via Docker. No Stripe, accounts, pricing or hosting; the monetization sections below are kept as background research only.
+> **Decision 2026-10-19: local-only, no paid tier.** Undertow runs on the owner's machine via Docker. No Stripe, accounts, pricing or hosting; the monetization sections below are kept as background research only.
 
-# Afterfile: Product Research (Small-Cap Event Intelligence)
+# Undertow: Product Research (Small-Cap Event Intelligence)
 
 *Compiled 2026-10-16. Educational research, not legal or financial advice. Prices were checked against vendor pages where those pages loaded. **(secondary)** means the figure came from a third-party review or aggregator and was not confirmed on the vendor's own page. Several vendor pages (DilutionTracker, Fintel, Benzinga, TipRanks) blocked automated fetches, so their prices are secondary and should be re-checked by hand before you quote them.*
 
 ## TL;DR
 
 - **The market is real and crowded at the "dilution data" layer.** DilutionTracker is the default small-cap dilution tool, and brokers like CenterPoint/Clear Street give it away free to active clients. AskEdgar ($59 to $199/mo) is the AI-filings player. A wave of newer clones (DilutionWatch, Dilutracker) compete on price.
-- **Afterfile's gap is "what happens next", not "what was filed".** No competitor reviewed here publishes per-signal-type historical reaction statistics (an event study) or a public, timestamped track record of its alerts. Afterfile also covers non-dilution adverse events: 8-K Item 4.02 restatements, 4.01 auditor changes, 3.01 delisting notices, and 13D activists. That combination is the wedge.
+- **Undertow's gap is "what happens next", not "what was filed".** No competitor reviewed here publishes per-signal-type historical reaction statistics (an event study) or a public, timestamped track record of its alerts. Undertow also covers non-dilution adverse events: 8-K Item 4.02 restatements, 4.01 auditor changes, 3.01 delisting notices, and 13D activists. That combination is the wedge.
 - **Table stakes before anyone pays:** fast alerts (seconds to about a minute after EDGAR acceptance), push, email and Discord delivery, watchlists, and a per-ticker page with dilution history, cash runway, float, short interest and halts.
 - **Price point:** the retail band is roughly $25 to $75/mo. Launch at about $29 to $49/mo with a useful free tier (delayed alerts), which mirrors Unusual Whales' delayed-free model.
 - **Legal posture:** stay inside the publisher's exclusion. Content must be impersonal, bona fide and regularly published. No personalized advice, no managing money, no auto-trading. Treat the Edge Lab and backtester as hypothetical performance: follow FTC substantiation norms and borrow the SEC Marketing Rule's disclosure discipline voluntarily.
@@ -39,14 +39,14 @@
 
 ### 1.2 How directly does DilutionTracker compete, and where is the gap?
 
-**Overlap (direct):** dilutive offerings are Afterfile's flagship signal, and DilutionTracker owns that job for small-cap day traders. It is wired into DAS Trader and bundled free by brokers (CenterPoint: $100k+ equity or 100k+ monthly shares), so the core audience often gets it at no cost. Competing head-on with "better dilution profiles" means fighting a free, entrenched incumbent.
+**Overlap (direct):** dilutive offerings are Undertow's flagship signal, and DilutionTracker owns that job for small-cap day traders. It is wired into DAS Trader and bundled free by brokers (CenterPoint: $100k+ equity or 100k+ monthly shares), so the core audience often gets it at no cost. Competing head-on with "better dilution profiles" means fighting a free, entrenched incumbent.
 
-**Gap (where Afterfile can win):**
+**Gap (where Undertow can win):**
 1. **Outcome statistics.** DilutionTracker tells you a company *can* dilute. It does not show, from what was found, how stocks *historically moved* after a priced offering, an S-1, an auditor change, and so on. The Edge Lab event study is the differentiator. Make it per-signal, per-size bucket (public float), with confidence intervals and sample sizes.
 2. **Non-dilution adverse events.** Restatements (8-K Item 4.02), auditor changes (4.01), delisting and compliance notices (3.01), and activist 13Ds are outside DilutionTracker's stated focus. AskEdgar touches Nasdaq compliance, but nobody packages these as one "small-cap distress radar".
 3. **Public, timestamped track record.** No competitor reviewed publishes a log of every alert with its subsequent move. That builds trust and doubles as SEO content.
 4. **Speed and freshness.** Reviewers note DilutionTracker data "lags" and shows structure rather than the last hour. Seconds-level alerts on EDGAR acceptance are a measurable edge, but DilutionWatch already claims 60-second scans, so speed alone is not a moat.
-5. **Positioning.** Be the complement ("open DilutionTracker for the structure, Afterfile for the alert and the odds"). Price below it and integrate links to it rather than rebuilding every warrant table on day one.
+5. **Positioning.** Be the complement ("open DilutionTracker for the structure, Undertow for the alert and the odds"). Price below it and integrate links to it rather than rebuilding every warrant table on day one.
 
 ---
 
@@ -110,7 +110,7 @@
   - not personal communications,
   - no false or misleading information,
   - not designed to tout securities the publisher has an interest in.
-- **2024 Seeking Alpha decision** (GT Law summary): subscription content plus **customized email alerts** still qualified. Breaking-news updates count as "regular." Subscriber filters on generally available content (watchlist alerts) do not make it personal. This closely matches Afterfile's watchlist alerts.
+- **2024 Seeking Alpha decision** (GT Law summary): subscription content plus **customized email alerts** still qualified. Breaking-news updates count as "regular." Subscriber filters on generally available content (watchlist alerts) do not make it personal. This closely matches Undertow's watchlist alerts.
 - **What breaks it:**
   - personalized communications or authority over funds (*Weiss Research*, 2006),
   - false or misleading content,
@@ -169,7 +169,7 @@
 - **Broker bundling:** DilutionTracker and Benzinga Pro reach traders through CenterPoint's free-tools tiers.
 - **Affiliate reviewers** (curvedtrading.com and others) drive "X review" and "X vs Y" search traffic for DilutionTracker.
 
-**Playbook for Afterfile:**
+**Playbook for Undertow:**
 1. **SEO ticker and event pages:** "/t/XYZ/offerings", "/signals/auditor-changes", each with the public outcome log. Long-tail queries like "XYZ offering" or "XYZ delisting notice" spike exactly when traders care.
 2. **X/FinTwit and Stocktwits bot:** auto-post delayed alerts with a chart of historical reaction stats. Delay makes it a teaser, not the product.
 3. **Discord:** a free server with delayed alerts and a paid role with real-time alerts, plus a bot other servers can install.

@@ -1,6 +1,6 @@
 // Pure, deterministic statistics for the Learn lessons and widgets. No React, no DOM: safe on the
 // server and in the browser. Each formula mirrors the backend function named in its comment, so a
-// widget shows the same arithmetic Afterfile runs:
+// widget shows the same arithmetic Undertow runs:
 //   backend/app/research/eventstudy.py  t_stat, welch_t, clustered_se, clustered_t, clustered_welch_t, winsorize, percentile
 //   backend/app/backtest/stats.py       moments, psr, expected_max_sharpe, dsr
 // References: Bailey & López de Prado (2012) "The Sharpe Ratio Efficient Frontier" (PSR);

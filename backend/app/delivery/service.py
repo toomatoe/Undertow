@@ -140,7 +140,7 @@ def confirm_url(s: DeliverySettings, token: str) -> str:
 
 
 def _footer_text(s: DeliverySettings, unsub: str, reason: str) -> str:
-    return "\n".join(["", "--", reason, f"Unsubscribe (one click): {unsub}", f"Afterfile, {s.email_postal_address}", DISCLAIMER, ""])
+    return "\n".join(["", "--", reason, f"Unsubscribe (one click): {unsub}", f"Undertow, {s.email_postal_address}", DISCLAIMER, ""])
 
 
 def _footer_html(s: DeliverySettings, unsub: str, reason: str) -> str:
@@ -151,7 +151,7 @@ def _footer_html(s: DeliverySettings, unsub: str, reason: str) -> str:
         f'<div style="max-width:640px;">'
         f'<p style="margin:0 0 6px;">{e(reason)}</p>'
         f'<p style="margin:0 0 6px;"><a href="{e(unsub)}" style="color:{nl.C_LINK};text-decoration:underline;">Unsubscribe</a> (one click)</p>'
-        f'<p style="margin:0 0 6px;">Afterfile, {e(s.email_postal_address)}</p>'
+        f'<p style="margin:0 0 6px;">Undertow, {e(s.email_postal_address)}</p>'
         f'<p style="margin:0;">{e(DISCLAIMER)}</p>'
         "</div></td></tr></table>\n"
     )
@@ -192,7 +192,7 @@ def build_message(s: DeliverySettings, to: str, subject: str, html_body: str, te
 def _confirm_message(s: DeliverySettings, sub: Subscriber, raw_confirm: str) -> EmailMessage:
     link = confirm_url(s, raw_confirm)
     daily = " and the daily filing digest" if sub.wants_daily else ""
-    text = (f"Please confirm your subscription to the Afterfile weekly Small-Cap Filing Radar{daily}.\n\n"
+    text = (f"Please confirm your subscription to the Undertow weekly Small-Cap Filing Radar{daily}.\n\n"
             f"Confirm: {link}\n\nThe link is valid for {CONFIRM_TTL_DAYS} days. If you did not ask for this, ignore this email: "
             "nothing more will be sent.\n")
     e = nl._e
@@ -201,7 +201,7 @@ def _confirm_message(s: DeliverySettings, sub: Subscriber, raw_confirm: str) -> 
         f'<body style="margin:0;padding:24px 8px;background:#f4f5f7;{nl.FONT}color:{nl.C_TEXT};">'
         '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr><td align="center">'
         f'<div style="max-width:560px;background:#ffffff;border:1px solid {nl.C_BORDER};border-radius:8px;padding:24px;text-align:left;font-size:14px;line-height:1.5;">'
-        f'<p style="margin:0 0 12px;">Please confirm your subscription to the Afterfile weekly Small-Cap Filing Radar{e(daily)}.</p>'
+        f'<p style="margin:0 0 12px;">Please confirm your subscription to the Undertow weekly Small-Cap Filing Radar{e(daily)}.</p>'
         f'<p style="margin:0 0 12px;"><a href="{e(link)}" style="display:inline-block;padding:10px 16px;background:{nl.C_LINK};color:#ffffff;'
         'text-decoration:none;border-radius:6px;">Confirm subscription</a></p>'
         f'<p style="margin:0;color:{nl.C_MUTED};font-size:12px;">The link is valid for {CONFIRM_TTL_DAYS} days. If you did not ask for this, '
@@ -210,7 +210,7 @@ def _confirm_message(s: DeliverySettings, sub: Subscriber, raw_confirm: str) -> 
     )
     reason = (f"You are receiving this one-time message because someone asked to subscribe this address at {s.site_base}. "
               "Without confirmation you will not hear from us again.")
-    return build_message(s, sub.email, "Confirm your Afterfile subscription", page, text,
+    return build_message(s, sub.email, "Confirm your Undertow subscription", page, text,
                          manage=_ensure_manage(sub, s), reason=reason)
 
 
@@ -401,7 +401,7 @@ def send_newsletter(session: Session, data_dir: str, issue_id: str, transport: T
     if flagged:
         log.error("Newsletter %s not emailed: advice-word check flagged %s", issue_id, flagged)
         return {"kind": "newsletter", "ref": issue_id, "skipped_reason": "flagged_words", "flagged_words": flagged, "sent": 0}
-    reason = f"You are receiving this because you confirmed a subscription to the Afterfile weekly newsletter at {s.site_base}."
+    reason = f"You are receiving this because you confirmed a subscription to the Undertow weekly newsletter at {s.site_base}."
     return _fan_out(session, s, transport, "newsletter", issue_id, [Subscriber.status == "active"],
                     f"{issue['title']}: {nl.week_label(issue)}", page, md, reason)
 
@@ -420,7 +420,7 @@ def send_daily_digest(session: Session, data_dir: str, day_et: date, transport: 
         return {"kind": "daily_digest", "ref": ref, "skipped_reason": "flagged_words", "flagged_words": d["flagged_words"], "sent": 0}
     if digest_mod.is_empty(d):
         return {"kind": "daily_digest", "ref": ref, "skipped_reason": "empty", "sent": 0}
-    reason = f"You are receiving this because you opted into the Afterfile daily filing digest at {s.site_base}."
+    reason = f"You are receiving this because you opted into the Undertow daily filing digest at {s.site_base}."
     return _fan_out(session, s, transport, "daily_digest", ref,
                     [Subscriber.status == "active", Subscriber.wants_daily.is_(True)],
                     digest_mod.subject(d), d["html"], d["markdown"], reason)

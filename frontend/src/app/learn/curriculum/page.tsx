@@ -8,7 +8,7 @@ import { CURRICULUM_PATH, getLesson, lessonPath, LESSONS_REVISED } from "@/lib/l
 import { SITE_URL } from "@/lib/server-api";
 
 // Static server component: no API calls.
-const TITLE = "8-week quant research curriculum for student developers · Afterfile Learn";
+const TITLE = "8-week quant research curriculum for student developers · Undertow Learn";
 const DESCRIPTION =
   "A self-study path through event studies, multiple testing, clustered errors, pre-registration, Form 4 parsing and the deflated Sharpe ratio, with code exercises and readings.";
 
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
   alternates: { canonical: CURRICULUM_PATH },
-  openGraph: { type: "article", siteName: "Afterfile", url: CURRICULUM_PATH, title: TITLE, description: DESCRIPTION },
+  openGraph: { type: "article", siteName: "Undertow", url: CURRICULUM_PATH, title: TITLE, description: DESCRIPTION },
   twitter: { card: "summary", title: TITLE, description: DESCRIPTION },
 };
 
@@ -37,9 +37,9 @@ export default function CurriculumPage() {
     isAccessibleForFree: true,
     learningResourceType: "Syllabus",
     timeRequired: "P8W",
-    author: { "@type": "Organization", name: "Afterfile", url: SITE_URL },
-    publisher: { "@type": "Organization", name: "Afterfile", url: SITE_URL },
-    isPartOf: { "@type": "Course", name: "Afterfile Learn", url: `${SITE_URL}/learn` },
+    author: { "@type": "Organization", name: "Undertow", url: SITE_URL },
+    publisher: { "@type": "Organization", name: "Undertow", url: SITE_URL },
+    isPartOf: { "@type": "Course", name: "Undertow Learn", url: `${SITE_URL}/learn` },
   };
 
   return (

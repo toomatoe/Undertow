@@ -68,7 +68,7 @@ from app.schemas import (
 from app.security import RateLimiter, RateLimitMiddleware, admin_dependency, admin_policy
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
-log = logging.getLogger("afterfile")
+log = logging.getLogger("undertow")
 settings = get_settings()
 
 EVIDENCE_HORIZON = 20  # trading days shown next to live alerts
@@ -395,7 +395,7 @@ async def lifespan(app: FastAPI):
         await asyncio.to_thread(get_research_jobs().shutdown)
 
 
-app = FastAPI(title="Afterfile API", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Undertow API", version="0.2.0", lifespan=lifespan)
 # Per-client rate limits (app/security.py). The middleware looks the limiter up per request, so tests can swap it.
 rate_limiter: RateLimiter | None = RateLimiter(
     settings.rate_limit_per_minute, settings.rate_limit_write_per_minute, trust_proxy=settings.trust_proxy_headers

@@ -27,7 +27,7 @@ def utc(*a):
 
 
 def enabled_settings(**kw) -> DeliverySettings:
-    base = dict(_env_file=None, smtp_host="smtp.test.invalid", email_from="Afterfile <radar@example.com>",
+    base = dict(_env_file=None, smtp_host="smtp.test.invalid", email_from="Undertow <radar@example.com>",
                 email_reply_to="hello@example.com", email_postal_address=POSTAL,
                 email_link_base_url="https://api.example.com", email_token_secret="test-secret-key")
     return DeliverySettings(**{**base, **kw})
@@ -281,7 +281,7 @@ def test_send_newsletter_idempotent_with_compliance_headers(env, data_dir):
         s.add(Subscriber(email="pending@example.com", status="pending", created_at=utc(2026, 10, 1)))
         s.add(Subscriber(email="gone@example.com", status="unsubscribed", created_at=utc(2026, 10, 1)))
         s.commit()
-        issue, created = nl.generate(s, str(data_dir), WEEK_END, public_base_url="https://afterfile.example")
+        issue, created = nl.generate(s, str(data_dir), WEEK_END, public_base_url="https://undertow.example")
         assert created and not issue["flagged_words"]
 
         r1 = service.send_newsletter(s, str(data_dir), issue["id"], env.transport, settings=env.settings)
@@ -341,14 +341,14 @@ def test_send_newsletter_missing_or_flagged_issue(env, data_dir):
 
 def test_build_daily_digest_content(data_dir):
     with SessionLocal() as s:
-        d = digest_mod.build_daily_digest(s, str(data_dir), DAY, public_base_url="https://afterfile.example")
+        d = digest_mod.build_daily_digest(s, str(data_dir), DAY, public_base_url="https://undertow.example")
     assert [i["ticker"] for i in d["items"]] == ["TINY", "MIDL"]  # severity 3 first; sev 1, large cap, other day excluded
     assert d["halts_total"] == 1 and d["serious_halts"] == 1
     assert d["flagged_words"] == []
     md, page = d["markdown"], d["html"]
     for body in (md, page):
         assert "Historical, hypothetical: past nano caps after" in body
-        assert "https://afterfile.example/ticker/TINY" in body
+        assert "https://undertow.example/ticker/TINY" in body
         assert "https://www.sec.gov/Archives/edgar/data/" in body
         assert digest_mod.NO_EVIDENCE in body  # MIDL has no evidence row
         assert "historical and hypothetical, not predictions" in body
@@ -372,7 +372,7 @@ def test_daily_digest_only_to_wants_daily(env, data_dir):
     for body in (text_part(msg), html_part(msg)):
         assert "Historical, hypothetical" in body
         assert service.DISCLAIMER in body and POSTAL in body
-    assert msg["Subject"] == "Afterfile daily filing digest: Wed Oct 7, 2026 (2 signal filings)"
+    assert msg["Subject"] == "Undertow daily filing digest: Wed Oct 7, 2026 (2 signal filings)"
 
 
 def test_daily_digest_skips_empty_day(env, data_dir):

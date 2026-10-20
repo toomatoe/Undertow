@@ -17,7 +17,7 @@ from app.models import TradingHalt
 from app.newsletter import service as nl
 from app.research.eventstudy import ET
 
-TITLE = "Afterfile daily filing digest"
+TITLE = "Undertow daily filing digest"
 MIN_SEVERITY = 2
 ITEM_LIMIT = 30
 INTRO = ("Signal filings from nano-, micro- and small-cap companies filed with the SEC on this day (Eastern Time). "
@@ -107,7 +107,7 @@ def render_html(d: dict) -> str:
     L = d["links"]
     e, a, row, p = nl._e, nl._a, nl._row, nl._p
     rows = [
-        row(f'<div style="font-size:12px;color:{nl.C_MUTED};text-transform:uppercase;letter-spacing:.05em;">Afterfile daily</div>'
+        row(f'<div style="font-size:12px;color:{nl.C_MUTED};text-transform:uppercase;letter-spacing:.05em;">Undertow daily</div>'
             f'<h1 style="margin:4px 0 2px;font-size:22px;color:{nl.C_TEXT};">{e(d["title"])}</h1>'
             f'<div style="font-size:14px;color:{nl.C_MUTED};">{e(day_label(date.fromisoformat(d["day"])))}</div>', "24px 24px 12px"),
         row(p(e(INTRO), muted=True, size=12)),

@@ -783,7 +783,7 @@ export function isAdminApiError(e: unknown): e is ApiError {
 // --- Admin token (this browser tab only) ---
 // Sent as a Bearer header on every admin-protected call. sessionStorage can be unavailable (privacy modes, SSR):
 // these helpers never throw.
-const ADMIN_TOKEN_KEY = "afterfile.researchAdminToken";
+const ADMIN_TOKEN_KEY = "undertow.researchAdminToken";
 
 export function getAdminToken(): string {
   try {

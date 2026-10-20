@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-  Start Afterfile locally on Windows (Docker Desktop required, nothing else).
+  Start Undertow locally on Windows (Docker Desktop required, nothing else).
 
 .DESCRIPTION
   - Creates .env from .env.example on the first run (every setting in it is optional).
@@ -70,7 +70,7 @@ if ($LASTEXITCODE -ne 0) {
 
 # 4. Where to go next.
 Write-Host ''
-Write-Host 'Afterfile is starting (the first ingest can take a minute).' -ForegroundColor Green
+Write-Host 'Undertow is starting (the first ingest can take a minute).' -ForegroundColor Green
 if ($NoWeb) {
     Write-Host '  UI:   run  npm --prefix frontend install  (first time), then  npm --prefix frontend run dev'
     Write-Host '        and open http://localhost:3000'

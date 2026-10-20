@@ -12,16 +12,16 @@ import { getEventStudy, SITE_URL } from "@/lib/server-api";
 // (the API is not running during `docker build`).
 export const dynamic = "force-dynamic";
 
-const TITLE = "Afterfile · small-cap SEC filing research, run locally";
+const TITLE = "Undertow · small-cap SEC filing research, run locally";
 const DESCRIPTION =
-  "Afterfile is a local, personal research platform for SEC filings by small US companies: each live filing signal is shown next to its event-study evidence. It does not trade; simulated results are hypothetical and nothing here is investment advice.";
+  "Undertow is a local, personal research platform for SEC filings by small US companies: each live filing signal is shown next to its event-study evidence. It does not trade; simulated results are hypothetical and nothing here is investment advice.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { absolute: TITLE },
   description: DESCRIPTION,
   alternates: { canonical: "/" },
-  openGraph: { type: "website", siteName: "Afterfile", url: "/", title: TITLE, description: DESCRIPTION },
+  openGraph: { type: "website", siteName: "Undertow", url: "/", title: TITLE, description: DESCRIPTION },
   twitter: { card: "summary", title: TITLE, description: DESCRIPTION },
 };
 
@@ -43,7 +43,7 @@ export default async function Home() {
         <span className={styles.eyebrow}>Runs locally · research only</span>
         <h1 id="hero-title">SEC filings from small US companies, each shown next to the evidence on what happened after similar ones.</h1>
         <p className={styles.lead}>
-          Afterfile is a personal research platform that runs on your own machine. It watches EDGAR for filings by companies under $2B of
+          Undertow is a personal research platform that runs on your own machine. It watches EDGAR for filings by companies under $2B of
           public float and puts every live signal beside an event study of how comparable stocks moved afterwards, including the results
           that did not hold up.
         </p>

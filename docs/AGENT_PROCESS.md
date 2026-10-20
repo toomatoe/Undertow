@@ -1,6 +1,6 @@
 # Agent process graph
 
-How work gets done on Afterfile with multiple agents. The orchestrator, the main Claude session,
+How work gets done on Undertow with multiple agents. The orchestrator, the main Claude session,
 doesn't write the plan, ownership rules and review steps from scratch each time. They live here as
 two graphs.
 
@@ -97,7 +97,7 @@ Merging is the orchestrator's call, made after its own review.
 
 ## Helper: `scripts/pytest.sh`
 
-Runs backend tests against the current source in the `afterfile-api-test` dependency image without rebuilding it.
+Runs backend tests against the current source in the `undertow-api-test` dependency image without rebuilding it.
 It mounts `backend/` at `/app` and the repo root read-only at `/repo`, so tests that compare backend code with `docs/` or
 `frontend/` (`tests/test_paper_numbers.py`, the bundled-evidence check in `tests/test_insider_live.py`) can see them; they
 skip when the mount is missing. Both mounts are per-container, so parallel runs stay safe.

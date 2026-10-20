@@ -1,4 +1,4 @@
-# Local stack. Afterfile runs on your own machine only: every port binds to 127.0.0.1.
+# Local stack. Undertow runs on your own machine only: every port binds to 127.0.0.1.
 #   docker compose up -d --build                  db + api (run the UI with `npm --prefix frontend run dev`)
 #   docker compose --profile web up -d --build    db + api + web (UI at http://localhost:3000, no Node needed)
 # Windows: scripts/start.ps1 does the above (and creates .env from .env.example on first run).
@@ -8,7 +8,7 @@ services:
   db:
     image: pgvector/pgvector:pg17
     environment:
-      # Internal Postgres names keep the project's original name (it was renamed to Afterfile): changing them
+      # Internal Postgres names keep the project's original name (it was renamed to Undertow): changing them
       # would orphan existing local volumes, and nothing outside this file sees them.
       POSTGRES_USER: quantdesk
       POSTGRES_PASSWORD: quantdesk

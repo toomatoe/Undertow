@@ -1,5 +1,5 @@
 export const metadata = {
-  title: "Small-Cap Filing Radar · Afterfile",
+  title: "Small-Cap Filing Radar · Undertow",
   description:
     "Weekly newsletter of serious SEC filings, dilution warnings and trading halts for companies under $2B float, generated automatically from public SEC/FINRA/Nasdaq data.",
 };

@@ -38,7 +38,7 @@ class AdminSettings(BaseSettings):
 
 
 class Settings(AdminSettings):
-    """Backend settings. Afterfile runs locally on your own machine; every default works with zero configuration.
+    """Backend settings. Undertow runs locally on your own machine; every default works with zero configuration.
 
     Site origin (frontend) http://localhost:3000, API origin http://localhost:8000. Every optional integration is off
     while its env vars are unset: Alpaca news (both keys), Claude enrichment (ANTHROPIC_API_KEY), Discord alerts
@@ -49,11 +49,11 @@ class Settings(AdminSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore", env_ignore_empty=True)
 
     # SQLite works with zero setup; docker-compose points this at Postgres.
-    database_url: str = "sqlite:///./data/afterfile.db"
+    database_url: str = "sqlite:///./data/undertow.db"
     data_dir: str = "./data"
 
     # SEC requires a descriptive User-Agent with contact info on every request.
-    sec_user_agent: str = "afterfile-dev contact@example.com"
+    sec_user_agent: str = "undertow-dev contact@example.com"
 
     rss_feeds: dict[str, str] = DEFAULT_RSS_FEEDS
     edgar_enabled: bool = True

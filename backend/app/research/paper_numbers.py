@@ -123,8 +123,8 @@ _PATH_TOKEN = re.compile(r"([^.\[\]]+)|\[(\d+)\]")
 
 
 def find_repo_root() -> Path:
-    """Repo root: env AFTERFILE_REPO_ROOT, else /repo (scripts/pytest.sh mount), else three levels above app/."""
-    env = os.environ.get("AFTERFILE_REPO_ROOT")
+    """Repo root: env UNDERTOW_REPO_ROOT, else /repo (scripts/pytest.sh mount), else three levels above app/."""
+    env = os.environ.get("UNDERTOW_REPO_ROOT")
     if env:
         return Path(env)
     mounted = Path("/repo")

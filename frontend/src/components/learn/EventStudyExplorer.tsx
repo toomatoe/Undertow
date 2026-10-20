@@ -107,7 +107,7 @@ export default function EventStudyExplorer({
           />
           <p className="small">
             {directionMark(row.direction)} The direction was fixed before the study ran ({row.direction === "-" ? "a decline was expected, so the gross result is the drift with its sign flipped" : "a rise, or no prior, so the gross result is the drift as measured"}).
-            Net = gross − {pctAbs(row.cost, 2)}. Verdict under Afterfile&apos;s rule:{" "}
+            Net = gross − {pctAbs(row.cost, 2)}. Verdict under Undertow&apos;s rule:{" "}
             <strong>{row.significant ? "survives the multiple-testing correction, the baseline test and costs" : row.nominal_significant ? "nominal only (|t| ≥ 1.96 but fails the full rule)" : "not significant"}</strong>.
           </p>
         </>
