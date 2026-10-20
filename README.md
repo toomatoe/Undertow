@@ -8,6 +8,17 @@ never places orders, and every simulated number in it is hypothetical.
 
 > Research and education only. Nothing here is financial advice or a recommendation to trade any security.
 
+## Screenshots
+
+| | |
+|---|---|
+| ![Home page with the three key findings](docs/screenshots/home.png) | ![Live filing signals with their study evidence](docs/screenshots/signals.png) |
+| **Home:** what Undertow is and the three headline results | **Signals:** live SEC filings, each with how similar stocks moved afterwards |
+| ![Edge Lab showing the pre-registered insider study](docs/screenshots/lab.png) | ![Hypothetical paper portfolio](docs/screenshots/paper-portfolio.png) |
+| **Edge Lab:** the pre-registered Form 4 insider study | **Paper portfolio:** hypothetical, simulated from the forward journal |
+
+The [working paper](docs/paper/WORKING_PAPER.md) is also rendered in the app at `/research/paper` ([screenshot](docs/screenshots/working-paper.png)).
+
 ## Status (v1.0, October 2026)
 
 - **Published results** (raw files in [docs/results/](docs/results/)):
