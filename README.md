@@ -1,6 +1,6 @@
-# QuantDesk
+# Afterfile
 
-QuantDesk is a personal, locally run research platform for SEC filings by small US companies (under $2B public float).
+Afterfile is a personal, locally run research platform for SEC filings by small US companies (under $2B public float).
 It watches EDGAR, tags each new filing with a signal (offerings, restatements, auditor changes, insider cluster purchases
 and more), and shows it next to an event study of how similar stocks moved afterwards, after costs. It runs on your own
 machine with Docker, is free, has no accounts and is not hosted anywhere. It is for research and education only: it
@@ -87,7 +87,7 @@ overrides go in `frontend/.env.local` (template: the commented frontend section 
 the root `.env`.
 
 `docker-compose.prod.yml` is **optional / for later, not used for the local-only setup**. It is kept only as a hardened
-template for a possible private server; see [Price data](#price-data) for why QuantDesk must not be deployed publicly.
+template for a possible private server; see [Price data](#price-data) for why Afterfile must not be deployed publicly.
 
 ## Optional features (off by default)
 
@@ -107,13 +107,13 @@ all Form 4 requests.
 
 - Research prices come from Yahoo Finance's unofficial chart endpoint and are used for **personal, local research
   only**. They are throttled and cached on your machine, never committed, redistributed or served raw by the API.
-- QuantDesk **must not be deployed publicly** with Yahoo prices. The app shows only aggregate statistics (event-study
+- Afterfile **must not be deployed publicly** with Yahoo prices. The app shows only aggregate statistics (event-study
   averages, journal and paper-portfolio summaries), never price charts or quotes.
 - Any public use would need a licensed price feed with redistribution rights first.
 
 ## What works now
 
-**Landing page** (`/`): what QuantDesk is, the three key findings read live from the study files (each with a fallback
+**Landing page** (`/`): what Afterfile is, the three key findings read live from the study files (each with a fallback
 when a study has not been run on this machine), and links to every section.
 
 **Signals tab** (`/signals`)
@@ -172,12 +172,12 @@ when a study has not been run on this machine), and links to every section.
 - Unknown symbols return a real HTTP 404. While the site origin is localhost, `/robots.txt` asks crawlers to stay out.
 
 **Newsletter tab** (`/newsletter`, `backend/app/newsletter/`, see its [AGENTS.md](backend/app/newsletter/AGENTS.md))
-- A weekly "Small-Cap Filing Radar" built automatically from QuantDesk's own data once a week is complete: headline counts, top signal filings with their historical study stat, dilution watch, serious halts, track-record progress, a research note and the disclaimer.
+- A weekly "Small-Cap Filing Radar" built automatically from Afterfile's own data once a week is complete: headline counts, top signal filings with their historical study stat, dilution watch, serious halts, track-record progress, a research note and the disclaimer.
 - Archived as JSON, Markdown and HTML under `{DATA_DIR}/newsletters/`; issues are never overwritten unless rebuilt with `--force`. Every number is labelled historical or hypothetical and the text is checked for advice words.
 - Email delivery is optional (see [Optional features](#optional-features-off-by-default)); details in [delivery/AGENTS.md](backend/app/delivery/AGENTS.md).
 
 **Learn tab** (`/learn`)
-- Six server-rendered lessons (event studies, baselines, multiple testing, clustered errors, survivorship bias, Sharpe / Deflated Sharpe and backtest pitfalls) plus an 8-week curriculum, using QuantDesk's own numbers (labelled historical) and seeded in-browser simulators (labelled hypothetical).
+- Six server-rendered lessons (event studies, baselines, multiple testing, clustered errors, survivorship bias, Sharpe / Deflated Sharpe and backtest pitfalls) plus an 8-week curriculum, using Afterfile's own numbers (labelled historical) and seeded in-browser simulators (labelled hypothetical).
 
 **Status page and platform** (`/status`, `backend/app/health.py`, `backend/app/security.py`)
 - Component health (database, ingest, EDGAR and halts pollers, journal, newsletter, alerts, email, research runs), 7-day uptime, incidents and the seal verification.
@@ -275,4 +275,4 @@ lint and build, and builds both images on every push and pull request.
 - Enrichment defaults to `claude-opus-5-5`; `ENRICH_MODEL=claude-haiku-5-5` costs about 40x less. `ENRICH_MAX_PER_CYCLE` caps spend per cycle.
 - Tables are created with `create_all`, plus a stopgap that adds new nullable columns. Move to Alembic before real data matters.
 - No Docker? The backend falls back to SQLite: `cd backend && pip install -r requirements.txt && uvicorn app.main:app --reload` (needs Python 3.12 on the host).
-- Background research for the original idea is in [docs/FEASIBILITY.md](docs/FEASIBILITY.md) and [docs/PRODUCT_RESEARCH.md](docs/PRODUCT_RESEARCH.md) (the latter now background only: QuantDesk is local-only with no paid tier).
+- Background research for the original idea is in [docs/FEASIBILITY.md](docs/FEASIBILITY.md) and [docs/PRODUCT_RESEARCH.md](docs/PRODUCT_RESEARCH.md) (the latter now background only: Afterfile is local-only with no paid tier).

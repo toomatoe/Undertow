@@ -12,7 +12,7 @@ from app.db import Base, engine
 from app.security import RateLimiter, RateLimitMiddleware, SlidingWindow, admin_policy, client_key
 
 client = TestClient(main.app)  # no `with`: the lifespan (network) never runs
-PUBLIC = "https://quantdesk.example.com"
+PUBLIC = "https://afterfile.example.com"
 LOCAL = "http://localhost:3000"
 
 

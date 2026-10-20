@@ -97,7 +97,7 @@ def setup_function():
 
 def build(data_dir, **kw):
     with SessionLocal() as s:
-        return nl.build_issue(s, str(data_dir), WEEK_END, user_agent="test", public_base_url="https://quantdesk.test", **kw)
+        return nl.build_issue(s, str(data_dir), WEEK_END, user_agent="test", public_base_url="https://afterfile.test", **kw)
 
 
 def test_ids_and_weeks():
@@ -151,7 +151,7 @@ def test_stale_runway_does_not_qualify(data_dir, monkeypatch):
     md = nl.render_markdown(issue)
     for heading in ("Top filings this week", "Dilution watch", "Serious trading halts", "Track record update", "Research note"):
         assert f"## {heading}" in md
-    assert "https://quantdesk.test/ticker/TINY" in md and "https://quantdesk.test/methodology" in md
+    assert "https://afterfile.test/ticker/TINY" in md and "https://afterfile.test/methodology" in md
     assert "Historical, hypothetical" in md and "48 hours" in md
 
 
@@ -197,7 +197,7 @@ def test_research_note_drops_inflected_banned_words(data_dir):
 
 def test_immutable_unless_forced(data_dir):
     with SessionLocal() as s:
-        first, created = nl.generate(s, str(data_dir), WEEK_END, public_base_url="https://quantdesk.test")
+        first, created = nl.generate(s, str(data_dir), WEEK_END, public_base_url="https://afterfile.test")
         assert created
         for ext in ("json", "md", "html"):
             assert (data_dir / "newsletters" / f"2026-W41.{ext}").exists()
@@ -242,7 +242,7 @@ def test_coverage_note_when_collection_started_later(data_dir):
 def test_api(data_dir, monkeypatch):
     monkeypatch.setattr(main.settings, "data_dir", str(data_dir))
     with SessionLocal() as s:
-        nl.generate(s, str(data_dir), WEEK_END, public_base_url="https://quantdesk.test")
+        nl.generate(s, str(data_dir), WEEK_END, public_base_url="https://afterfile.test")
     client = TestClient(main.app)
     issues = client.get("/api/newsletter/issues").json()
     assert issues[0]["id"] == "2026-W41" and issues[0]["headline"]["signal_filings"] == 4 and issues[0]["week_end"] == "2026-10-11"
@@ -300,7 +300,7 @@ def test_flagged_words_ignore_names_but_catch_our_prose(data_dir, caplog, monkey
 
 def test_flagged_words_saved_with_issue(data_dir):
     with SessionLocal() as s:
-        issue, _ = nl.generate(s, str(data_dir), WEEK_END, public_base_url="https://quantdesk.test")
+        issue, _ = nl.generate(s, str(data_dir), WEEK_END, public_base_url="https://afterfile.test")
     assert issue["flagged_words"] == [] and nl.load_issue(str(data_dir), "2026-W41")["flagged_words"] == []
 
 
@@ -326,7 +326,7 @@ def test_track_record_seal_when_chain_exists(data_dir):
     head = digest.chain_head(str(data_dir))
     issue = build(data_dir)
     assert issue["track_record"]["seal"] == head and head["days"] == 5 and head["head_day"] == "2026-10-10"
-    line = f"Track-record seal through 2026-10-10: {head['head_hash'][:16]}… (5 days; verify at https://quantdesk.test/track-record)"
+    line = f"Track-record seal through 2026-10-10: {head['head_hash'][:16]}… (5 days; verify at https://afterfile.test/track-record)"
     assert line in nl.render_markdown(issue)
     assert line in nl.render_html(issue)
     assert issue["flagged_words"] == []

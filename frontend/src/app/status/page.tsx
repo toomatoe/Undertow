@@ -214,7 +214,7 @@ export default function StatusPage() {
       <div>
         <h1>System status</h1>
         <p className="muted small">
-          Live health of the data pipeline behind QuantDesk. Refreshes every minute.
+          Live health of the data pipeline behind Afterfile. Refreshes every minute.
           {details && <> Last checked {when(details.checked_at)}.</>}
         </p>
       </div>

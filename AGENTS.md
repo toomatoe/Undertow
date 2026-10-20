@@ -1,6 +1,6 @@
-# QuantDesk: agent guide (start here)
+# Afterfile: agent guide (start here)
 
-QuantDesk is a personal, **locally run** small-cap SEC-filing research platform (v1.0): live SEC filing signals for
+Afterfile is a personal, **locally run** small-cap SEC-filing research platform (v1.0): live SEC filing signals for
 companies under $2B public float, each shown next to an event-study result on how similar stocks moved afterwards.
 It also has a landing page with the key findings, a live market news feed (EDGAR, RSS, optional Alpaca/Benzinga) with
 optional Claude enrichment, a hash-sealed track record, a live forward test of the insider-cluster finding, a
@@ -42,7 +42,7 @@ Read this file, then only the AGENTS.md of the folder you are working in.
 | `docs/` | Feasibility and product research (background), published results, the working paper, batch plans, agent graph + process | [docs/AGENTS.md](docs/AGENTS.md) |
 | `docs/paper/` | `WORKING_PAPER.md`: write-up of all three studies and the backtest; numbers checked by `paper_numbers.py` | [research/AGENTS.md](backend/app/research/AGENTS.md) |
 | `scripts/start.ps1` | Windows one-command start: creates `.env` from `.env.example` if missing, `docker compose --profile web up -d --build`, prints the URLs (`-NoWeb` skips the UI container) | its header comment |
-| `scripts/pytest.sh` | Backend tests against mounted source in the `quantdesk-api-test` image (`backend/` at `/app`, repo read-only at `/repo`; no image rebuild, parallel-safe) | [docs/AGENT_PROCESS.md](docs/AGENT_PROCESS.md) |
+| `scripts/pytest.sh` | Backend tests against mounted source in the `afterfile-api-test` image (`backend/` at `/app`, repo read-only at `/repo`; no image rebuild, parallel-safe) | [docs/AGENT_PROCESS.md](docs/AGENT_PROCESS.md) |
 | `scripts/reproduce.sh`, `Makefile` | Offline replay of the in-sample / OOS / insider study and canonical compare (`make reproduce`, `make reproduce-oos`, `make reproduce-insiders`); also `make test`, `make test-file F=...`, `make snapshot` | [research/AGENTS.md](backend/app/research/AGENTS.md) |
 | `.github/workflows/ci.yml` | CI on every push/PR: backend pytest, frontend tsc + lint + build, both Docker images built (never pushed). Needs no secrets | |
 | `.claude/workflows/feature-graph.js` | Multi-agent Plan/Build/Review/Verify/Critic workflow | [docs/AGENT_PROCESS.md](docs/AGENT_PROCESS.md) |
@@ -110,12 +110,12 @@ Every default is local and needs no change.
 - Rate limits: `RATE_LIMIT_PER_MINUTE` (120), `RATE_LIMIT_WRITE_PER_MINUTE` (10), `TRUST_PROXY_HEADERS` (false; not
   needed locally).
 - Not settings: `POSTGRES_PASSWORD` (only for the optional prod compose env file), `GIT_SHA` (code version in study
-  manifests), `REPRO_BUILD=1` (`scripts/reproduce.sh` rebuilds the api image first), `QUANTDESK_REPO_ROOT` (repo root
+  manifests), `REPRO_BUILD=1` (`scripts/reproduce.sh` rebuilds the api image first), `AFTERFILE_REPO_ROOT` (repo root
   for `paper_numbers.find_repo_root`, else `/repo`).
 
 ## Conventions (non-negotiable)
 
-- **Local only.** QuantDesk is not deployed anywhere and has no paid tier, accounts or pricing. Do not add Stripe,
+- **Local only.** Afterfile is not deployed anywhere and has no paid tier, accounts or pricing. Do not add Stripe,
   sign-up, entitlement or hosting code. `docker-compose.prod.yml` is optional, for later.
 - **SEC User-Agent comes from config** (`settings.sec_user_agent`, env `SEC_USER_AGENT`). Pass it through;
   never hard-code a personal email or any contact string in code, tests or docs.

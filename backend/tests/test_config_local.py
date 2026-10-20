@@ -1,6 +1,6 @@
 """Zero-configuration local defaults: a clean environment gives a localhost site, every integration off, open admin.
 
-QuantDesk is local-only. PUBLIC_BASE_URL is the SITE origin (frontend, :3000), not the API origin (:8000).
+Afterfile is local-only. PUBLIC_BASE_URL is the SITE origin (frontend, :3000), not the API origin (:8000).
 No network: nothing here builds a client or sends anything.
 """
 
@@ -90,7 +90,7 @@ def test_admin_policy_treats_default_as_local(clean_env):
 
 def test_non_local_site_closes_admin_policy(clean_env, monkeypatch):
     # Guard rail: if someone points PUBLIC_BASE_URL at a public origin, changes are closed by default.
-    monkeypatch.setenv("PUBLIC_BASE_URL", "https://quantdesk.invalid")
+    monkeypatch.setenv("PUBLIC_BASE_URL", "https://afterfile.invalid")
     s = make_settings()
     assert not is_local_origin(s.public_base_url)
     assert admin_policy(s, s.public_base_url, "mutations").enabled is False

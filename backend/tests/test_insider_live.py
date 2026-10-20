@@ -21,7 +21,7 @@ from app.pipeline.signals import ALL_SIGNALS, FORWARD_TEST_SIGNALS, signal_def
 from app.pipeline.tickers import TickerUniverse
 
 FIX = Path(__file__).parent / "fixtures" / "form4_live"
-UA = "quantdesk-test agent"
+UA = "afterfile-test agent"
 MICRO_CIK, BIG_CIK = 111111, 222222
 DOCS_ROW = "docs/results/event_study_insider_purchases_2026-10-19.json"
 

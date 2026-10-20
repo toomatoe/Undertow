@@ -1,12 +1,12 @@
-# OPTIONAL, FOR LATER. You do not need this file: QuantDesk is local-only (use docker-compose.yml or scripts/start.ps1).
-# Do NOT deploy QuantDesk publicly while research prices come from Yahoo Finance (personal use only, never
-# redistributed): a public deployment would need a licensed price feed first. QuantDesk is free and not hosted anywhere.
+# OPTIONAL, FOR LATER. You do not need this file: Afterfile is local-only (use docker-compose.yml or scripts/start.ps1).
+# Do NOT deploy Afterfile publicly while research prices come from Yahoo Finance (personal use only, never
+# redistributed): a public deployment would need a licensed price feed first. Afterfile is free and not hosted anywhere.
 # This file is kept only as a hardened template for a possible private server later.
 #
 # Stack: Postgres + API + Next.js frontend.
 #
 # Use it with an env file that lives OUTSIDE git and is never committed (it holds the admin token and passwords):
-#   docker compose -f docker-compose.prod.yml --env-file /etc/quantdesk/prod.env up -d --build
+#   docker compose -f docker-compose.prod.yml --env-file /etc/afterfile/prod.env up -d --build
 #
 # Required (compose refuses to start without them): POSTGRES_PASSWORD, ADMIN_TOKEN.
 # Set for any real deployment (the defaults are local-only): PUBLIC_BASE_URL (public site origin, also the
@@ -23,13 +23,13 @@ services:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: quantdesk
+      POSTGRES_USER: afterfile
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}
-      POSTGRES_DB: quantdesk
+      POSTGRES_DB: afterfile
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U quantdesk"]
+      test: ["CMD-SHELL", "pg_isready -U afterfile"]
       interval: 5s
       retries: 20
 
@@ -37,7 +37,7 @@ services:
     build: ./backend
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://quantdesk:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}@db:5432/quantdesk
+      DATABASE_URL: postgresql+psycopg://afterfile:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in the env file}@db:5432/afterfile
       DATA_DIR: /app/data
       ADMIN_TOKEN: ${ADMIN_TOKEN:?set ADMIN_TOKEN in the env file}
       # Blank values are ignored by the backend (env_ignore_empty), so `:-` falls back to the code default.

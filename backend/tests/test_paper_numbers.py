@@ -18,7 +18,7 @@ FRONTEND_COPY = "frontend/src/content/working-paper.md"
 
 pytestmark = pytest.mark.skipif(
     not (ROOT / "docs").is_dir(),
-    reason=f"repo docs/ not available at {ROOT} (bare api image?); mount the repo at /repo or set QUANTDESK_REPO_ROOT",
+    reason=f"repo docs/ not available at {ROOT} (bare api image?); mount the repo at /repo or set AFTERFILE_REPO_ROOT",
 )
 
 
@@ -67,5 +67,5 @@ def test_check_detects_json_drift(tmp_path):
 
 
 def test_find_repo_root_env_override(monkeypatch, tmp_path):
-    monkeypatch.setenv("QUANTDESK_REPO_ROOT", str(tmp_path))
+    monkeypatch.setenv("AFTERFILE_REPO_ROOT", str(tmp_path))
     assert find_repo_root() == tmp_path

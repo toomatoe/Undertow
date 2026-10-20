@@ -116,7 +116,7 @@ def load_prices(
             resp = httpx.get(
                 CHART_URL.format(symbol=yahoo_symbol(ticker)),
                 params=params,
-                headers={"User-Agent": "Mozilla/5.0 (research; quantdesk)"},
+                headers={"User-Agent": "Mozilla/5.0 (research; afterfile)"},
                 timeout=20,
             )
         except httpx.HTTPError as exc:

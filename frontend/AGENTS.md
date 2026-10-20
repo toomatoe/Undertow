@@ -2,7 +2,7 @@
 
 Next.js 15.5 App Router, React 19, TypeScript (strict). No UI library, no state library, no CSS framework:
 plain components plus `src/app/globals.css`. Path alias `@/*` -> `src/*`.
-QuantDesk runs locally: the site is http://localhost:3000 and the API http://localhost:8000 by default, with no env
+Afterfile runs locally: the site is http://localhost:3000 and the API http://localhost:8000 by default, with no env
 file needed. There are no accounts, pricing pages or sign-up flows; don't add any.
 
 ## Layout
@@ -164,7 +164,7 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
   `cache: "no-store"` and throw an `ApiError` (`status`, `detail`, `admin`) whose message starts with the status
   (`"404 ..."`), so pages can keep checking `startsWith("404")`.
 - Writes go through `send(path, method, { admin?, body? })`. `admin: true` attaches `Authorization: Bearer <token>`
-  from `getAdminToken()` (session storage key `quantdesk.researchAdminToken`, shared by `/status` and
+  from `getAdminToken()` (session storage key `afterfile.researchAdminToken`, shared by `/status` and
   `ResearchRunPanel`; `setAdminToken` stores/clears it) and maps 401/403 to the `ADMIN_TOKEN_REQUIRED` /
   `CHANGES_DISABLED` messages; 429 becomes "Too many requests. Try again in N seconds." `isAdminApiError(e)` is true for
   admin 401/403/429. Admin calls: `startResearch`, `watch` (PUT/DELETE), `ingest`. Public writes (`subscribe`,
@@ -267,7 +267,7 @@ Visual check: dev server on :3000 (preview config `frontend` in `.claude/launch.
 All user-facing copy follows `docs/PRODUCT_RESEARCH.md` section 4 and `/legal/disclaimer`:
 - Impersonal facts and historical statistics only. No buy/sell language, price targets or "you should".
 - Label simulated results as hypothetical wherever they appear, show costs and losers, and never make earnings claims.
-- No pricing, plans, sign-up or "Pro" copy: QuantDesk is free and local-only. Don't describe it as a hosted or public service.
+- No pricing, plans, sign-up or "Pro" copy: Afterfile is free and local-only. Don't describe it as a hosted or public service.
 - **Markdown rendering:** render Markdown only through `components/markdown/Markdown.tsx`, which builds React elements.
   Never use `dangerouslySetInnerHTML` for Markdown or any document text, and never add an HTML-string Markdown library (the escaped JSON-LD `<script>` tags are the only `dangerouslySetInnerHTML` use).
 - When the backend logic changes (signals, entry timing, costs), update `/methodology` in the same PR.

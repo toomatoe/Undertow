@@ -63,7 +63,7 @@ export const LESSONS: Lesson[] = [
     slug: "baselines",
     title: "Why 'vs ordinary days' matters: baselines in an event study",
     description:
-      "Small caps drift down even on days with no news. Learn how QuantDesk compares filing events with the same stocks on ordinary days, and why that changes results.",
+      "Small caps drift down even on days with no news. Learn how Afterfile compares filing events with the same stocks on ordinary days, and why that changes results.",
     level: "Beginner",
     minutes: 8,
     concepts: ["baseline", "excess return", "Welch t-test", "small-cap drift"],
@@ -78,7 +78,7 @@ export const LESSONS: Lesson[] = [
     slug: "multiple-testing",
     title: "Multiple testing and the Bonferroni correction, with a noise simulator",
     description:
-      "Test 100 pure-noise signals and about five clear |t| 1.96 by chance. Simulate it, then see why QuantDesk uses a Bonferroni cutoff instead.",
+      "Test 100 pure-noise signals and about five clear |t| 1.96 by chance. Simulate it, then see why Afterfile uses a Bonferroni cutoff instead.",
     level: "Intermediate",
     minutes: 10,
     concepts: ["false discoveries", "family-wise error", "Bonferroni", "data snooping", "pre-registration"],
@@ -93,7 +93,7 @@ export const LESSONS: Lesson[] = [
     slug: "clustered-errors",
     title: "Clustered standard errors: when many events come from a few companies",
     description:
-      "Events from the same company are not independent. Simulate naive vs firm-clustered t-stats and see how QuantDesk's nano-cap offering result holds up.",
+      "Events from the same company are not independent. Simulate naive vs firm-clustered t-stats and see how Afterfile's nano-cap offering result holds up.",
     level: "Intermediate",
     minutes: 12,
     concepts: ["independence", "cluster-robust SE (CR1)", "effective sample size", "confirmatory test"],
@@ -110,7 +110,7 @@ export const LESSONS: Lesson[] = [
     slug: "survivorship-bias",
     title: "Survivorship bias example: the companies that vanish from your data",
     description:
-      "Delisted small caps lose their ticker and price history, so they drop out of backtests. Simulate how much that flatters results and see QuantDesk's real coverage gaps.",
+      "Delisted small caps lose their ticker and price history, so they drop out of backtests. Simulate how much that flatters results and see Afterfile's real coverage gaps.",
     level: "Beginner",
     minutes: 8,
     concepts: ["survivorship bias", "delisting", "coverage", "point-in-time universe"],
@@ -126,7 +126,7 @@ export const LESSONS: Lesson[] = [
     slug: "sharpe-dsr-backtest-pitfalls",
     title: "Deflated Sharpe ratio calculator and other backtest pitfalls",
     description:
-      "A PSR and deflated Sharpe ratio calculator pre-filled from QuantDesk's backtest, plus the friction waterfall from gross edge to net loss, look-ahead and borrow.",
+      "A PSR and deflated Sharpe ratio calculator pre-filled from Afterfile's backtest, plus the friction waterfall from gross edge to net loss, look-ahead and borrow.",
     level: "Advanced",
     minutes: 15,
     concepts: ["Sharpe ratio", "PSR", "deflated Sharpe ratio", "frictions", "in-sample vs out-of-sample", "look-ahead bias", "borrow cost"],
@@ -164,4 +164,4 @@ export function repoHref(path: string): string | null {
 }
 
 /** Title used in <title> and Open Graph. */
-export const lessonDocTitle = (l: Lesson) => `${l.title} · QuantDesk Learn`;
+export const lessonDocTitle = (l: Lesson) => `${l.title} · Afterfile Learn`;

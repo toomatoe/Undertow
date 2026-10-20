@@ -7,7 +7,7 @@ import { bonferroniT, clusteredT, mean, mulberry32, normalSampler, studentTSampl
 
 export interface NoiseParams {
   seed: number;
-  /** Number of signals tested (QuantDesk's grid ran 102). */
+  /** Number of signals tested (Afterfile's grid ran 102). */
   signals: number;
   /** Events per signal. */
   events: number;

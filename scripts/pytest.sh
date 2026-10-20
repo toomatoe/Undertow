@@ -4,10 +4,10 @@
 #   scripts/pytest.sh                      # whole suite
 #   scripts/pytest.sh tests/test_halts.py  # one module's tests
 #
-# Mounts backend/ over /app in a dependency image (quantdesk-api-test), so several agents
+# Mounts backend/ over /app in a dependency image (afterfile-api-test), so several agents
 # can run tests at the same time. Only `docker compose build api` is an exclusive resource;
 # this script never touches it. Rebuild the dependency image only when requirements change:
-#   docker build -q -t quantdesk-api-test backend
+#   docker build -q -t afterfile-api-test backend
 # The repo root is also mounted read-only at /repo, so tests that compare backend code with docs/ or
 # frontend/ (tests/test_paper_numbers.py) can see them. Both mounts are per-container, so parallel runs are safe.
 set -euo pipefail
@@ -26,11 +26,11 @@ if command -v cygpath >/dev/null 2>&1; then
   fi
 fi
 
-if ! docker image inspect quantdesk-api-test >/dev/null 2>&1; then
-  docker build -q -t quantdesk-api-test "$ROOT/backend" >/dev/null
+if ! docker image inspect afterfile-api-test >/dev/null 2>&1; then
+  docker build -q -t afterfile-api-test "$ROOT/backend" >/dev/null
 fi
 
 MSYS_NO_PATHCONV=1 docker run --rm \
   -v "$HOST_PATH/backend:/app" \
   -v "$HOST_PATH:/repo:ro" \
-  -w /app quantdesk-api-test pytest -q "$@"
+  -w /app afterfile-api-test pytest -q "$@"

@@ -1,4 +1,4 @@
-// Server component: the frame every lesson shares (JSON-LD, header, "What this means for QuantDesk",
+// Server component: the frame every lesson shares (JSON-LD, header, "What this means for Afterfile",
 // "Read the code", readings, disclaimer, previous/next).
 
 import Link from "next/link";
@@ -17,7 +17,7 @@ export default function LessonLayout({
   children,
 }: {
   lesson: Lesson;
-  /** "What this means for QuantDesk" body. */
+  /** "What this means for Afterfile" body. */
   meaning: ReactNode;
   /** Newest generated_at among the live documents shown (dateModified), if any loaded. */
   dataDate: string | null;
@@ -45,9 +45,9 @@ export default function LessonLayout({
     timeRequired: `PT${lesson.minutes}M`,
     keywords: lesson.concepts.join(", "),
     citation: lesson.readings.map((r) => `${r.cite}. ${r.title}. ${r.venue}.`),
-    author: { "@type": "Organization", name: "QuantDesk", url: SITE_URL },
-    publisher: { "@type": "Organization", name: "QuantDesk", url: SITE_URL },
-    isPartOf: { "@type": "Course", name: "QuantDesk Learn", url: `${SITE_URL}/learn` },
+    author: { "@type": "Organization", name: "Afterfile", url: SITE_URL },
+    publisher: { "@type": "Organization", name: "Afterfile", url: SITE_URL },
+    isPartOf: { "@type": "Course", name: "Afterfile Learn", url: `${SITE_URL}/learn` },
   };
 
   return (
@@ -71,7 +71,7 @@ export default function LessonLayout({
       {children}
 
       <section className={styles.section}>
-        <h2>What this means for QuantDesk</h2>
+        <h2>What this means for Afterfile</h2>
         {meaning}
       </section>
 

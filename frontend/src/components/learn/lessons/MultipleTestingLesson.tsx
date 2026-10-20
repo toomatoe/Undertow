@@ -25,7 +25,7 @@ export default async function MultipleTestingLesson({ lesson }: { lesson: Lesson
       meaning={
         <>
           <p>
-            QuantDesk applies the correction to the whole grid it tested, not just to the rows that looked interesting, and the rule was
+            Afterfile applies the correction to the whole grid it tested, not just to the rows that looked interesting, and the rule was
             written before the results existed (<code>backend/app/research/AGENTS.md</code>: change the design before looking at results,
             never after). A row that clears 1.96 but not the corrected bar is labelled &quot;nominal only&quot;: a lead for a new,
             pre-registered test, not a finding.
@@ -53,7 +53,7 @@ export default async function MultipleTestingLesson({ lesson }: { lesson: Lesson
       <section className={styles.section}>
         <h2>Why one threshold is not enough</h2>
         <p>
-          The 5% error rate applies to one test. QuantDesk&apos;s Edge Lab tests every signal × size bucket × horizon with at least 20
+          The 5% error rate applies to one test. Afterfile&apos;s Edge Lab tests every signal × size bucket × horizon with at least 20
           events. If each test has a 5% false-positive rate, the chance that at least one of N independent tests fires by luck is 1 −
           0.95<sup>N</sup>: 64% for 20 tests, over 99% for 100.
         </p>
@@ -83,12 +83,12 @@ export default async function MultipleTestingLesson({ lesson }: { lesson: Lesson
         <p>
           With {nTests} pure-noise signals, the 1.96 line typically flags a handful; the Bonferroni line (|t| ≥{" "}
           {bonferroniT(nTests).toFixed(2)}) almost never flags any. Fat tails make it slightly worse, because extreme events in a small
-          sample produce extreme t-stats more often than the normal curve predicts. That is one reason QuantDesk also winsorizes returns at
+          sample produce extreme t-stats more often than the normal curve predicts. That is one reason Afterfile also winsorizes returns at
           the 1st and 99th percentile before testing.
         </p>
         <p>
           The correction only protects you if the count is honest. Trying ten versions of a signal and reporting the best one is ten
-          tests, even if only one appears in the table. That is why QuantDesk pre-registers designs and logs every backtest
+          tests, even if only one appears in the table. That is why Afterfile pre-registers designs and logs every backtest
           configuration.
         </p>
       </section>

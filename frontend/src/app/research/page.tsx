@@ -5,17 +5,17 @@ import { SITE_URL } from "@/lib/server-api";
 
 import styles from "./research.module.css";
 
-// Static server component (no API calls): index of QuantDesk's published research.
-const TITLE = "Research · QuantDesk";
+// Static server component (no API calls): index of Afterfile's published research.
+const TITLE = "Research · Afterfile";
 const DESCRIPTION =
-  "QuantDesk research: a working paper on SEC filing events and small-cap returns, the Edge Lab event studies (in-sample, pre-registered out-of-sample, Form 4 insider purchases) and their pre-registrations.";
+  "Afterfile research: a working paper on SEC filing events and small-cap returns, the Edge Lab event studies (in-sample, pre-registered out-of-sample, Form 4 insider purchases) and their pre-registrations.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { absolute: TITLE },
   description: DESCRIPTION,
   alternates: { canonical: "/research" },
-  openGraph: { type: "website", siteName: "QuantDesk", url: "/research", title: TITLE, description: DESCRIPTION },
+  openGraph: { type: "website", siteName: "Afterfile", url: "/research", title: TITLE, description: DESCRIPTION },
   twitter: { card: "summary", title: TITLE, description: DESCRIPTION },
 };
 
@@ -47,7 +47,7 @@ export default function ResearchPage() {
     <main className={`page ${styles.page}`}>
       <h1>Research</h1>
       <p className="muted">
-        What QuantDesk&apos;s data says about SEC filings and small-cap returns, written up with its methods and failures. Event-study numbers
+        What Afterfile&apos;s data says about SEC filings and small-cap returns, written up with its methods and failures. Event-study numbers
         are historical averages; net and backtest numbers are hypothetical. Nothing here is investment advice.
       </p>
 

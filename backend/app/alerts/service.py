@@ -56,7 +56,7 @@ def format_message(article: Article, company: Company | None, evidence: list[dic
         )
     size = f"{company.size_bucket} cap, {_money(company.public_float)}" if company and company.size_bucket else "size unknown"
     return {
-        "username": "QuantDesk",
+        "username": "Afterfile",
         "embeds": [{
             "title": f"${ticker} · {article.form or 'Filing'} · {top.label}"[:256],
             "url": article.url,
@@ -132,7 +132,7 @@ class Alerter:
     def send_test(self) -> dict:
         if self.channel == "none":
             return {"ok": False, "error": "Set DISCORD_WEBHOOK_URL in .env and restart the API."}
-        resp = self.post(self.settings.discord_webhook_url, json={"username": "QuantDesk", "content": "✅ QuantDesk test alert: delivery works."}, timeout=10)
+        resp = self.post(self.settings.discord_webhook_url, json={"username": "Afterfile", "content": "✅ Afterfile test alert: delivery works."}, timeout=10)
         return {"ok": resp.status_code < 300, "status": resp.status_code}
 
 
@@ -157,7 +157,7 @@ def stats(session: Session, limit: int = 100) -> dict:
 def format_halt(h, company: Company | None) -> dict:
     size = f"{company.size_bucket} cap, {_money(company.public_float)}" if company and company.size_bucket else "size unknown"
     return {
-        "username": "QuantDesk",
+        "username": "Afterfile",
         "embeds": [{
             "title": f"⏸️ ${h.symbol} halted · {h.reason}"[:256],
             "url": "https://www.nasdaqtrader.com/Trader.aspx?id=TradeHalts",

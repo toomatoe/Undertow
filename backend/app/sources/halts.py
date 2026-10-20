@@ -94,7 +94,7 @@ def parse_feed(xml: str) -> list[Halt]:
     return halts
 
 
-def fetch(user_agent: str = "Mozilla/5.0 (quantdesk)") -> list[Halt]:
+def fetch(user_agent: str = "Mozilla/5.0 (afterfile)") -> list[Halt]:
     resp = httpx.get(FEED_URL, headers={"User-Agent": user_agent}, timeout=20)
     resp.raise_for_status()
     return parse_feed(resp.text)
