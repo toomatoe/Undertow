@@ -14,7 +14,7 @@ import type {
   TickerDetail,
 } from "./api";
 
-// Afterfile runs locally, so every variable below is optional and the defaults need no configuration:
+// Undertow runs locally, so every variable below is optional and the defaults need no configuration:
 // site origin http://localhost:3000, API origin http://localhost:8000.
 // Environment variables (server-only module, so non-NEXT_PUBLIC names are readable here):
 //   API_URL_INTERNAL      optional; API origin as seen from the Next server (http://api:8000 in the compose `web`

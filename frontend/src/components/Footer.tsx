@@ -54,7 +54,7 @@ export default function Footer() {
         </div>
       )}
       <p>
-        Afterfile shows general information about public filings and historical statistics. It is not investment advice and it does not
+        Undertow shows general information about public filings and historical statistics. It is not investment advice and it does not
         trade. Simulated results are hypothetical.
         <span className="footer-local">
           Runs locally: a personal research tool on your own machine, with no accounts and no hosted service.

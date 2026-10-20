@@ -9,7 +9,7 @@ export default function TickerNotFound() {
       <section className="panel ticker-missing">
         <h1>No data for this ticker yet</h1>
         <p className="muted">
-          Afterfile has no filings or news on record for this symbol. Pages appear once a company files with the SEC or is mentioned in a
+          Undertow has no filings or news on record for this symbol. Pages appear once a company files with the SEC or is mentioned in a
           tracked source.
         </p>
         <p>

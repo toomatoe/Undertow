@@ -9,7 +9,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Afterfile",
+  title: "Undertow",
   description:
     "Local, personal small-cap SEC filing research: live filing signals next to their event-study evidence. Does not trade; simulated results are hypothetical.",
 };

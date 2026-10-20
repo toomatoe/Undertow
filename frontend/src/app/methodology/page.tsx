@@ -1,13 +1,13 @@
 import Link from "next/link";
 
-export const metadata = { title: "Methodology · Afterfile" };
+export const metadata = { title: "Methodology · Undertow" };
 
 export default function MethodologyPage() {
   return (
     <main className="page prose legal">
       <h1>Methodology</h1>
       <p className="muted">
-        How every number on Afterfile is produced, what it assumes, and where it can be wrong. If you can&apos;t see how a number was
+        How every number on Undertow is produced, what it assumes, and where it can be wrong. If you can&apos;t see how a number was
         made, don&apos;t trust it, including ours.
       </p>
 

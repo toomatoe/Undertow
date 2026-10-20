@@ -8,16 +8,16 @@ import { CURRICULUM_PATH, LESSONS, lessonPath, LESSONS_REVISED } from "@/lib/lea
 import { SITE_URL } from "@/lib/server-api";
 
 // Static server component (no API calls): the lesson list and curriculum, crawlable.
-const TITLE = "Learn quant research with real small-cap data · Afterfile";
+const TITLE = "Learn quant research with real small-cap data · Undertow";
 const DESCRIPTION =
-  "Free lessons on event studies, baselines, multiple testing, clustered errors, survivorship bias and the deflated Sharpe ratio, each tied to Afterfile's own code and data.";
+  "Free lessons on event studies, baselines, multiple testing, clustered errors, survivorship bias and the deflated Sharpe ratio, each tied to Undertow's own code and data.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: { absolute: TITLE },
   description: DESCRIPTION,
   alternates: { canonical: "/learn" },
-  openGraph: { type: "website", siteName: "Afterfile", url: "/learn", title: TITLE, description: DESCRIPTION },
+  openGraph: { type: "website", siteName: "Undertow", url: "/learn", title: TITLE, description: DESCRIPTION },
   twitter: { card: "summary", title: TITLE, description: DESCRIPTION },
 };
 
@@ -28,12 +28,12 @@ export default function LearnIndex() {
     "@type": "Course",
     "@id": url,
     url,
-    name: "Afterfile Learn",
+    name: "Undertow Learn",
     description: DESCRIPTION,
     inLanguage: "en",
     isAccessibleForFree: true,
     dateModified: LESSONS_REVISED,
-    provider: { "@type": "Organization", name: "Afterfile", url: SITE_URL },
+    provider: { "@type": "Organization", name: "Undertow", url: SITE_URL },
     hasPart: LESSONS.map((l) => ({
       "@type": "Article",
       headline: l.title,
@@ -49,7 +49,7 @@ export default function LearnIndex() {
         <h1>Learn</h1>
         <p className={styles.lede}>
           How to tell a real pattern in market data from a lucky one. Each lesson explains one idea, lets you run a small simulation in your
-          browser, shows Afterfile&apos;s own live numbers with their dates, and points to the exact file and function in this project that
+          browser, shows Undertow&apos;s own live numbers with their dates, and points to the exact file and function in this project that
           implements it.
         </p>
       </header>

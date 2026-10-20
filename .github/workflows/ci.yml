@@ -69,7 +69,7 @@ jobs:
         with:
           context: backend
           push: false
-          tags: afterfile-api:ci
+          tags: undertow-api:ci
           cache-from: type=gha,scope=api
           cache-to: type=gha,mode=max,scope=api
       - name: Build web image
@@ -77,6 +77,6 @@ jobs:
         with:
           context: frontend
           push: false
-          tags: afterfile-web:ci
+          tags: undertow-web:ci
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web

@@ -318,7 +318,7 @@ def test_wrong_shape_jobs_are_dropped(tmp_path, job):
 
 
 def test_api_launch_disabled_on_public_deployment_without_token(tmp_path, worker, monkeypatch):
-    launch_settings(monkeypatch, public="https://afterfile.example.com")
+    launch_settings(monkeypatch, public="https://undertow.example.com")
     monkeypatch.setattr(main, "research_jobs", ResearchJobs(tmp_path))
     client = TestClient(main.app)
     status = client.get("/api/research/jobs").json()
@@ -334,7 +334,7 @@ def test_api_explicit_disable_wins_on_local_deployment(tmp_path, worker, monkeyp
 
 
 def test_api_admin_token_required_when_configured(tmp_path, worker, monkeypatch):
-    launch_settings(monkeypatch, token="s3cret-token", public="https://afterfile.example.com")
+    launch_settings(monkeypatch, token="s3cret-token", public="https://undertow.example.com")
     manager = ResearchJobs(tmp_path)
     monkeypatch.setattr(main, "research_jobs", manager)
     client = TestClient(main.app)

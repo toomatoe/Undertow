@@ -37,7 +37,7 @@ export function weekLabel(issue: { week_start: string; week_end: string }): stri
 
 /** <title> of an issue page. */
 export function issueTitle(issue: { week_start: string; week_end: string }): string {
-  return `Small-Cap Filing Radar: ${weekLabel(issue)} | Afterfile`;
+  return `Small-Cap Filing Radar: ${weekLabel(issue)} | Undertow`;
 }
 
 const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-US")} ${n === 1 ? one : many}`;

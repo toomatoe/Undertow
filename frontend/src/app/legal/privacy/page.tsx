@@ -1,6 +1,6 @@
 import DraftNotice from "@/components/DraftNotice";
 
-export const metadata = { title: "Privacy · Afterfile" };
+export const metadata = { title: "Privacy · Undertow" };
 
 export default function PrivacyPage() {
   return (
@@ -10,14 +10,14 @@ export default function PrivacyPage() {
       <p className="muted">Last updated October 19, 2026</p>
 
       <p>
-        Afterfile runs on your own computer. Everything it stores stays in your local database and data folder; nobody else operates a
+        Undertow runs on your own computer. Everything it stores stays in your local database and data folder; nobody else operates a
         server for it, and there are no accounts.
       </p>
 
       <h2>What is stored, and where</h2>
       <ul>
         <li>
-          <strong>No accounts.</strong> Watchlists are stored in your local Afterfile database, not tied to any identity.
+          <strong>No accounts.</strong> Watchlists are stored in your local Undertow database, not tied to any identity.
         </li>
         <li>
           <strong>Local logs:</strong> the API and web containers write standard request logs (address, time, page) on your machine only.
@@ -32,23 +32,23 @@ export default function PrivacyPage() {
         </li>
       </ul>
 
-      <h2>What Afterfile doesn&apos;t do</h2>
+      <h2>What Undertow doesn&apos;t do</h2>
       <ul>
         <li>No selling or sharing of personal data.</li>
         <li>No advertising trackers or third-party analytics.</li>
-        <li>No payments and no card numbers: Afterfile is free.</li>
+        <li>No payments and no card numbers: Undertow is free.</li>
         <li>No access to brokerage accounts, positions or trades.</li>
       </ul>
 
       <h2>Deleting your data</h2>
       <p>
         All data lives in your local Docker volumes and data folder. Removing them (for example with <code>docker compose down -v</code>)
-        deletes everything Afterfile stored.
+        deletes everything Undertow stored.
       </p>
 
       <h2>Outbound requests</h2>
       <p>
-        Your local Afterfile fetches public data from SEC EDGAR, FINRA, Nasdaq Trader, news RSS feeds and, for research, Yahoo Finance.
+        Your local Undertow fetches public data from SEC EDGAR, FINRA, Nasdaq Trader, news RSS feeds and, for research, Yahoo Finance.
         SEC requests carry the user agent you configure (SEC asks for a contact address); no other information about you is sent. Optional
         integrations you turn on (Alpaca, Anthropic, Discord, your mail server) receive only what they need to work.
       </p>

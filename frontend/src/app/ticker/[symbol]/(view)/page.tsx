@@ -36,7 +36,7 @@ async function load(raw: string): Promise<TickerData & { fundamentalsStatus: num
 }
 
 function title(d: TickerData["detail"]): string {
-  return `${d.symbol}${d.name ? ` – ${d.name}` : ""}: SEC filings, dilution & cash runway | Afterfile`;
+  return `${d.symbol}${d.name ? ` – ${d.name}` : ""}: SEC filings, dilution & cash runway | Undertow`;
 }
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
@@ -50,7 +50,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     title: t,
     description,
     alternates: { canonical: path },
-    openGraph: { type: "website", siteName: "Afterfile", url: path, title: t, description },
+    openGraph: { type: "website", siteName: "Undertow", url: path, title: t, description },
     twitter: { card: "summary", title: t, description },
   };
 }
@@ -77,7 +77,7 @@ export default async function TickerPage({ params }: { params: Params }) {
       name: d.name ?? d.symbol,
       tickerSymbol: d.symbol,
     },
-    isPartOf: { "@type": "WebSite", name: "Afterfile", url: SITE_URL },
+    isPartOf: { "@type": "WebSite", name: "Undertow", url: SITE_URL },
   };
 
   // Fundamentals: a 404 means no SEC company data, so the section is left out. Any other failure

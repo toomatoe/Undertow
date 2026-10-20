@@ -1,7 +1,7 @@
 export const meta = {
   name: 'feature-graph',
   description: 'Plan a goal into a dependency graph of work items, build them in parallel waves with file ownership, review, verify and critique',
-  whenToUse: 'Any Afterfile feature or batch of roadmap items. args: {goal: string, context?: string, items?: [...pre-planned items], review_only?: boolean}',
+  whenToUse: 'Any Undertow feature or batch of roadmap items. args: {goal: string, context?: string, items?: [...pre-planned items], review_only?: boolean}',
   phases: [
     { title: 'Plan', detail: 'decompose the goal into work items over docs/agent-graph.json modules' },
     { title: 'Build', detail: 'one builder per item, items in a wave run in parallel' },
@@ -108,7 +108,7 @@ if (args && args.items) {
   plan = { items: args.items, notes: 'pre-planned by orchestrator' }
 } else {
   plan = await agent(
-    `You are the planner for Afterfile. Goal: ${goal}\n${context ? `Context: ${context}\n` : ''}
+    `You are the planner for Undertow. Goal: ${goal}\n${context ? `Context: ${context}\n` : ''}
 Read AGENTS.md, docs/agent-graph.json, docs/PRODUCT_RESEARCH.md (roadmap) and the AGENTS.md files of relevant modules.
 Decompose the goal into 1-6 work items that can be built by independent agents. Rules:
 - Each item names its modules (ids from agent-graph.json) and the EXACT files/dirs it owns (owned_paths).

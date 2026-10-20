@@ -5,7 +5,7 @@ import { SITE_URL } from "@/lib/server-api";
 
 // /news: the live market news and filing feed (moved here from / when / became the landing page).
 // NewsFeed is a client component (filters, pagination, SSE); this wrapper only adds metadata.
-const TITLE = "News · Afterfile";
+const TITLE = "News · Undertow";
 const DESCRIPTION = "Live feed of SEC filings and market headlines for small US companies, with filters by size, source, sentiment and event type.";
 
 export const metadata: Metadata = {
@@ -13,7 +13,7 @@ export const metadata: Metadata = {
   title: { absolute: TITLE },
   description: DESCRIPTION,
   alternates: { canonical: "/news" },
-  openGraph: { type: "website", siteName: "Afterfile", url: "/news", title: TITLE, description: DESCRIPTION },
+  openGraph: { type: "website", siteName: "Undertow", url: "/news", title: TITLE, description: DESCRIPTION },
 };
 
 export default function NewsPage() {

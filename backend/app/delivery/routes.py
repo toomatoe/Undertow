@@ -91,7 +91,7 @@ def make_router(
         # GET never unsubscribes (mail scanners prefetch links); the button POSTs, like the RFC 8058 one-click.
         action = f"?token={html.escape(token, quote=True)}"
         return _page("Unsubscribe", (
-            "<p>Stop all Afterfile emails to this address?</p>"
+            "<p>Stop all Undertow emails to this address?</p>"
             f'<form method="post" action="{action}">'
             '<button type="submit" style="padding:10px 16px;background:#1d5fc0;color:#fff;border:0;border-radius:6px;font-size:14px;cursor:pointer;">'
             "Unsubscribe</button></form>"))

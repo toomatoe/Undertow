@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 import { isLocalSiteUrl, SITE_URL } from "@/lib/server-api";
 
 export default function robots(): MetadataRoute.Robots {
-  // Afterfile runs locally by default: with a localhost site origin nothing is public, so ask crawlers to stay out.
+  // Undertow runs locally by default: with a localhost site origin nothing is public, so ask crawlers to stay out.
   // The sitemap link is still served so /sitemap.xml stays discoverable for local checks.
   if (isLocalSiteUrl()) {
     return {

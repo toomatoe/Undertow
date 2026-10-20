@@ -1,6 +1,6 @@
 # Do SEC filing events predict small-cap returns? Evidence from an in-sample event study, a pre-registered out-of-sample replication, and Form 4 insider purchases
 
-*Afterfile working paper, October 2026. Research and education only. Every return in this paper is a historical, market-adjusted average or a hypothetical simulation. Nothing here is investment advice, and no result describes a strategy that has been traded.*
+*Undertow working paper, October 2026. Research and education only. Every return in this paper is a historical, market-adjusted average or a hypothetical simulation. Nothing here is investment advice, and no result describes a strategy that has been traded.*
 
 ## Abstract
 
@@ -16,7 +16,7 @@ The answer is mostly negative. The one strong in-sample result recurs gross of c
 
 ## 2 Data
 
-**Filings.** Events are non-amended filings with their acceptance timestamps from the SEC EDGAR submissions API for each sampled company, mapped to signals by the taxonomy that drives Afterfile's live alerts (for example 8-K item 1.01 material agreements, item 3.02 unregistered equity sales, and 424B4/424B5 final prospectuses for priced offerings). Signals and their expected directions were fixed before results were computed.
+**Filings.** Events are non-amended filings with their acceptance timestamps from the SEC EDGAR submissions API for each sampled company, mapped to signals by the taxonomy that drives Undertow's live alerts (for example 8-K item 1.01 material agreements, item 3.02 unregistered equity sales, and 424B4/424B5 final prospectuses for priced offerings). Signals and their expected directions were fixed before results were computed.
 
 **Size.** Companies are bucketed by SEC public float from the XBRL frame for the second calendar quarter before each window (CY2023Q2 for the in-sample and insider studies, CY2020Q2 for the replication), frozen so that bucket assignment uses no later information: nano (under $50M), micro ($50M to $300M), small ($300M to $2B) and large (over $10B, a control). Each study draws a random sample of operating companies per bucket, excluding SPACs (SIC 6770) and entities without a ticker.
 

@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     title: { absolute: title },
     description,
     alternates: { canonical: path },
-    openGraph: { type: "article", siteName: "Afterfile", url: path, title, description, publishedTime: published(issue) },
+    openGraph: { type: "article", siteName: "Undertow", url: path, title, description, publishedTime: published(issue) },
     twitter: { card: "summary", title, description },
   };
 }
@@ -67,8 +67,8 @@ export default async function IssuePage({ params }: { params: Params }) {
     temporalCoverage: `${issue.week_start}/${issue.week_end}`,
     inLanguage: "en",
     isAccessibleForFree: true,
-    author: { "@type": "Organization", name: "Afterfile", url: SITE_URL },
-    publisher: { "@type": "Organization", name: "Afterfile", url: SITE_URL },
+    author: { "@type": "Organization", name: "Undertow", url: SITE_URL },
+    publisher: { "@type": "Organization", name: "Undertow", url: SITE_URL },
     isPartOf: { "@type": "CreativeWorkSeries", name: "Small-Cap Filing Radar", url: `${SITE_URL}/newsletter` },
   };
 

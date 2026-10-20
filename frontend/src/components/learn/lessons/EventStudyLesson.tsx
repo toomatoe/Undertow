@@ -24,7 +24,7 @@ export default async function EventStudyLesson({ lesson }: { lesson: Lesson }) {
         study ? (
           <>
             <p>
-              <LiveTag kind="historical" date={study.generated_at} what="study generated" /> Afterfile&apos;s Edge Lab ran{" "}
+              <LiveTag kind="historical" date={study.generated_at} what="study generated" /> Undertow&apos;s Edge Lab ran{" "}
               {study.testing.n_tests} tests on {study.measured_events.toLocaleString()} filing events from {study.config.window[0]} to{" "}
               {study.config.window[1]}. {survivors.length} {survivors.length === 1 ? "cell" : "cells"} passed every rule (multiple-testing
               correction, the ordinary-day baseline, the expected direction and costs).
@@ -41,7 +41,7 @@ export default async function EventStudyLesson({ lesson }: { lesson: Lesson }) {
           </>
         ) : (
           <p>
-            Every signal card on Afterfile carries an evidence line from this kind of study. When the live study loads, this section shows
+            Every signal card on Undertow carries an evidence line from this kind of study. When the live study loads, this section shows
             how many of its tests survived and the strongest lead.
           </p>
         )
@@ -49,7 +49,7 @@ export default async function EventStudyLesson({ lesson }: { lesson: Lesson }) {
     >
       <p className={styles.lede}>
         An event study asks a narrow question: after a specific kind of event, what did similar stocks do next, compared with the market?
-        Afterfile uses it to attach historical context to every SEC filing signal.
+        Undertow uses it to attach historical context to every SEC filing signal.
       </p>
 
       <section className={styles.section}>
@@ -77,7 +77,7 @@ export default async function EventStudyLesson({ lesson }: { lesson: Lesson }) {
         <p>
           <strong>Reaction</strong> is day-0 close vs the previous close: the move that happened as the news came out, mostly before anyone
           could respond. <strong>Drift</strong> runs from the day-0 close to the close 5 or 20 trading days later: the part that, in
-          principle, someone could have captured. Afterfile reports both but judges a signal on drift. A big reaction with no drift is a
+          principle, someone could have captured. Undertow reports both but judges a signal on drift. A big reaction with no drift is a
           market that priced the news immediately.
         </p>
       </section>

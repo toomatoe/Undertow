@@ -2,7 +2,7 @@
 
 Plain Markdown and JSON, no build step. Docs are evidence for decisions, so keep them factual,
 dated and sourced. Research and education only; nothing here is financial advice.
-Afterfile is local-only (decision 2026-10-19): no paid tier, accounts or hosting. Monetization research is background only.
+Undertow is local-only (decision 2026-10-19): no paid tier, accounts or hosting. Monetization research is background only.
 
 ## What each doc is
 
