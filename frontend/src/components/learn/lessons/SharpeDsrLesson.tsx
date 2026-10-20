@@ -38,7 +38,7 @@ export default async function SharpeDsrLesson({ lesson }: { lesson: Lesson }) {
             </p>
             <p>
               The event study measures an average drift; the backtest is where borrow, recalls, stops and unborrowable names are added, and
-              the waterfall below shows how much of the gross edge each one removes. QuantDesk publishes the verdict whatever it says rather
+              the waterfall below shows how much of the gross edge each one removes. Afterfile publishes the verdict whatever it says rather
               than tuning parameters until it looks better, and every configuration ever tried counts against the deflated Sharpe ratio. Full details: <Link href="/backtest">Backtest</Link>.
             </p>
           </>
@@ -56,10 +56,10 @@ export default async function SharpeDsrLesson({ lesson }: { lesson: Lesson }) {
       <section className={styles.section}>
         <h2>Sharpe ratio, and why the raw number misleads</h2>
         <p>
-          The Sharpe ratio is the mean return divided by its standard deviation; QuantDesk uses daily returns, a zero risk-free rate and
+          The Sharpe ratio is the mean return divided by its standard deviation; Afterfile uses daily returns, a zero risk-free rate and
           annualizes by √252. Two problems. First, a short track record produces high Sharpe ratios by chance. Second, strategies that
           collect small gains and occasionally suffer large losses (negative skew, fat tails) look smoother than they are, and the hypothetical
-          nano-cap offering strategy QuantDesk backtests has exactly that shape.
+          nano-cap offering strategy Afterfile backtests has exactly that shape.
         </p>
       </section>
 
@@ -81,7 +81,7 @@ export default async function SharpeDsrLesson({ lesson }: { lesson: Lesson }) {
         </p>
         <p className={styles.code}>E[max SR] ≈ sd(trial SRs) × ( (1 − γ)·Φ⁻¹(1 − 1/N) + γ·Φ⁻¹(1 − 1/(N·e)) ),  γ ≈ 0.5772</p>
         <p>
-          and then computes the PSR against it. QuantDesk logs every backtest run to <code>runs.jsonl</code> and counts distinct
+          and then computes the PSR against it. Afterfile logs every backtest run to <code>runs.jsonl</code> and counts distinct
           configurations (different random seeds do not count as new ideas), so the bar can only rise. The live-readiness gate requires
           DSR ≥ 0.95 on the out-of-sample period.
         </p>

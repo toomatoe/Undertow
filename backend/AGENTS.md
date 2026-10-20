@@ -108,9 +108,9 @@ a blank `NAME=` line counts as unset.
 
 | Env var | Default | Notes |
 |---|---|---|
-| `DATABASE_URL` | `sqlite:///./data/quantdesk.db` | compose sets Postgres (`postgresql+psycopg://...@db:5432/quantdesk`) |
+| `DATABASE_URL` | `sqlite:///./data/afterfile.db` | compose sets Postgres (`postgresql+psycopg://...@db:5432/quantdesk`; the local Postgres user/db keep the project's original name so existing volumes still work) |
 | `DATA_DIR` | `./data` | compose: `/app/data` (volume `apidata`). SEC caches, prices, `event_study.json` |
-| `SEC_USER_AGENT` | `quantdesk-dev contact@example.com` | used for every SEC request and RSS. Never hard-code one |
+| `SEC_USER_AGENT` | `afterfile-dev contact@example.com` | used for every SEC request and RSS. Never hard-code one |
 | `RSS_FEEDS` | `DEFAULT_RSS_FEEDS` | JSON object name -> url |
 | `EDGAR_ENABLED` | `true` | |
 | `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY` | none | both set -> `alpaca_enabled`. Paper keys only |
@@ -131,7 +131,7 @@ a blank `NAME=` line counts as unset.
 | `INSIDER_LIVE_ENABLED` | `true` | live insider-cluster forward test in the fast EDGAR poller (also needs `EDGAR_ENABLED`); read by `app/insiders/settings.py` `InsiderLiveSettings` (not `Settings`, yet). `false` stops all Form 4 requests |
 | `SMTP_*`, `EMAIL_*` | none | optional, off by default: email delivery; read by `app/delivery/settings.py` `DeliverySettings` (not `Settings`, yet). Full table in [delivery/AGENTS.md](app/delivery/AGENTS.md) |
 
-Not settings: `GIT_SHA` (read by `app.research.snapshot` for manifests; `unknown` when unset), `QUANTDESK_REPO_ROOT`
+Not settings: `GIT_SHA` (read by `app.research.snapshot` for manifests; `unknown` when unset), `AFTERFILE_REPO_ROOT`
 (repo root for `app.research.paper_numbers.find_repo_root`; else `/repo` when it has `docs/`, else the checkout).
 
 `get_settings()` is `lru_cache`d and `db.engine` is built at import time, so env must be set before
@@ -178,9 +178,9 @@ the OOS and insider studies write their own files, served by `GET /api/research/
 Tests in `tests/test_research_jobs.py` use offline substitute workers.
 
 Run: `bash scripts/pytest.sh [tests/test_x.py ...]` from the repo root. It mounts `backend/` at `/app` and the repo
-root read-only at `/repo` into the `quantdesk-api-test` dependency image, so it tests the current source without a
+root read-only at `/repo` into the `afterfile-api-test` dependency image, so it tests the current source without a
 rebuild and is safe to run in parallel. The `/repo` mount lets tests compare backend code with `docs/` and `frontend/`
-(`test_paper_numbers.py`, `test_insider_live.py::test_bundled_row_matches_docs_results`); without it those checks skip. Rebuild that image only when requirements change (`docker build -q -t quantdesk-api-test backend`).
+(`test_paper_numbers.py`, `test_insider_live.py::test_bundled_row_matches_docs_results`); without it those checks skip. Rebuild that image only when requirements change (`docker build -q -t afterfile-api-test backend`).
 The full path (`docker compose build api && docker compose run --rm api pytest -q`) bakes code into the image;
 in multi-agent runs only the Verify step uses it (docs/AGENT_PROCESS.md).
 

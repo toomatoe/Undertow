@@ -28,8 +28,8 @@ export function ApiNote({ what, status }: { what: string; status: number }) {
   return (
     <p className={styles.note} role="note">
       {status === 404
-        ? `The ${what} has not been run yet, so live QuantDesk numbers are missing here. `
-        : `Live QuantDesk numbers (${what}) are unavailable right now${status ? ` (API answered ${status})` : " (API unreachable)"}. `}
+        ? `The ${what} has not been run yet, so live Afterfile numbers are missing here. `
+        : `Live Afterfile numbers (${what}) are unavailable right now${status ? ` (API answered ${status})` : " (API unreachable)"}. `}
       The explanation and the simulators below still work: they run on fixed formulas, not on the API.
     </p>
   );

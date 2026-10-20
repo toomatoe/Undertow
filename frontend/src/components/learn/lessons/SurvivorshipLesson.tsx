@@ -25,7 +25,7 @@ export default async function SurvivorshipLesson({ lesson }: { lesson: Lesson })
       meaning={
         <>
           <p>
-            QuantDesk cannot recover the missing names from free data, so it does the next best thing: it counts them, publishes the count
+            Afterfile cannot recover the missing names from free data, so it does the next best thing: it counts them, publishes the count
             next to every result, and writes the direction of the bias into the study&apos;s caveats. The backtest goes further and never
             books a delisting as a gain (<code>delist_penalty</code>): a position in a stock whose data ends is closed at the last price
             plus 10%.
@@ -49,7 +49,7 @@ export default async function SurvivorshipLesson({ lesson }: { lesson: Lesson })
         <h2>How companies vanish</h2>
         <p>
           Small caps delist all the time: bankruptcy, reverse-merger shells, failing exchange listing rules, going private, being acquired.
-          When that happens the ticker is reused or retired, and free price sources often drop the history. QuantDesk samples companies by
+          When that happens the ticker is reused or retired, and free price sources often drop the history. Afterfile samples companies by
           their SEC public float from a fixed past date (a point-in-time universe, so size is not chosen with hindsight), but it still needs
           a ticker today to fetch prices. Companies without one are counted as <code>no_ticker</code>; those with a ticker but no usable
           history as <code>no_prices</code>.

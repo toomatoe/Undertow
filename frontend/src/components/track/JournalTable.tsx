@@ -72,7 +72,7 @@ export default function JournalTable({ entries }: { entries: JournalEntry[] }) {
     downloadCsv(
       [...CSV_HEADER],
       rows.map((e) => CSV_HEADER.map((c) => e[c])),
-      `quantdesk_track_record_${new Date().toISOString().slice(0, 10)}${signal ? `_${signal}` : ""}${size ? `_${size}` : ""}${status ? `_${status}` : ""}.csv`,
+      `afterfile_track_record_${new Date().toISOString().slice(0, 10)}${signal ? `_${signal}` : ""}${size ? `_${size}` : ""}${status ? `_${status}` : ""}.csv`,
     );
 
   return (

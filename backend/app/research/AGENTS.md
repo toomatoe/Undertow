@@ -144,7 +144,7 @@ listed in `HEADLINE` (label, result file, selector, field, value, tolerance, `fm
 by `{signal, bucket, horizon_days}`, a row of another list (`{"list": "confirmatory", "hypothesis": "H1"}`) or a
 dotted path with `[i]` indices (`{"path": "periods.A.waterfall[0]"}`). `check(repo_root)` returns mismatches:
 the JSON value must equal `value` within `tolerance`, and `fmt.format(value)` (e.g. `"+1.66%"`, `"t = 3.29"`,
-`"n = 662"`) must appear literally in the paper. `find_repo_root()`: env `QUANTDESK_REPO_ROOT`, else `/repo`
+`"n = 662"`) must appear literally in the paper. `find_repo_root()`: env `AFTERFILE_REPO_ROOT`, else `/repo`
 (when it has `docs/`), else `Path(__file__).parents[3]` (CI checkout). Pure stdlib; CLI:
 `python -m app.research.paper_numbers`.
 

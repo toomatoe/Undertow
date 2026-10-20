@@ -21,7 +21,7 @@ class DeliverySettings(BaseSettings):
     smtp_starttls: bool = True  # port 465 uses implicit TLS instead (SMTP_SSL)
     smtp_timeout_seconds: float = 20.0
 
-    email_from: str | None = None  # e.g. "QuantDesk <radar@example.com>"
+    email_from: str | None = None  # e.g. "Afterfile <radar@example.com>"
     email_reply_to: str | None = None  # also used as the mailto: List-Unsubscribe target
     email_postal_address: str | None = None  # CAN-SPAM: a valid physical postal address, printed in every footer
 

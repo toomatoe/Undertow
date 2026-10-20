@@ -15,7 +15,7 @@ Double-opt-in email list plus idempotent fan-out of the weekly "Small-Cap Filing
 | `digest.py` | `build_daily_digest(session, data_dir, day_et)` -> dict with `markdown`, `html`, `flagged_words`; `subject`, `is_empty` |
 | `routes.py` | `make_router(get_session, get_settings=None, make_transport=None)` and the default `router` |
 
-## Env vars (all optional and off by default; listed in `.env.example`. QuantDesk runs locally, so email stays off unless you add SMTP settings. `docker-compose.prod.yml` passes them through but is kept only for a possible later deployment)
+## Env vars (all optional and off by default; listed in `.env.example`. Afterfile runs locally, so email stays off unless you add SMTP settings. `docker-compose.prod.yml` passes them through but is kept only for a possible later deployment)
 
 These fields live in `DeliverySettings` only because this module was built in parallel with the config owner.
 **They should move into `app.config.Settings` later** (same env names). `PUBLIC_BASE_URL` is read via `app.config.get_settings()`.
@@ -27,7 +27,7 @@ These fields live in `DeliverySettings` only because this module was built in pa
 | `SMTP_USERNAME`, `SMTP_PASSWORD` | none | password is a `SecretStr`; keep it in `.env` |
 | `SMTP_STARTTLS` | true | ignored on port 465 |
 | `SMTP_TIMEOUT_SECONDS` | 20 | |
-| `EMAIL_FROM` | none | required, e.g. `QuantDesk <radar@yourdomain>` on a domain with SPF/DKIM/DMARC |
+| `EMAIL_FROM` | none | required, e.g. `Afterfile <radar@yourdomain>` on a domain with SPF/DKIM/DMARC |
 | `EMAIL_REPLY_TO` | none | also the `mailto:` target in `List-Unsubscribe` |
 | `EMAIL_POSTAL_ADDRESS` | none | required (CAN-SPAM physical address), printed in every footer |
 | `EMAIL_DAILY_DIGEST_HOUR_ET` | 7 | 0..23. From this ET hour on day D, the digest for the finished day D-1 is due (default: before the 09:30 open) |
@@ -90,7 +90,7 @@ No prices or float figures. It reuses `app.newsletter.service` helpers (`_filing
 - Headers: `List-Unsubscribe: <https://.../api/unsubscribe?token=...>` plus `, <mailto:REPLY_TO?subject=unsubscribe>`
   when `EMAIL_REPLY_TO` is set; `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058); `Message-ID`, `Date`,
   `Reply-To`. The message policy folds only past 998 chars: the stdlib default (78) RFC 2047-encodes the long URL and breaks the header.
-- Footer (text and HTML): why you get it, the unsubscribe link, `QuantDesk, EMAIL_POSTAL_ADDRESS`, and `DISCLAIMER`
+- Footer (text and HTML): why you get it, the unsubscribe link, `Afterfile, EMAIL_POSTAL_ADDRESS`, and `DISCLAIMER`
   ("Research and education only, not financial advice. Historical statistics are not predictions.").
 
 ## Compliance checklist

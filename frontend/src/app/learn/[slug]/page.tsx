@@ -43,7 +43,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
     description: lesson.description,
     keywords: lesson.concepts,
     alternates: { canonical: path },
-    openGraph: { type: "article", siteName: "QuantDesk", url: path, title, description: lesson.description },
+    openGraph: { type: "article", siteName: "Afterfile", url: path, title, description: lesson.description },
     twitter: { card: "summary", title, description: lesson.description },
   };
 }

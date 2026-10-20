@@ -55,7 +55,7 @@ DISCLAIMER = [
     "prepared with hindsight, they cannot fully model real-world costs, and past results are no indication of future results.",
     "Small-cap and nano-cap stocks are volatile and illiquid, and automated classification can misread filings. "
     "Read the original filing, linked from every item, before relying on anything here.",
-    "Our trading policy: QuantDesk and its operators do not trade any security within 48 hours before or after we publish "
+    "Our trading policy: Afterfile and its operators do not trade any security within 48 hours before or after we publish "
     "an alert or analysis about it, and we accept no payment to cover, promote or omit companies.",
 ]
 
@@ -596,7 +596,7 @@ def _arrow(d: str) -> str:
 def render_html(issue: dict) -> str:
     L = issue["links"]
     rows = [
-        _row(f'<div style="font-size:12px;color:{C_MUTED};text-transform:uppercase;letter-spacing:.05em;">QuantDesk weekly</div>'
+        _row(f'<div style="font-size:12px;color:{C_MUTED};text-transform:uppercase;letter-spacing:.05em;">Afterfile weekly</div>'
              f'<h1 style="margin:4px 0 2px;font-size:22px;color:{C_TEXT};">{_e(issue["title"])}</h1>'
              f'<div style="font-size:14px;color:{C_MUTED};">{_e(week_label(issue))}</div>', "24px 24px 12px"),
     ]

@@ -30,7 +30,7 @@ export default async function BaselinesLesson({ lesson }: { lesson: Lesson }) {
       meaning={
         <>
           <p>
-            Every QuantDesk evidence line reports the drift <em>and</em> the excess over ordinary days, and a signal only counts as
+            Every Afterfile evidence line reports the drift <em>and</em> the excess over ordinary days, and a signal only counts as
             significant if its excess passes the same multiple-testing bar as its raw drift (<code>t_vs_baseline</code>).
           </p>
           {study && typeof nanoBase === "number" && (
@@ -57,7 +57,7 @@ export default async function BaselinesLesson({ lesson }: { lesson: Lesson }) {
       </section>
 
       <section className={styles.section}>
-        <h2>How QuantDesk builds the baseline</h2>
+        <h2>How Afterfile builds the baseline</h2>
         <p>
           <code>baseline_events</code> creates pseudo-events for every sampled company at 10:00 ET every 21 trading days, roughly once a
           month, and measures them with exactly the same code as real filings. The <strong>excess</strong> is the event mean minus the

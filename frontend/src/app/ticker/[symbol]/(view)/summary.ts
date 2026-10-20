@@ -67,7 +67,7 @@ export function summarySentences({ detail: d, fundamentals: f, halts }: TickerDa
     const asOf = d.float_as_of ? ` as of ${longDate(d.float_as_of)}` : "";
     out.push(`${name} (${d.symbol}) is a ${CAP_WORDS[d.size_bucket] ?? d.size_bucket} company (public float ${formatMoney(d.public_float)}${asOf}).`);
   } else {
-    out.push(`${name} (${d.symbol}) is a company whose SEC filings and news QuantDesk tracks.`);
+    out.push(`${name} (${d.symbol}) is a company whose SEC filings and news Afterfile tracks.`);
   }
 
   if (f?.cash) {
@@ -109,7 +109,7 @@ export function summarySentences({ detail: d, fundamentals: f, halts }: TickerDa
     out.push(`Trading halts and pauses recorded between ${yearAgo} and ${to}: ${halts.length}, most recently on ${longDate(latestHalt(halts))}.`);
   }
 
-  out.push(`QuantDesk recorded ${d.mentions} mention${d.mentions === 1 ? "" : "s"} of ${d.symbol} in news and SEC filings in the ${days} days to ${to}.`);
+  out.push(`Afterfile recorded ${d.mentions} mention${d.mentions === 1 ? "" : "s"} of ${d.symbol} in news and SEC filings in the ${days} days to ${to}.`);
   return out;
 }
 
