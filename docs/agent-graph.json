@@ -11,18 +11,18 @@
   "modules": [
     {
       "id": "api",
-      "paths": ["backend/app/main.py", "backend/app/schemas.py", "backend/app/research_jobs.py", "backend/tests/test_api.py", "backend/tests/test_research_jobs.py"],
+      "paths": ["backend/app/main.py", "backend/app/schemas.py", "backend/app/research_jobs.py", "backend/tests/test_api.py", "backend/tests/test_research_jobs.py", "backend/tests/test_vault_api.py"],
       "agents_md": "backend/AGENTS.md",
-      "summary": "FastAPI routes (incl. /api/paper-portfolio (hypothetical, cached 10 min), /api/newsletter/*, /api/tickers/sitemap, /api/research/studies, /api/journal/chain|verify, /api/health/details|history; mounts the delivery router), rate-limit middleware + admin dependency wiring, lifespan (load_study + load_forward_evidence), to_out (main vs forward-test EvidenceOut), scheduler loops (slow: ingest, borrow snapshot, journal, seal_cycle, newsletter_cycle (+ email), digest_cycle, uptime_cycle; fast: EDGAR + live Form 4 forward-test poller + halts), AppState (incl. paper_cache, forward_evidence). Optional schema fields: SignalOut/ArticleOut.forward_test, EvidenceOut, Paper* models. research_jobs.MODULES: backtest, event_study, event_study_oos, insider_study.",
-      "depends_on": ["config_db", "platform", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter", "delivery", "insiders", "paper"],
-      "tests": ["backend/tests/test_api.py", "backend/tests/test_research_jobs.py"],
+      "summary": "FastAPI routes (incl. /api/paper-portfolio (hypothetical, cached 10 min), /api/newsletter/*, /api/tickers/sitemap, /api/research/studies, /api/journal/chain|verify, /api/health/details|history, /api/vault/status|notes (thesis read-back, cached 60 s) and admin POST /api/vault/export; mounts the delivery router), rate-limit middleware + admin dependency wiring, lifespan (load_study + load_forward_evidence), to_out (main vs forward-test EvidenceOut), scheduler loops (slow: ingest, borrow snapshot, journal, seal_cycle, vault_cycle (throttled to VAULT_EXPORT_MINUTES, forced after new seals and once at startup, EXPORT_LOCK), newsletter_cycle (+ email), digest_cycle, uptime_cycle; fast: EDGAR + live Form 4 forward-test poller + halts), AppState (incl. paper_cache, forward_evidence, vault_last_run/vault_due/vault_notes_cache). Vault* schema models. Optional schema fields: SignalOut/ArticleOut.forward_test, EvidenceOut, Paper* models. research_jobs.MODULES: backtest, event_study, event_study_oos, insider_study.",
+      "depends_on": ["config_db", "platform", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter", "delivery", "insiders", "paper", "vault"],
+      "tests": ["backend/tests/test_api.py", "backend/tests/test_research_jobs.py", "backend/tests/test_vault_api.py"],
       "hotspot": true
     },
     {
       "id": "config_db",
       "paths": ["backend/app/config.py", "backend/app/db.py", "backend/app/models.py", "backend/app/__init__.py", "backend/tests/test_config_local.py"],
       "agents_md": "backend/AGENTS.md",
-      "summary": "Settings (env; local zero-config defaults: PUBLIC_BASE_URL = site origin http://localhost:3000, every integration off until set) incl. AdminSettings (ADMIN_TOKEN, RESEARCH_JOBS_ENABLED, MUTATIONS_ENABLED) and rate-limit settings, engine/session, stopgap column migration, all ORM tables (incl. subscribers, email_sends). test_config_local.py checks the zero-config local defaults.",
+      "summary": "Settings (env; local zero-config defaults: PUBLIC_BASE_URL = site origin http://localhost:3000, every integration off until set) incl. AdminSettings (ADMIN_TOKEN, RESEARCH_JOBS_ENABLED, MUTATIONS_ENABLED), rate-limit settings and VAULT_* settings, engine/session, stopgap column migration, all ORM tables (incl. subscribers, email_sends). test_config_local.py checks the zero-config local defaults.",
       "depends_on": [],
       "tests": ["backend/tests/test_config_local.py", "backend/tests"],
       "hotspot": true
@@ -108,6 +108,14 @@
       "tests": ["backend/tests/test_delivery.py"]
     },
     {
+      "id": "vault",
+      "paths": ["backend/app/vault/", "backend/tests/test_vault.py"],
+      "agents_md": "backend/app/vault/AGENTS.md",
+      "summary": "Obsidian vault export: plain Markdown only under <VAULT_DIR>/Undertow/ (Tickers, Signals, Journal (sealed fields), Briefs, Studies, Newsletter, Paper copy, Bases/*.base, in-vault AGENTS.md/CLAUDE.md, index.md, append-only log.md, _conflicts/). VaultFS path confinement, atomic write-if-changed, never deletes; fence/hash conflicts; read_theses (thesis notes outside Undertow/); {data_dir}/vault_state.json. Never imports app.main, never reads Settings. working_paper.md is a byte-identical copy of docs/paper/WORKING_PAPER.md (test needs /repo). Wired by vault_cycle and /api/vault/* in main.py.",
+      "depends_on": ["config_db", "journal", "pipeline", "newsletter", "fundamentals", "research"],
+      "tests": ["backend/tests/test_vault.py"]
+    },
+    {
       "id": "insiders",
       "paths": ["backend/app/insiders/", "backend/tests/test_insiders.py", "backend/tests/fixtures/form4/", "backend/tests/test_insider_live.py", "backend/tests/fixtures/form4_live/"],
       "agents_md": "backend/app/insiders/AGENTS.md",
@@ -144,7 +152,7 @@
       "id": "fe_ticker",
       "paths": ["frontend/src/app/ticker/", "frontend/src/components/DilutionPanel.tsx", "frontend/src/lib/server-api.ts", "frontend/src/app/sitemap.ts", "frontend/src/app/robots.ts"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Server-rendered SEO ticker pages ((view)/ route group, 404 gate, summary.ts), server-side fetch helpers + SITE_URL (server-api.ts, also used by the newsletter and Learn pages: getEventStudy, getBacktestReport), sitemap.xml (incl. /learn pages from lib/learn/lessons.ts), robots.txt.",
+      "summary": "Server-rendered SEO ticker pages ((view)/ route group, 404 gate, summary.ts, client VaultNotes panel with the user's Obsidian thesis notes via api.vaultNotes, plain text), server-side fetch helpers + SITE_URL (server-api.ts, also used by the newsletter and Learn pages: getEventStudy, getBacktestReport), sitemap.xml (incl. /learn pages from lib/learn/lessons.ts), robots.txt.",
       "depends_on": ["fe_core", "fe_content", "fe_learn", "api"],
       "tests": ["frontend: npx tsc --noEmit", "curl raw HTML of /ticker/OCGN", "curl /ticker/NOPE123 -> 404", "curl /sitemap.xml and /robots.txt"]
     },
@@ -184,7 +192,7 @@
       "id": "fe_status",
       "paths": ["frontend/src/app/status/"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "/status: health components, 7-day uptime, incidents, journal seal verification, and the admin-token box (session storage, shared with ResearchRunPanel via api.ts get/setAdminToken).",
+      "summary": "/status: health components, 7-day uptime, incidents, journal seal verification, the Obsidian vault card (api.vaultStatus, Export now via admin api.vaultExport, conflict count), and the admin-token box (session storage, shared with ResearchRunPanel via api.ts get/setAdminToken).",
       "depends_on": ["fe_core"],
       "tests": ["frontend: npx tsc --noEmit"]
     },

@@ -13,7 +13,7 @@ Undertow is local-only (decision 2026-10-19): no paid tier, accounts or hosting.
 | `results/event_study_YYYY-MM-DD.json` | Frozen copies of event-study runs, one file per run date. First: `event_study_2026-10-15.json` | Append-only; never edit a published file |
 | `results/backtest_YYYY-MM-DD.json` | Frozen copies of backtest reports (`report_latest.json`). First: `backtest_2026-10-16.json` | Append-only |
 | `results/event_study_oos_YYYY-MM-DD.json`, `results/event_study_insider_purchases_YYYY-MM-DD.json` | Frozen copies of the pre-registered out-of-sample and insider studies (`{DATA_DIR}/event_study_oos.json`, `{DATA_DIR}/event_study_insider_purchases.json`). Published: `event_study_oos_2026-10-19.json`, `event_study_insider_purchases_2026-10-19.json` | Append-only, same rules |
-| `paper/WORKING_PAPER.md` | Working paper on all three studies and the backtest. Every headline number is listed in `HEADLINE` in `backend/app/research/paper_numbers.py` and checked against `results/` by `backend/tests/test_paper_numbers.py`. A byte-identical copy lives at `frontend/src/content/working-paper.md` (rendered at `/research/paper`) | Change a number -> update `HEADLINE` and the frontend copy in the same change |
+| `paper/WORKING_PAPER.md` | Working paper on all three studies and the backtest. Every headline number is listed in `HEADLINE` in `backend/app/research/paper_numbers.py` and checked against `results/` by `backend/tests/test_paper_numbers.py`. Byte-identical copies live at `frontend/src/content/working-paper.md` (rendered at `/research/paper`) and `backend/app/vault/working_paper.md` (exported to the Obsidian vault) | Change a number -> update `HEADLINE` and both copies in the same change |
 | `plans/YYYY-MM-DD-*.json` | Batch plans from the planning step (work items, owned paths, acceptance). `2026-10-19-batch.json` (platform + studies), `2026-10-19-v1-local.json` (v1.0 local-only batch) | Historical record; don't edit after the batch runs |
 | `agent-graph.json` | Machine-readable module graph: paths (every repo file in exactly one module), AGENTS.md, depends_on, tests, hotspots, shared resources | Update when a module or top-level file is added |
 | `AGENT_PROCESS.md` | Multi-agent process: Plan, ownership waves, Build, 2-lens Review, exclusive Verify, final Docs item, Critic | Update when `.claude/workflows/feature-graph.js` changes |
@@ -54,7 +54,7 @@ can be compared against a new one field by field.
 3. Copy it out with a dated name, e.g. with the API running:
    `docker compose cp api:/app/data/event_study.json docs/results/event_study_<YYYY-MM-DD>.json`.
    Never overwrite an earlier file; a rerun on the same day gets a suffix.
-4. Update the working paper (`paper/WORKING_PAPER.md`), `HEADLINE` in `paper_numbers.py` and the frontend copy, run
+4. Update the working paper (`paper/WORKING_PAPER.md`), `HEADLINE` in `paper_numbers.py` and both copies (frontend and `backend/app/vault/working_paper.md`), run
    `bash scripts/pytest.sh tests/test_paper_numbers.py`, then copy the changed numbers into the "Key findings" section
    of `README.md` exactly as the paper writes them. Keep `n`, `t`, `excess_vs_baseline`, `mean_net` and the caveats
    (non-independent events, survivorship, borrow), and label every net or simulated figure hypothetical.

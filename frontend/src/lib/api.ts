@@ -873,6 +873,52 @@ export interface ResearchJobs {
   requires_token: boolean;
 }
 
+// --- Obsidian vault (GET /api/vault/status, GET /api/vault/notes, POST /api/vault/export) ---
+
+/** Result of one vault export run. */
+export interface VaultExportResult {
+  created: number;
+  updated: number;
+  unchanged: number;
+  conflicts: number;
+  errors: number;
+  /** Notes written per vault folder. */
+  counts: Record<string, number>;
+  started_at: string;
+  finished_at: string;
+}
+
+/** GET /api/vault/status; also returned by POST /api/vault/export. */
+export interface VaultStatus {
+  /** VAULT_ENABLED on the API. */
+  enabled: boolean;
+  /** Vault directory as configured on the API. */
+  dir: string;
+  last_export_at: string | null;
+  last_result: VaultExportResult | null;
+  /** Files currently in Undertow/_conflicts/ in the vault. */
+  conflicts: number;
+  running: boolean;
+}
+
+/** One of the user's own thesis notes read from the vault (read-only). `excerpt` is plain text, never HTML. */
+export interface VaultNote {
+  title: string;
+  /** Vault-relative path. */
+  path: string;
+  ticker: string | null;
+  updated: string | null;
+  tags: string[];
+  excerpt: string;
+}
+
+/** GET /api/vault/notes?ticker=X */
+export interface VaultNotes {
+  enabled: boolean;
+  ticker: string;
+  notes: VaultNote[];
+}
+
 export const api = {
   researchJobs: async () => {
     const res = await fetch(`${API_BASE}/api/research/jobs`, { cache: "no-store", signal: AbortSignal.timeout(15000) });
@@ -923,5 +969,9 @@ export const api = {
   newsletterPreview: () => send<NewsletterIssue>("/api/newsletter/preview", "POST"),
   /** Admin-protected. Throws ApiError (401 -> ADMIN_TOKEN_REQUIRED, 403 -> CHANGES_DISABLED). */
   ingest: () => send<Record<string, unknown>>("/api/ingest", "POST", { admin: true }),
+  vaultStatus: () => get<VaultStatus>("/api/vault/status"),
+  vaultNotes: (ticker: string) => get<VaultNotes>(`/api/vault/notes${query({ ticker })}`),
+  /** Admin-protected. Throws ApiError: 401 -> ADMIN_TOKEN_REQUIRED, 403 -> CHANGES_DISABLED, 409 disabled or already running. */
+  vaultExport: () => send<VaultStatus>("/api/vault/export", "POST", { admin: true, timeoutMs: 120000 }),
   streamUrl: `${API_BASE}/api/stream`,
 };

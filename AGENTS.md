@@ -4,8 +4,8 @@ Undertow is a personal, **locally run** small-cap SEC-filing research platform (
 companies under $2B public float, each shown next to an event-study result on how similar stocks moved afterwards.
 It also has a landing page with the key findings, a live market news feed (EDGAR, RSS, optional Alpaca/Benzinga) with
 optional Claude enrichment, a hash-sealed track record, a live forward test of the insider-cluster finding, a
-hypothetical paper portfolio, a working paper, a weekly newsletter with optional email delivery, a Learn section and a
-`/status` page. It runs on the owner's machine via Docker (ports on 127.0.0.1): no paid tier, no accounts, no hosting.
+hypothetical paper portfolio, a working paper, a weekly newsletter with optional email delivery, a Learn section, a
+`/status` page and an Obsidian vault export (Markdown notes, plus the user's thesis notes read back onto ticker pages). It runs on the owner's machine via Docker (ports on 127.0.0.1): no paid tier, no accounts, no hosting.
 Research and education only; it never places orders.
 
 Read this file, then only the AGENTS.md of the folder you are working in.
@@ -32,6 +32,7 @@ Read this file, then only the AGENTS.md of the folder you are working in.
 | `backend/app/fundamentals/` | Cash runway and dilution history from SEC XBRL + filings | [fundamentals/AGENTS.md](backend/app/fundamentals/AGENTS.md) |
 | `backend/app/newsletter/` | Weekly "Small-Cap Filing Radar": build, Markdown/HTML render, immutable archive, CLI | [newsletter/AGENTS.md](backend/app/newsletter/AGENTS.md) |
 | `backend/app/delivery/` | Email delivery (off unless SMTP is configured): double opt-in list, newsletter fan-out, daily digest, `/api/subscribe` router | [delivery/AGENTS.md](backend/app/delivery/AGENTS.md) |
+| `backend/app/vault/` | Obsidian vault export: Markdown notes only under `<VAULT_DIR>/Undertow/` (never deletes, write-if-changed, fence/hash conflicts), Bases files, in-vault `AGENTS.md`, thesis-note read-back (`read_theses`), byte-identical `working_paper.md` copy | [vault/AGENTS.md](backend/app/vault/AGENTS.md) |
 | `backend/app/security.py`, `backend/app/health.py` | Admin policy for mutating endpoints + per-client rate limiter; deep health check + uptime history | covered in backend/AGENTS.md |
 | `backend/tests/` | pytest suite (in-memory SQLite, no network); `fixtures/form4/` (insider study) and `fixtures/form4_live/` (live forward test) | covered in backend/AGENTS.md |
 | `frontend/` | Next.js 15 App Router UI; `Dockerfile` = standalone image used by the compose `web` profile | [frontend/AGENTS.md](frontend/AGENTS.md) |
@@ -107,6 +108,10 @@ Every default is local and needs no change.
 - Admin protection (`AdminSettings` in `app/config.py`, policy in `app/security.py`): `ADMIN_TOKEN` (the old name
   `RESEARCH_ADMIN_TOKEN` is still accepted), `RESEARCH_JOBS_ENABLED`, `MUTATIONS_ENABLED`. Without a token or flag,
   mutations work only while `PUBLIC_BASE_URL` is localhost (the local default).
+- Obsidian vault export (`app/config.py`, rules in [backend/app/vault/AGENTS.md](backend/app/vault/AGENTS.md)):
+  `VAULT_ENABLED` (true), `VAULT_DIR` (`./vault`; compose sets `/app/vault`), `VAULT_LOOKBACK_DAYS` (30),
+  `VAULT_EXPORT_MINUTES` (15). `VAULT_HOST_DIR` is compose-only, not a setting: the host folder bind-mounted to
+  `/app/vault` (default `./vault`, git-ignored as `/vault/`); after changing it, `docker compose up -d api` remounts.
 - Rate limits: `RATE_LIMIT_PER_MINUTE` (120), `RATE_LIMIT_WRITE_PER_MINUTE` (10), `TRUST_PROXY_HEADERS` (false; not
   needed locally).
 - Not settings: `POSTGRES_PASSWORD` (only for the optional prod compose env file), `GIT_SHA` (code version in study
@@ -132,9 +137,14 @@ Every default is local and needs no change.
   study's taxonomy and Bonferroni count never change. Resolve stored signal codes with `signal_def()`, never
   `ALL_SIGNALS[code]`; forward-test evidence comes from its own study file (`insiders/evidence.py`), never `event_study.json`.
 - **Paper numbers are checked.** Change a number in `docs/paper/WORKING_PAPER.md` -> update `HEADLINE` in
-  `paper_numbers.py` and copy the paper byte-identically to `frontend/src/content/working-paper.md`.
+  `paper_numbers.py` and copy the paper byte-identically to `frontend/src/content/working-paper.md` **and**
+  `backend/app/vault/working_paper.md` (`test_paper_numbers.py` and `test_vault.py` fail otherwise).
 - **Every mutating endpoint goes through the admin policy** (`app/security.py`); never add an unprotected write
-  except deliberate public ones (subscribe, newsletter preview), which the write-tier rate limit covers.
+  except deliberate public ones (subscribe, newsletter preview), which the write-tier rate limit covers. Protected
+  today: `POST /api/research/jobs/{kind}`, `POST /api/ingest`, `POST /api/alerts/test`, `POST /api/vault/export`,
+  `PUT`/`DELETE /api/watchlist/{symbol}`.
+- **The vault export only writes under `<VAULT_DIR>/Undertow/` and never deletes** (backend/app/vault/AGENTS.md); it
+  never reads `Settings`, so no key, token or contact string can reach the vault.
 - **Email:** only double opt-in via `POST /api/subscribe`; never bulk-insert subscribers or send from tests (delivery/AGENTS.md).
 - UI shows headlines and links out; never republish full article text. Content rules (no buy/sell language,
   label hypothetical results) are in frontend/AGENTS.md and apply to docs too.
@@ -183,7 +193,7 @@ Every default is local and needs no change.
 | Evidence line on signal cards | `load_study()` / `load_forward_evidence()` / `to_out()` in `main.py`, `ArticleCard.tsx` |
 | Live insider forward test (Form 4 poller, cluster signal) | `backend/app/insiders/live.py`, `settings.py`, `evidence.py`; `_poll_form4` in `pipeline/ingest.py`; `FORWARD_TEST_SIGNALS` in `pipeline/signals.py`; `EVALUATION_HORIZONS` in `journal/service.py` |
 | Paper portfolio (hypothetical) | `backend/app/paper/service.py`, `/api/paper-portfolio` in `main.py`, `frontend/src/app/paper/`, `frontend/src/components/portfolio/` |
-| Working paper and its numbers | `docs/paper/WORKING_PAPER.md`, `backend/app/research/paper_numbers.py` (`HEADLINE`), `backend/tests/test_paper_numbers.py`, `frontend/src/content/working-paper.md`, `frontend/src/app/research/paper/`, `frontend/src/components/markdown/` |
+| Working paper and its numbers | `docs/paper/WORKING_PAPER.md`, `backend/app/research/paper_numbers.py` (`HEADLINE`), `backend/tests/test_paper_numbers.py`, `frontend/src/content/working-paper.md`, `backend/app/vault/working_paper.md`, `frontend/src/app/research/paper/`, `frontend/src/components/markdown/` |
 | Edge Lab charts | `frontend/src/app/lab/page.tsx`, `--div-*` tokens in `globals.css` |
 | Strategy backtests | `backend/app/backtest/` (its own AGENTS.md) |
 | Weekly newsletter content or schedule | `backend/app/newsletter/service.py`, `newsletter_cycle()` in `main.py`, `frontend/src/components/newsletter/` |
@@ -194,6 +204,7 @@ Every default is local and needs no change.
 | Track-record seal (hash chain) | `backend/app/journal/digest.py`, `seal_cycle()` and `/api/journal/chain`, `/api/journal/verify` in `main.py`, `components/track/SealPanel.tsx` |
 | Out-of-sample study, offline replay | `backend/app/research/oos.py`, `snapshot.py`, `scripts/reproduce.sh` |
 | Insider-purchase (Form 4) study | `backend/app/insiders/` (its own AGENTS.md and PREREGISTRATION.md) |
+| Obsidian vault export, thesis notes on ticker pages | `backend/app/vault/` (its own AGENTS.md; `exporter.py`, `writer.py`, `fs.py`, `readback.py`, `static/vault_agents.md`), `vault_cycle()` and `/api/vault/*` in `main.py`, `VaultNotes.tsx` in `frontend/src/app/ticker/[symbol]/(view)/`, `VaultCard` in `frontend/src/app/status/page.tsx`, README "Using Undertow with Obsidian" |
 | Learn lessons and simulators | `frontend/src/app/learn/`, `frontend/src/components/learn/`, `frontend/src/lib/learn/` |
 | CI; server deploy (optional, for later) | `.github/workflows/ci.yml`; `docker-compose.prod.yml`, `frontend/Dockerfile` |
 | Feasibility / product docs (background) | `docs/` |

@@ -64,8 +64,12 @@ from app.schemas import (
     StudyInfo,
     TickerDetail,
     TrendingTicker,
+    VaultExportResultOut,
+    VaultNotesOut,
+    VaultStatusOut,
 )
 from app.security import RateLimiter, RateLimitMiddleware, admin_dependency, admin_policy
+from app import vault
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("undertow")
@@ -83,6 +87,9 @@ CHAIN_TAIL = 30  # lines returned by GET /api/journal/chain
 VERIFY_TTL_SECONDS = 600  # verify_chain recomputes every sealed day: cache it
 PAPER_TTL_SECONDS = 600  # paper portfolio: recomputed from the journal + cached prices at most every 10 minutes
 PAPER_NOTIONAL = 10_000  # fixed server-side (hypothetical notional per position)
+VAULT_NOTES_TTL_SECONDS = 60  # read_theses walks the vault: cache per ticker
+# Ticker query values for /api/vault/notes: letters/digits with an optional class suffix (BRK.B, BF-A)
+TICKER_PATTERN = r"^[A-Za-z][A-Za-z0-9]{0,9}(?:[.\-][A-Za-z0-9]{1,3})?$"
 
 
 class AppState:
@@ -106,6 +113,12 @@ class AppState:
     study_cache: dict[str, tuple[float, dict]] = {}  # study name -> (file mtime, parsed JSON)
     # (ET date, hedge, max_concurrent) -> (monotonic time, build_portfolio result): hypothetical paper portfolio
     paper_cache: dict[tuple[date, bool, int], tuple[float, dict]] = {}
+    # Obsidian vault export (app/vault/): monotonic time of the last export run, and "seal_cycle sealed new days,
+    # export on the next vault_cycle regardless of the throttle"
+    vault_last_run: float | None = None
+    vault_due: bool = False
+    # (vault_dir, ticker) -> (monotonic time, read_theses result)
+    vault_notes_cache: dict[tuple[str, str], tuple[float, list[dict]]] = {}
 
 
 state = AppState()
@@ -200,6 +213,10 @@ async def scheduler() -> None:
             await asyncio.to_thread(seal_cycle)
         except Exception:
             log.exception("Journal seal failed")
+        try:  # Obsidian vault export every vault_export_minutes, or right after new seals (never overlaps: EXPORT_LOCK)
+            await asyncio.to_thread(vault_cycle)
+        except Exception:
+            log.exception("Vault export failed")
         try:  # weekly newsletter: build last week's issue once, after the week is complete (emails it if configured)
             await asyncio.to_thread(newsletter_cycle)
         except Exception:
@@ -316,7 +333,73 @@ def seal_cycle(now: datetime | None = None) -> None:
     if added:
         log.info("Journal chain: sealed %d day(s) through %s", len(added), added[-1]["day"])
         state.verify_cache = None
+        state.vault_due = True  # journal notes pick up sealed_day/seal_hash on the next vault_cycle
     state.sealed_through = yesterday
+
+
+def vault_evidence(code: str, bucket: str):
+    """(signal code, bucket) -> evidence row for the vault, in main.py terms: main-study evidence for ALL_SIGNALS,
+    forward-test evidence (insider study) for FORWARD_TEST_SIGNALS. The vault's evidence_fn takes a code and a
+    bucket, not an Article, so evidence_for() cannot be passed directly."""
+    source = forward_evidence() if is_forward_test(code) else state.evidence
+    return source.get((code, bucket))
+
+
+def cached_paper_summary() -> dict | None:
+    """The cached hypothetical paper portfolio (state.paper_cache), preferring the endpoint's defaults (no hedge,
+    20 concurrent) and the newest entry. Never triggers a recompute; None when nothing is cached."""
+    if not paper_lock.acquire(timeout=5):  # a recompute is running: skip rather than wait for it
+        return None
+    try:
+        cache = dict(state.paper_cache)
+    finally:
+        paper_lock.release()
+    if not cache:
+        return None
+    default = [k for k in cache if not k[1] and k[2] == 20]
+    key = max(default or cache, key=lambda k: (k[0], cache[k][0]))
+    return cache[key][1]
+
+
+def _vault_export(force: bool) -> tuple[str, dict | None]:
+    """Run one export. Returns (outcome, result dict): outcome is disabled | throttled | busy | ok | error."""
+    if not settings.vault_enabled:
+        return "disabled", None
+    if not force and not state.vault_due and state.vault_last_run is not None \
+            and time.monotonic() - state.vault_last_run < settings.vault_export_minutes * 60:
+        return "throttled", None
+    if not vault.EXPORT_LOCK.acquire(blocking=False):
+        return "busy", None
+    try:
+        state.vault_due = False
+        with SessionLocal() as session:
+            res = vault.export_vault(
+                session, vault_dir=settings.vault_dir, data_dir=settings.data_dir,
+                lookback_days=settings.vault_lookback_days, evidence_fn=vault_evidence,
+                paper_fn=cached_paper_summary, study_files=STUDY_FILES,
+            )
+        out = res.to_dict()
+        if res.changed:
+            log.info("Vault export: created=%d updated=%d conflicts=%d errors=%d",
+                     res.created, res.updated, res.conflicts, res.errors)
+        return "ok", out
+    except Exception:
+        log.exception("Vault export crashed")
+        return "error", None
+    finally:
+        state.vault_last_run = time.monotonic()
+        state.vault_notes_cache = {}
+        vault.EXPORT_LOCK.release()
+
+
+def vault_cycle(force: bool = False) -> dict | None:
+    """Obsidian vault export (app/vault/AGENTS.md). None when disabled, throttled (vault_export_minutes since the last
+    run, unless forced or seal_cycle sealed new days), already running, or failed (logged, never raised)."""
+    try:
+        return _vault_export(force)[1]
+    except Exception:
+        log.exception("Vault cycle failed")
+        return None
 
 
 def health_inputs() -> health_mod.HealthInputs:
@@ -385,6 +468,8 @@ async def lifespan(app: FastAPI):
         NEW_ARTICLE_HOOKS.append(state.alerter)
     log.info("Alerts: channel=%s, min severity %d, sizes %s", state.alerter.channel, settings.alert_min_severity, settings.alert_sizes)
     tasks = [asyncio.create_task(scheduler())]
+    # First vault export in the background (forced): never blocks startup, ingest or the EDGAR loop
+    tasks.append(asyncio.create_task(asyncio.to_thread(vault_cycle, True)))
     if settings.edgar_poll_seconds > 0:
         tasks.append(asyncio.create_task(edgar_poller()))
     try:
@@ -778,6 +863,68 @@ def paper_portfolio(hedge: bool = False, max_concurrent: int = Query(20, ge=1, l
         state.paper_cache = {k: v for k, v in state.paper_cache.items() if k[0] == key[0]}  # drop older days
         state.paper_cache[key] = (time.monotonic(), result)
         return result
+
+
+def vault_status() -> VaultStatusOut:
+    """Export state from {data_dir}/vault_state.json plus live conflict count and lock state. Works before the vault
+    folder exists (conflicts 0, last_* null)."""
+    saved = vault.read_state(settings.data_dir) or {}
+    last = saved.get("last_export") if isinstance(saved.get("last_export"), dict) else None
+    result = None
+    if last is not None:
+        try:
+            result = VaultExportResultOut(**{k: last.get(k) for k in VaultExportResultOut.model_fields})
+        except Exception as exc:  # a malformed state file must not break the status endpoint
+            log.warning("Vault state unreadable: %s", exc)
+    at = (last or {}).get("finished_at") or saved.get("written_at")
+    return VaultStatusOut(
+        enabled=settings.vault_enabled, dir=settings.vault_dir,
+        last_export_at=at if isinstance(at, str) else None, last_result=result,
+        conflicts=vault.count_conflicts(settings.vault_dir), running=vault.EXPORT_LOCK.locked(),
+    )
+
+
+@app.get("/api/vault/status", response_model=VaultStatusOut)
+def vault_status_endpoint():
+    return vault_status()
+
+
+@app.get("/api/vault/notes", response_model=VaultNotesOut)
+def vault_notes(ticker: str = Query(..., min_length=1, max_length=16, pattern=TICKER_PATTERN)):
+    """Thesis notes a human wrote in the vault (outside Undertow/) for one ticker. Read-only; cached 60 s."""
+    symbol = ticker.upper()
+    if not settings.vault_enabled:
+        return VaultNotesOut(enabled=False, ticker=symbol, notes=[])
+    key = (settings.vault_dir, symbol)
+    now = time.monotonic()
+    cached = state.vault_notes_cache.get(key)
+    if cached and now - cached[0] < VAULT_NOTES_TTL_SECONDS:
+        notes = cached[1]
+    else:
+        try:
+            notes = vault.read_theses(settings.vault_dir, ticker=symbol)
+        except Exception:
+            log.exception("Vault read-back failed")
+            notes = []
+        fresh = {k: v for k, v in state.vault_notes_cache.items() if now - v[0] < VAULT_NOTES_TTL_SECONDS}
+        fresh[key] = (now, notes)
+        state.vault_notes_cache = fresh
+    return VaultNotesOut(enabled=True, ticker=symbol, notes=notes)
+
+
+@app.post("/api/vault/export", response_model=VaultStatusOut, dependencies=[Depends(require_admin("mutations"))])
+async def vault_export():
+    """Run the vault export now (admin policy, write-tier rate limit). 409 when disabled or already running."""
+    if not settings.vault_enabled:
+        raise HTTPException(409, "Vault export is disabled (VAULT_ENABLED=false)")
+    if vault.EXPORT_LOCK.locked():
+        raise HTTPException(409, "A vault export is already running")
+    outcome, _ = await asyncio.to_thread(_vault_export, True)
+    if outcome == "busy":
+        raise HTTPException(409, "A vault export is already running")
+    if outcome == "error":
+        raise HTTPException(500, "Vault export failed; see the API log")
+    return vault_status()
 
 
 @app.get("/api/newsletter/issues")

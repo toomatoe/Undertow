@@ -20,6 +20,7 @@ src/app/ticker/[symbol]/           /ticker/X  server-rendered SEO ticker page (I
   (view)/page.tsx                  server component: metadata, canonical, JSON-LD, summary paragraph, server ArticleCards
   (view)/loading.tsx               skeleton (wraps only page.tsx)
   (view)/TickerView.tsx            client part: watch toggle, 7/30/90d window, coverage bars, articles
+  (view)/VaultNotes.tsx            client panel "Your notes (Obsidian)": the user's thesis notes from the vault (read-only)
   (view)/summary.ts                factual summary sentences, meta description, dateModified (pure, dated text)
   (view)/symbol.ts                 parseSymbol(): route param -> symbol or null (no second decode)
 src/app/newsletter/layout.tsx      /newsletter default title + description
@@ -32,7 +33,8 @@ src/app/learn/[slug]/page.tsx      /learn/<slug>  one lesson (server component, 
                                    components/learn/lessons/*Lesson.tsx, live numbers via server-api getEventStudy/getBacktestReport
 src/app/learn/curriculum/page.tsx  /learn/curriculum  8-week self-study path (static server component)
 src/app/status/layout.tsx          /status metadata (title, description)
-src/app/status/page.tsx            /status  health components, 7-day uptime, incidents, seal verification, admin-token box (client, refresh 60 s)
+src/app/status/page.tsx            /status  health components, 7-day uptime, incidents, seal verification, Obsidian vault card,
+                                   admin-token box (client, refresh 60 s)
 src/app/sitemap.ts                 /sitemap.xml  static pages (incl. /learn, every lesson, /learn/curriculum) + /api/tickers/sitemap + archived issues (revalidate 1 h)
 src/app/robots.ts                  /robots.txt   allow /, disallow /api/, points at the sitemap
 src/app/research/page.tsx   /research        static research index (studies, pre-registrations, link to the paper; research.module.css)
@@ -114,11 +116,20 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
   `SharpeDsrLesson.tsx`. A new lesson needs an entry in `LESSONS` (lessons.ts) and in `BODIES`; the sitemap picks it up.
 - `/status`: `api.healthDetails()` + `api.healthHistory(7)` (refresh every 60 s), `api.journalVerify()`, `api.status()`
   for `admin`; an admin-token box that stores the token in session storage (`setAdminToken`) for protected servers.
+  `VaultCard` (Obsidian vault): `api.vaultStatus()` on the same 60 s refresh shows on/off, the API's vault path, last
+  export (relative time), created/updated/unchanged/errors, per-folder counts and waiting conflict files
+  (`Undertow/_conflicts/`); **Export now** calls `api.vaultExport()` (admin; 401/403/429 show the admin message, 409 =
+  "already running or disabled"), disabled while running or when `VAULT_ENABLED` is off. Styles in `status.module.css`
+  (`vaultList`, `vaultPath`, `vaultFolders`, `vaultActions`).
 - `/newsletter` also renders `SubscribeForm` (client island, anchor `#subscribe`); the page stays a server component.
 - `/ticker/[symbol]`: server-fetched ticker (90 days), fundamentals and halts; factual summary paragraph, then
   `TickerView` (watchlist re-checked in the browser, window switch re-fetches via `api.ticker`), `DilutionPanel` (server
   data, or client fetch if the server call failed with non-404, omitted without a CIK or on 404), `HaltsPanel`,
-  coverage bars, articles, related links.
+  `VaultNotes`, coverage bars, articles, related links. `VaultNotes` (client, after hydration so the cached server HTML
+  never contains personal notes) calls `api.vaultNotes(symbol)` and lists title, updated date (date-only values
+  formatted in UTC), vault path and excerpt **as plain text** (never Markdown/HTML rendering). Empty state: a copyable
+  `type: thesis` + `ticker:` frontmatter example; `enabled: false` -> "Vault integration is off"; errors -> a muted
+  "unavailable" line. Inline styles from the globals.css tokens (no CSS module in that folder).
 - `/newsletter`, `/newsletter/[issue]`: `NewsletterWorkspace` = `ArchiveList` sidebar + export toolbar (Copy Markdown,
   Download HTML, Open email version) + `IssueView`. "Preview this week so far" calls `api.newsletterPreview()` (POST,
   never archived). If the server could not reach the API, the workspace retries from the browser.
@@ -167,13 +178,14 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
   from `getAdminToken()` (session storage key `undertow.researchAdminToken`, shared by `/status` and
   `ResearchRunPanel`; `setAdminToken` stores/clears it) and maps 401/403 to the `ADMIN_TOKEN_REQUIRED` /
   `CHANGES_DISABLED` messages; 429 becomes "Too many requests. Try again in N seconds." `isAdminApiError(e)` is true for
-  admin 401/403/429. Admin calls: `startResearch`, `watch` (PUT/DELETE), `ingest`. Public writes (`subscribe`,
+  admin 401/403/429. Admin calls: `startResearch`, `watch` (PUT/DELETE), `ingest`, `vaultExport`. Public writes (`subscribe`,
   `newsletterPreview`) send no token. (`ResearchRequestError` was replaced by `ApiError`.)
 - `api.*` methods: `researchJobs`, `startResearch`, `articles`, `article`, `signals`, `signalCatalog`,
   `eventStudy(study = "main")`, `studies`, `watchlist`, `watch`, `trending`, `halts`, `fundamentals`, `ticker`, `status`,
   `backtestReport`, `backtestRuns`, `journal`, `journalSummary`, `journalChain`, `journalChainDay`, `journalVerify`,
   `healthDetails`, `healthHistory(days)`, `subscribe(email, daily)`, `newsletterIssues`, `newsletterIssue`,
-  `newsletterHtmlUrl`, `newsletterHtml`, `newsletterPreview`, `ingest`, `paperPortfolio(params)`, plus `streamUrl`. Never call `fetch` from
+  `newsletterHtmlUrl`, `newsletterHtml`, `newsletterPreview`, `ingest`, `paperPortfolio(params)`, `vaultStatus`,
+  `vaultNotes(ticker)`, `vaultExport` (POST, 120 s timeout), plus `streamUrl`. Never call `fetch` from
   components (server components use `server-api.ts`).
 - Batch 2026-10-19 types: `StudyName`, `StudyInfo`, `ConfirmatoryResult` (+ `EventStudy.confirmatory`,
   `confirmatory_testing`, `preregistration`, `config.study`, `StudyResult.t_stat_clustered` / `t_vs_baseline_clustered` /
@@ -184,6 +196,8 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
   `forward_test` / `t_stat_clustered` / `companies`, `Article.forward_test`, journal rows' `evaluation_horizon` /
   `forward_test_label`, and `PaperPortfolio` (`PaperAssumptions`, `PaperEquityPoint`, `PaperTotals`, `PaperSignalRow`,
   `PaperPosition`, `PaperPortfolioParams`) mirroring `PaperPortfolioOut`.
+- Vault types: `VaultStatus` (= `VaultStatusOut`), `VaultExportResult` (= `VaultExportResultOut`), `VaultNotes`
+  (= `VaultNotesOut`), `VaultNote` (= `VaultNoteOut`; `excerpt` is plain text).
 - Newsletter types (`NewsletterIssue`, `NewsletterIssueSummary`, `NewsletterFiling`, ...) mirror the dict built by
   `backend/app/newsletter/service.py` `build_issue` (not a pydantic model). `SitemapTicker` (in server-api.ts) mirrors
   `GET /api/tickers/sitemap`.

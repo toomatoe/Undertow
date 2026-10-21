@@ -3,9 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   api,
+  ApiError,
   getAdminToken,
+  isAdminApiError,
   setAdminToken,
   type AdminStatus,
+  type VaultStatus,
   type ChainVerify,
   type HealthDetails,
   type HealthHistory,
@@ -108,6 +111,134 @@ function ChainResult({ verify, error }: { verify: ChainVerify | null; error: str
       <Dot state="down" /> Verification failed at {where}
       {verify.broken_link ? `: ${verify.broken_link.reason}` : ": a sealed day no longer matches the journal"}.
     </p>
+  );
+}
+
+function sinceIso(iso: string): string {
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return iso;
+  return age(Math.max(0, (Date.now() - t) / 1000));
+}
+
+function VaultCard() {
+  const [vault, setVault] = useState<VaultStatus | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [actionMsg, setActionMsg] = useState<{ text: string; bad: boolean } | null>(null);
+
+  const load = useCallback(() => {
+    api
+      .vaultStatus()
+      .then((v) => {
+        setVault(v);
+        setLoadError(null);
+      })
+      .catch((e) => setLoadError(String(e instanceof Error ? e.message : e)));
+  }, []);
+
+  useEffect(() => {
+    load();
+    const timer = window.setInterval(load, REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [load]);
+
+  const exportNow = async () => {
+    setBusy(true);
+    setActionMsg(null);
+    try {
+      const v = await api.vaultExport();
+      setVault(v);
+      setActionMsg({ text: v.running ? "Export started." : "Export finished.", bad: false });
+    } catch (e) {
+      if (isAdminApiError(e)) setActionMsg({ text: e.message.replace(/^\d{3}\s+/, ""), bad: true });
+      else if (e instanceof ApiError && e.status === 409) setActionMsg({ text: "Export is already running or disabled.", bad: true });
+      else setActionMsg({ text: `Export failed. ${String(e instanceof Error ? e.message : e)}`, bad: true });
+    } finally {
+      setBusy(false);
+      load();
+    }
+  };
+
+  const r = vault?.last_result ?? null;
+  const folders = r ? Object.entries(r.counts).sort(([a], [b]) => a.localeCompare(b)) : [];
+  return (
+    <section className="panel" aria-labelledby="vault-title">
+      <h2 id="vault-title">Obsidian vault</h2>
+      {loadError && !vault && <p className={styles.bad}>Could not read the vault status: {loadError}</p>}
+      {!loadError && !vault && <p className="muted">Checking the vault…</p>}
+      {vault && (
+        <>
+          <dl className={styles.vaultList}>
+            <dt>Status</dt>
+            <dd>
+              <Dot state={vault.enabled ? (vault.running ? "degraded" : "ok") : "disabled"} />
+              {vault.enabled ? (vault.running ? "Enabled, export running" : "Enabled") : "Off (VAULT_ENABLED)"}
+            </dd>
+            <dt>Path</dt>
+            <dd>
+              <code className={styles.vaultPath}>{vault.dir || "—"}</code>
+              {vault.dir?.startsWith("/app/") && (
+                <div className="muted small">
+                  Inside Docker. On your computer this is the repo&apos;s <code>vault/</code> folder, or the folder set as{" "}
+                  <code>VAULT_HOST_DIR</code> in <code>.env</code>. Open that folder as a vault in Obsidian.
+                </div>
+              )}
+            </dd>
+            <dt>Last export</dt>
+            <dd>
+              {vault.last_export_at ? (
+                <time dateTime={vault.last_export_at} title={vault.last_export_at}>
+                  {sinceIso(vault.last_export_at)}
+                </time>
+              ) : (
+                "Never"
+              )}
+            </dd>
+            {r && (
+              <>
+                <dt>Last result</dt>
+                <dd>
+                  {r.created.toLocaleString("en-US")} created · {r.updated.toLocaleString("en-US")} updated · {r.unchanged.toLocaleString("en-US")} unchanged ·{" "}
+                  <span className={r.errors > 0 ? styles.bad : undefined}>{r.errors.toLocaleString("en-US")} errors</span>
+                </dd>
+              </>
+            )}
+            {folders.length > 0 && (
+              <>
+                <dt>Per folder</dt>
+                <dd>
+                  <ul className={styles.vaultFolders}>
+                    {folders.map(([folder, n]) => (
+                      <li key={folder}>
+                        <code>{folder}</code> {n.toLocaleString("en-US")}
+                      </li>
+                    ))}
+                  </ul>
+                </dd>
+              </>
+            )}
+            <dt>Conflicts</dt>
+            <dd>
+              {vault.conflicts > 0 ? (
+                <span className={styles.warn}>
+                  {vault.conflicts.toLocaleString("en-US")}: see <code>Undertow/_conflicts/</code> in the vault
+                </span>
+              ) : (
+                "0"
+              )}
+            </dd>
+          </dl>
+          <div className={styles.vaultActions}>
+            <button type="button" onClick={exportNow} disabled={busy || vault.running || !vault.enabled}>
+              {busy || vault.running ? "Exporting…" : "Export now"}
+            </button>
+            <span role="status" className={actionMsg?.bad ? `small ${styles.bad}` : "muted small"}>
+              {actionMsg?.text ?? ""}
+            </span>
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -308,6 +439,8 @@ export default function StatusPage() {
         </p>
         <ChainResult verify={verify} error={verifyError} />
       </section>
+
+      <VaultCard />
 
       <AdminToken admin={admin} />
     </main>

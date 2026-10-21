@@ -92,6 +92,14 @@ class Settings(AdminSettings):
     # (not needed for local use).
     trust_proxy_headers: bool = False
 
+    # Obsidian vault export (app/vault/AGENTS.md). Undertow writes plain Markdown only under <VAULT_DIR>/Undertow/
+    # and never deletes anything. Compose sets VAULT_DIR=/app/vault and bind-mounts VAULT_HOST_DIR (default ./vault)
+    # there; the container cwd is /app, so the default "./vault" is the same place.
+    vault_enabled: bool = True
+    vault_dir: str = "./vault"
+    vault_lookback_days: int = 30  # signal filings newer than this get Signal notes (and their tickers Ticker notes)
+    vault_export_minutes: int = 15  # how often the scheduler runs the export
+
     @property
     def alpaca_enabled(self) -> bool:
         return bool(self.alpaca_api_key_id and self.alpaca_api_secret_key)

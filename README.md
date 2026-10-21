@@ -112,7 +112,87 @@ Everything works without these. Each one turns on only when its keys are set in 
 | Claude enrichment (summaries, sentiment, filing red flags) | `ANTHROPIC_API_KEY` (`ENRICH_MODEL`, `ENRICH_MAX_PER_CYCLE`) | Articles and filings show without AI summaries |
 
 The live insider forward test is on by default (`INSIDER_LIVE_ENABLED=true`) and needs no key; set it to `false` to stop
-all Form 4 requests.
+all Form 4 requests. The Obsidian vault export (next section) is also on by default (`VAULT_ENABLED=true`) and only writes
+Markdown files into a local folder; set it to `false` to turn it off.
+
+## Using Undertow with Obsidian
+
+Undertow writes its data as plain Markdown notes into an [Obsidian](https://obsidian.md) vault folder, so you can browse
+filings, journal entries and study results next to your own notes, and write thesis notes that Undertow shows on the
+ticker page. Details of the export are in [backend/app/vault/AGENTS.md](backend/app/vault/AGENTS.md).
+
+**1. Install Obsidian.** It is a free desktop app from <https://obsidian.md>. Undertow does not install anything for you,
+and nothing here needs an Obsidian account or a paid add-on.
+
+**2. Open the vault.** With the stack running, the export runs once at startup and then every 15 minutes
+(`VAULT_EXPORT_MINUTES`), plus whenever you click **Export now** on `/status`. Then either:
+
+- in Obsidian, choose **Open folder as vault** and pick the repo's `vault/` folder (created on first start; it is
+  git-ignored), or
+- use a vault you already have: set `VAULT_HOST_DIR` in `.env` to its absolute path on your machine, e.g.
+  `VAULT_HOST_DIR=D:/Notes/MyVault`, then run `docker compose up -d api` so the API container is recreated with the new
+  folder mounted (at `/app/vault` inside the container).
+
+**Everything Undertow writes goes under `Undertow/` in that folder.** It never writes anywhere else in the vault and
+never deletes any file, including its own old notes. The rest of your vault is only read, to find thesis notes (step 5).
+
+**3. What's in `Undertow/`:**
+
+| Folder / file | Note type | How it is updated |
+|---|---|---|
+| `Tickers/<SYMBOL>.md` | `ticker`: company, size bucket, recent signal filings, dilution and runway, historical study evidence | The generated block is refreshed; the `## My notes` section is yours |
+| `Signals/<date>-<SYMBOL>-<form>-<accession>.md` | `signal`: one signal filing with a short excerpt, the EDGAR link and its historical study result | Written once |
+| `Journal/<entry id>.md` | `journal`: one forward-journal entry; its sealed fields mirror the track-record hash chain | Only the hypothetical `outcome_*` fields update |
+| `Briefs/<YYYY-MM-DD>.md` | `brief`: that day's signal filings, journal entries and the hypothetical paper-portfolio change | Today's is refreshed; past days are frozen |
+| `Studies/<name>.md` | `study`: headline results of each study that has been run on this machine | Refreshed when the study file changes |
+| `Newsletter/<issue>.md`, `Paper/working-paper.md` | Archived newsletter issues; the working paper | Copies |
+| `Bases/*.base` | Table views (below) | Copies |
+| `index.md`, `log.md` | Catalog of everything above; one line per export run that changed something | Rewritten / appended |
+| `_conflicts/` | New versions of notes whose generated block you edited (below) | New files only |
+
+**4. Bases tables.** `Undertow/Bases/` has ready-made tables (Tickers, Signals, Journal, Briefs) for Obsidian's core
+**Bases** plugin (Obsidian 1.9 or later; enable it under Settings > Core plugins if it is off). Open any
+`Undertow/Bases/*.base` file to sort and filter the notes by their frontmatter. These views assume `Undertow/` sits at the
+top level of the vault.
+
+**5. Your own thesis notes.** Create a note anywhere in the vault **outside** `Undertow/` (and outside dot-folders) with
+this frontmatter, and it appears in the "Your notes (Obsidian)" panel on `/ticker/<SYMBOL>` within about a minute:
+
+```yaml
+---
+type: thesis          # or tags: [undertow/thesis]
+ticker: ABCD          # "[[ABCD]]" or a list of tickers also work
+title: Why ABCD's cash runway matters
+updated: 2026-10-21
+---
+```
+
+Undertow only reads the frontmatter and a short excerpt (files under 1 MB, `.md` only); it never runs anything in a note
+and never changes it. `GET /api/vault/notes?ticker=ABCD` returns the same list.
+
+**6. Claude Code or another agent in the vault.** `Undertow/AGENTS.md` describes every note type, its frontmatter and the
+rules (where to write, what never to edit, numbers are historical or hypothetical), and `Undertow/CLAUDE.md` points to it.
+Start the agent in the vault folder and ask it to read `Undertow/AGENTS.md` first (Undertow never writes to the vault root,
+so if you want that automatic, add the pointer to your own root `CLAUDE.md` or `AGENTS.md`). `Undertow/index.md` is the
+catalog to start from and `Undertow/log.md` shows when each export changed something. Let the agent write its notes
+outside `Undertow/` (thesis notes as in step 5) or under `## My notes`.
+
+**7. Editing Undertow's notes.** Write freely under the `## My notes` heading of a ticker note, and add extra frontmatter
+keys to any note; both are kept. Don't edit between `<!-- undertow:begin -->` and `<!-- undertow:end -->`: if you do,
+Undertow stops updating that note and writes its new version to `Undertow/_conflicts/<name>-<timestamp>.md` instead. Merge
+what you want and delete the conflict file yourself. `/status` shows how many conflict files are waiting.
+
+**Sync and history**
+
+- **Never let two sync services manage the same folder**, for example Obsidian Sync plus iCloud, OneDrive or Dropbox on
+  one vault. They overwrite each other's changes and create duplicate files. Pick one.
+- Optional: for a full history of your notes and of every export, run `git init` inside the vault folder (a separate
+  repository from Undertow's; the default `vault/` folder is ignored by Undertow's git). Undertow ignores `.git/`.
+- Keep secrets out of the vault. Undertow never writes keys, tokens or `.env` values there; don't paste them into notes,
+  especially in a synced vault.
+
+Every number in the vault is historical (event-study averages over past filings) or hypothetical (journal outcomes, the
+paper portfolio, net-of-cost figures). None of it is a forecast, a recommendation or investment advice.
 
 ## Price data
 
@@ -181,6 +261,10 @@ when a study has not been run on this machine), and links to every section.
 **Ticker pages** (`/ticker/{SYMBOL}`, `backend/app/fundamentals/`, `backend/app/sources/halts.py`)
 - Server-rendered: a factual summary paragraph with explicit dates, cash and runway from SEC XBRL, 1-year share-count change and offering history, FINRA short interest, Nasdaq trading halts with plain-English reasons, coverage and articles.
 - Unknown symbols return a real HTTP 404. While the site origin is localhost, `/robots.txt` asks crawlers to stay out.
+- A "Your notes (Obsidian)" panel lists your own thesis notes for that ticker from the vault (read-only; see [Using Undertow with Obsidian](#using-undertow-with-obsidian)).
+
+**Obsidian vault export** (`backend/app/vault/`)
+- Tickers, signal filings, journal entries, daily briefs, study summaries, newsletter issues and the working paper as plain Markdown notes under `Undertow/` in a local vault folder, with Bases tables and an `AGENTS.md` for agents working in the vault. Write-if-changed, never deletes, hand edits inside generated blocks go to `_conflicts/`.
 
 **Newsletter tab** (`/newsletter`, `backend/app/newsletter/`, see its [AGENTS.md](backend/app/newsletter/AGENTS.md))
 - A weekly "Small-Cap Filing Radar" built automatically from Undertow's own data once a week is complete: headline counts, top signal filings with their historical study stat, dilution watch, serious halts, track-record progress, a research note and the disclaimer.
@@ -192,7 +276,8 @@ when a study has not been run on this machine), and links to every section.
 
 **Status page and platform** (`/status`, `backend/app/health.py`, `backend/app/security.py`)
 - Component health (database, ingest, EDGAR and halts pollers, journal, newsletter, alerts, email, research runs), 7-day uptime, incidents and the seal verification.
-- Every change to server state (research runs, manual ingest, test alerts, watchlist) goes through one admin policy. Locally (the default `PUBLIC_BASE_URL=http://localhost:3000`) it is open on your machine; compose binds every port to `127.0.0.1`, so nothing else on your network can reach it. `ADMIN_TOKEN`, `RESEARCH_JOBS_ENABLED` and `MUTATIONS_ENABLED` can lock it down further.
+- An "Obsidian vault" card: export on/off, vault path, last export and its per-folder counts, waiting conflict files, and an **Export now** button.
+- Every change to server state (research runs, manual ingest, test alerts, watchlist, vault export) goes through one admin policy. Locally (the default `PUBLIC_BASE_URL=http://localhost:3000`) it is open on your machine; compose binds every port to `127.0.0.1`, so nothing else on your network can reach it. `ADMIN_TOKEN`, `RESEARCH_JOBS_ENABLED` and `MUTATIONS_ENABLED` can lock it down further.
 - Per-client rate limits: 120 requests/min and 10 writes/min by default.
 
 ## Architecture
@@ -210,6 +295,7 @@ sources (EDGAR 8-K/424B/S-1/13D + Form 4, RSS, Alpaca) → dedupe → ticker tag
 | `backend/app/insiders/` | Pre-registered Form 4 insider study and the live forward test (`live.py`) |
 | `backend/app/backtest/`, `journal/`, `paper/` | Backtester; forward journal + hash chain; hypothetical paper portfolio |
 | `backend/app/alerts/`, `fundamentals/`, `newsletter/`, `delivery/` | Alerts, dilution/runway, weekly newsletter, optional email delivery |
+| `backend/app/vault/` | Obsidian vault export (Markdown notes under `<vault>/Undertow/`) and thesis-note read-back |
 | `backend/app/main.py` | API, background scheduler and the fast EDGAR/Form 4/halts poller |
 | `frontend/src/` | Next.js App Router UI |
 | `docs/` | Feasibility and product research, published results, working paper, agent graph |
@@ -271,6 +357,8 @@ lint and build, and builds both images on every push and pull request.
 | `GET /api/newsletter/issues` · `GET /api/newsletter/{id}` · `GET /api/newsletter/{id}.html` · `POST /api/newsletter/preview` | Newsletter archive, one issue, its HTML, current week preview |
 | `POST /api/subscribe` and related `/api/subscribe/confirm`, `/api/unsubscribe`, `/api/subscription/daily`, `/api/delivery/status` | Optional email delivery (503 when email is not configured) |
 | `GET /api/health` · `GET /api/health/details` · `GET /api/health/history?days=7` | Liveness · per-component health · uptime history |
+| `GET /api/vault/status` · `POST /api/vault/export` | Vault export state (last run, counts, conflicts) · run the export now (admin-protected; 409 when disabled or already running) |
+| `GET /api/vault/notes?ticker=` | Your thesis notes for one ticker, read from the vault (read-only, cached 60 s) |
 
 ## What's next (research)
 
