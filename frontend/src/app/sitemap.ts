@@ -16,6 +16,7 @@ const STATIC_PAGES: { path: string; changeFrequency: "hourly" | "daily" | "weekl
   { path: "/lab", changeFrequency: "weekly", priority: 0.7 },
   { path: "/backtest", changeFrequency: "weekly", priority: 0.6 },
   { path: "/paper", changeFrequency: "daily", priority: 0.7 },
+  { path: "/graph", changeFrequency: "daily", priority: 0.6 },
   { path: "/research", changeFrequency: "monthly", priority: 0.7 },
   { path: "/research/paper", changeFrequency: "monthly", priority: 0.8 },
   { path: "/methodology", changeFrequency: "monthly", priority: 0.6 },

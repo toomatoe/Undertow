@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator
 
 from app.research_jobs import MODULES
 
@@ -387,3 +387,102 @@ class VaultNotesOut(BaseModel):
     enabled: bool
     ticker: str
     notes: list[VaultNoteOut]
+
+
+# --- Event graph (app/graph/AGENTS.md): edges are associations / proximity, not causes ---------------------------
+
+
+def _utc(v: datetime) -> datetime:
+    # SQLite drops tzinfo; everything is stored in UTC
+    return v.replace(tzinfo=timezone.utc) if v.tzinfo is None else v.astimezone(timezone.utc)
+
+
+UtcDatetime = Annotated[datetime, AfterValidator(_utc)]
+
+
+class GraphNodeOut(BaseModel):
+    id: int
+    kind: Literal["filing", "news"]
+    title: str
+    url: str
+    source_name: str
+    form: str | None = None
+    ticker: str | None = None  # first ticker (alphabetical)
+    tickers: list[str] = []
+    signals: list[str] = []  # codes, most severe first
+    signal_labels: list[str] = []
+    severity: int | None = None
+    size_bucket: str | None = None
+    sentiment: float | None = None
+    published_at: UtcDatetime
+    cluster: int  # -1 = Other / unclustered
+    x: float | None = None  # layout is done client-side
+    y: float | None = None
+
+
+class GraphEdgeOut(BaseModel):
+    source: int  # article id; temporal edges point earlier -> later
+    target: int
+    type: Literal["contextual", "spatial", "temporal"]
+    weight: float  # 0..1
+
+
+class GraphSignalCount(BaseModel):
+    code: str
+    label: str
+    count: int
+
+
+class GraphClusterOut(BaseModel):
+    id: int
+    name: str
+    name_source: Literal["terms", "llm"]
+    terms: list[str]
+    size: int
+    tickers: list[str]
+    signal_mix: list[GraphSignalCount]
+    mean_sentiment: float | None = None
+    sentiment_n: int
+    start: UtcDatetime
+    end: UtcDatetime
+    evidence: EvidenceOut | None = None  # historical event-study row for the dominant signal + bucket
+    evidence_note: str
+
+
+class GraphTimelineBucket(BaseModel):
+    t: UtcDatetime
+    counts: dict[str, int]  # str(cluster id) -> items in this bucket (nonzero only)
+
+
+class GraphTimelineOut(BaseModel):
+    granularity: Literal["hour", "day"]
+    buckets: list[GraphTimelineBucket]
+
+
+class GraphParamsOut(BaseModel):
+    days: int
+    max_nodes: int
+    ticker: str | None = None
+    source: Literal["all", "filings", "news"]
+    truncated: bool
+    total_in_window: int
+
+
+class GraphMethodOut(BaseModel):
+    embedding: str
+    smoothing: str
+    clustering: str
+    edges: str
+    naming: str
+    note: str  # edges are associations / proximity, not causes; credits the source papers
+
+
+class GraphOut(BaseModel):
+    nodes: list[GraphNodeOut]
+    edges: list[GraphEdgeOut]
+    clusters: list[GraphClusterOut]
+    timeline: GraphTimelineOut
+    params: GraphParamsOut
+    generated_at: UtcDatetime
+    method: GraphMethodOut
+

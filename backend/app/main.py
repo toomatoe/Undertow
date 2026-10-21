@@ -27,6 +27,7 @@ from app.delivery import service as delivery
 from app.delivery.routes import router as delivery_router
 from app.delivery.settings import get_delivery_settings
 from app.fundamentals import service as fundamentals
+from app.graph import GraphParams, build_graph
 from app.journal import digest as chain
 from app.journal import service as journal
 from app.paper import service as paper
@@ -52,6 +53,7 @@ from app.schemas import (
     DailySentiment,
     Evidence,
     EvidenceOut,
+    GraphOut,
     HealthDetails,
     HealthHistory,
     JournalChain,
@@ -863,6 +865,23 @@ def paper_portfolio(hedge: bool = False, max_concurrent: int = Query(20, ge=1, l
         state.paper_cache = {k: v for k, v in state.paper_cache.items() if k[0] == key[0]}  # drop older days
         state.paper_cache[key] = (time.monotonic(), result)
         return result
+
+
+@app.get("/api/graph", response_model=GraphOut)
+def event_graph(
+    days: int = Query(7, ge=1, le=30),
+    max_nodes: int = Query(400, ge=20, le=1000),
+    ticker: str | None = Query(None, min_length=1, max_length=12, pattern=r"^[A-Za-z0-9.\-]+$"),
+    source: Literal["all", "filings", "news"] = "all",
+    session: Session = Depends(get_session),
+):
+    """Event graph of recent filings and news (app/graph/AGENTS.md). Edges are associations / proximity, not causes.
+    Public and read-only (rate-limited by the middleware); a plain def, so FastAPI runs it in the threadpool."""
+    params = GraphParams(days=days, max_nodes=max_nodes, ticker=ticker.upper() if ticker else None, source=source)
+    # Reuse the evidence main already loaded (same source as to_out); before load_study / load_forward_evidence ran
+    # (no lifespan), fall back to build_graph's default app.vault.make_evidence_fn(settings.data_dir) + its cache.
+    loaded = bool(state.evidence) or state.forward_evidence is not None
+    return build_graph(session, params, evidence_fn=vault_evidence if loaded else None)
 
 
 def vault_status() -> VaultStatusOut:

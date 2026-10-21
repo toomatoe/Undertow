@@ -919,6 +919,111 @@ export interface VaultNotes {
   notes: VaultNote[];
 }
 
+// --- Event graph (mirrors GET /api/graph) ---
+
+export type GraphNodeKind = "filing" | "news";
+export type GraphEdgeType = "contextual" | "spatial" | "temporal";
+export type GraphSource = "all" | "filings" | "news";
+
+export interface GraphNode {
+  id: number;
+  kind: GraphNodeKind;
+  title: string;
+  url: string;
+  source_name: string;
+  form: string | null;
+  ticker: string | null;
+  tickers: string[];
+  signals: string[];
+  signal_labels: string[];
+  severity: number | null;
+  size_bucket: string | null;
+  sentiment: number | null;
+  published_at: string;
+  /** Cluster id; -1 = "other" (not in any named cluster). */
+  cluster: number;
+  /** Optional server-side layout hint; null when the server did not compute one. */
+  x: number | null;
+  y: number | null;
+}
+
+export interface GraphEdge {
+  source: number;
+  target: number;
+  type: GraphEdgeType;
+  weight: number;
+}
+
+export interface GraphSignalMix {
+  code: string;
+  label: string;
+  count: number;
+}
+
+export interface GraphCluster {
+  id: number;
+  name: string;
+  name_source: "terms" | "llm";
+  terms: string[];
+  size: number;
+  tickers: string[];
+  signal_mix: GraphSignalMix[];
+  mean_sentiment: number | null;
+  sentiment_n: number;
+  start: string;
+  end: string;
+  /** Historical event-study evidence for the cluster's dominant signal (hypothetical), or null. */
+  evidence: Evidence | null;
+  evidence_note: string;
+}
+
+export interface GraphTimelineBucket {
+  t: string;
+  /** Count per cluster id, keyed by the id as a string ("-1" = other). */
+  counts: Record<string, number>;
+}
+
+export interface GraphTimeline {
+  granularity: "hour" | "day";
+  buckets: GraphTimelineBucket[];
+}
+
+export interface GraphParams {
+  days: number;
+  max_nodes: number;
+  ticker: string | null;
+  source: GraphSource;
+  truncated: boolean;
+  total_in_window: number;
+}
+
+export interface GraphMethod {
+  embedding: string;
+  smoothing: string;
+  clustering: string;
+  edges: string;
+  naming: string;
+  note: string;
+}
+
+export interface GraphResponse {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  clusters: GraphCluster[];
+  timeline: GraphTimeline;
+  params: GraphParams;
+  generated_at: string;
+  method: GraphMethod;
+}
+
+/** Query for api.graph: days 1-30, max_nodes 20-1000, optional ticker symbol, source all|filings|news. */
+export interface GraphQuery {
+  days?: number;
+  max_nodes?: number;
+  ticker?: string;
+  source?: GraphSource;
+}
+
 export const api = {
   researchJobs: async () => {
     const res = await fetch(`${API_BASE}/api/research/jobs`, { cache: "no-store", signal: AbortSignal.timeout(15000) });
@@ -973,5 +1078,7 @@ export const api = {
   vaultNotes: (ticker: string) => get<VaultNotes>(`/api/vault/notes${query({ ticker })}`),
   /** Admin-protected. Throws ApiError: 401 -> ADMIN_TOKEN_REQUIRED, 403 -> CHANGES_DISABLED, 409 disabled or already running. */
   vaultExport: () => send<VaultStatus>("/api/vault/export", "POST", { admin: true, timeoutMs: 120000 }),
+  /** Event graph of recent filings and news. Edges are associations (similar text, same company, close in time), not causes. */
+  graph: (q: GraphQuery = {}) => get<GraphResponse>(`/api/graph${query(q)}`),
   streamUrl: `${API_BASE}/api/stream`,
 };

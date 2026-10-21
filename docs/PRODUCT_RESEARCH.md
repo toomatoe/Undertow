@@ -210,6 +210,8 @@
 
 *Deliberately later:* the nano-cap short backtester as a paid feature (hypothetical-performance risk; ship it as research with heavy disclosure), a native mobile app, licensed live quotes, an API tier, and broker partnerships.
 
+*Shipped after the 2026-10-19 local-only decision (not part of the roadmap above):* an event graph at `/graph` (`GET /api/graph`) that clusters recent filings and news by wording, company and timing, adapted from University of Louisville disaster social-media research. Links show association, not cause.
+
 ---
 
 ## Sources

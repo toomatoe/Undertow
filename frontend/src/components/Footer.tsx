@@ -64,6 +64,7 @@ export default function Footer() {
       <nav aria-label="Footer">
         <Link href="/research/paper">Working paper</Link>
         <Link href="/paper">Paper portfolio</Link>
+        <Link href="/graph">Event graph</Link>
         <Link href="/methodology">Methodology</Link>
         <Link href="/newsletter#subscribe">Subscribe</Link>
         <Link href="/status">Status</Link>

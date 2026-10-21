@@ -115,6 +115,8 @@ export default function TickerView({ initial, initialDays, fundamentals, fundame
                 </a>
               </>
             )}
+            {" · "}
+            <Link href={`/graph?ticker=${encodeURIComponent(data.symbol)}`}>View in event graph</Link>
           </p>
         </div>
         <div className="stats">

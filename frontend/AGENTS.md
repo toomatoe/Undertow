@@ -14,12 +14,14 @@ src/app/page.tsx            /                landing page (server component, ISR
 src/app/news/page.tsx       /news            server wrapper (metadata) around the client <NewsFeed/> (moved here from /)
 src/app/signals/page.tsx    /signals         filing signals (default size "nano,micro,small")
 src/app/lab/page.tsx        /lab             Edge Lab: event-study results
+src/app/graph/page.tsx      /graph           event graph: server wrapper (metadata) around the client <GraphExplorer/> in a
+                                             <Suspense> (fallback GraphSkeleton; it reads ?ticker=&days=&source=&max_nodes=)
 src/app/ticker/[symbol]/           /ticker/X  server-rendered SEO ticker page (ISR 15 min), see "Server-rendered pages"
   not-found.tsx                    404 page; catches notFound() thrown by (view)/layout.tsx
   (view)/layout.tsx                404 gate: parseSymbol + getTicker before anything streams (real HTTP 404)
   (view)/page.tsx                  server component: metadata, canonical, JSON-LD, summary paragraph, server ArticleCards
   (view)/loading.tsx               skeleton (wraps only page.tsx)
-  (view)/TickerView.tsx            client part: watch toggle, 7/30/90d window, coverage bars, articles
+  (view)/TickerView.tsx            client part: watch toggle, 7/30/90d window, coverage bars, articles, "View in event graph" link
   (view)/VaultNotes.tsx            client panel "Your notes (Obsidian)": the user's thesis notes from the vault (read-only)
   (view)/summary.ts                factual summary sentences, meta description, dateModified (pure, dated text)
   (view)/symbol.ts                 parseSymbol(): route param -> symbol or null (no second decode)
@@ -43,7 +45,8 @@ src/app/research/paper/     /research/paper  the working paper: page.tsx reads s
 src/app/paper/page.tsx      /paper           hypothetical paper portfolio (server shell + client PaperPortfolioView)
 src/app/track-record/page.tsx /track-record forward signal journal vs Edge Lab (components in src/components/track/)
 src/app/backtest/page.tsx   /backtest        backtest report + live-readiness log (components in src/components/backtest/)
-src/app/methodology/page.tsx /methodology  how every number is produced (keep in sync with backend logic)
+src/app/methodology/page.tsx /methodology  how every number is produced (keep in sync with backend logic), incl. the
+                                           "Event graph" section (method, UofL credits, association-not-cause note)
 src/app/legal/{disclaimer,terms,privacy}/page.tsx  DRAFT legal pages (DraftNotice until lawyer review)
 src/app/trading/page.tsx    /trading         redirect("/paper") (the old "Trading (planned)" page is gone)
 src/app/{signals,backtest,track-record}/layout.tsx  metadata for those client pages (a "use client" page cannot export it)
@@ -98,6 +101,15 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
   per-signal table, recent positions, assumptions; always shows the backend's hypothetical `label`. Paper-only: no
   order, broker or account UI, ever.
 - `/research`: static index of the studies and pre-registrations. `/research/paper`: the working paper (see Layout).
+- `/graph` `GraphExplorer` (client): controls for ticker (`TICKER_RE`, 1-10 chars starting with a letter), window
+  (1/3/7/14/30 days), source (filings and news / filings / news) and max nodes (200/400/700/1000), synced to the URL with
+  `router.replace` (defaults omitted; out-of-range values fall back to the defaults: 7 days, all, 400). Calls
+  `api.graph({days, source, max_nodes, ticker})`. Renders edge-type checkboxes, `GraphCanvas`, `TimeScrubber` (play
+  replays the window in 12 s; with `prefers-reduced-motion` it steps in 10 jumps every 0.8 s, and the canvas draws only
+  the settled layout), `NodeDetail` for the selected node, `ClusterLegend`
+  (click to highlight a cluster; "AI-named" badge when `name_source === "llm"`; evidence text labelled historical and
+  hypothetical) and `HowItWorks`. Every text says links are associations, not causes. Ticker pages link here with
+  `?ticker=`; Nav tab "Graph" and a Footer link "Event graph" point here.
 - `/news` `NewsFeed`: filters (search debounced 300 ms, ticker, size, source, sentiment, event type),
   `before`-cursor pagination ("Load older"), live SSE inserts, `Sidebar` (trending tickers, source status,
   "ingest now").
@@ -148,14 +160,15 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
 
 | File | Role |
 |---|---|
-| `Nav.tsx` | Header tabs from `TABS` (News `/news`, Signals, Track record, Paper `/paper`, Newsletter, Edge Lab, Backtest, Learn, Research); `isActive()`: `/ticker/*` highlights News, `/research/paper` highlights Research, `/` highlights none. Add new pages here |
+| `graph/` | `/graph`: `GraphExplorer.tsx` (client; controls, URL sync, fetch, `GraphSkeleton`), `GraphCanvas.tsx` (canvas force-directed graph: filings circles, news squares, cluster colours, edges styled by type; pan/zoom/reset, hover tooltip, click/tap select; cools and stops, pauses while the tab is hidden), `force.ts` (zero-dependency force simulation, grid-based repulsion, seeded mulberry32 start layout; no React/DOM), `TimeScrubber.tsx` (stacked timeline + range input + play/pause, `SCRUB_STEPS`), `ClusterLegend.tsx`, `NodeDetail.tsx` (ticker chips link to `/ticker/X`, source link only if http(s)), `HowItWorks.tsx` (collapsible method note, UofL paper credits, association-not-cause note), `util.ts` (pure: palette index, edge labels/dash, `moodWord` with the +-0.15 thresholds, `TICKER_RE`, `safeHttpUrl`), `graph.module.css` (own `--g-c0..--g-c9` cluster palette) |
+| `Nav.tsx` | Header tabs from `TABS` (News `/news`, Signals, Graph `/graph`, Track record, Paper `/paper`, Newsletter, Edge Lab, Backtest, Learn, Research); `isActive()`: `/ticker/*` highlights News, `/research/paper` highlights Research, `/` highlights none. Add new pages here |
 | `home/` | Landing page: `findings.ts` (pure Finding builders + `pct`), `KeyFindings.tsx`, `home.module.css` |
 | `markdown/Markdown.tsx` (+ `.module.css`) | Tiny server-side Markdown renderer for docs we own (`parseMarkdown`, `headings`, `plainText`): headings with ids, lists, GFM tables, code, quotes, links (http(s)/relative only) |
 | `portfolio/` | `/paper`: `PaperPortfolioView.tsx` (client), `EquityChart.tsx`, `portfolio.module.css` |
 | `NewsFeed.tsx` | News tab body; owns the SSE subscription for `/`. Has its own `EVENT_TYPES` list for the filter |
 | `ArticleCard.tsx` | One article/filing: badges, sentiment, signals, AI flags, tickers with size, `EvidenceLine`; forward-test signals get a "Forward test of pre-registered finding" badge and an "(in-sample, hypothetical)" evidence line |
 | `Sidebar.tsx` | Trending tickers (`api.trending(hours)`), `api.status()`, manual `api.ingest()` |
-| `Footer.tsx` | Site-wide footer (client component, in layout.tsx): disclaimer line, Methodology / Subscribe (`/newsletter#subscribe`) / Status / legal links; also shows a dismissible notice for any unhandled admin `ApiError` (401/403/429) with a link to `/status` |
+| `Footer.tsx` | Site-wide footer (client component, in layout.tsx): disclaimer line, Working paper / Paper portfolio / Event graph / Methodology / Subscribe (`/newsletter#subscribe`) / Status / legal links; also shows a dismissible notice for any unhandled admin `ApiError` (401/403/429) with a link to `/status` |
 | `SubscribeForm.tsx` (+ `.module.css`) | Email signup (`api.subscribe(email, daily)`) on `/newsletter`; generic success message (no enumeration), 503 -> "not set up yet", 422 -> invalid email |
 | `track/SealPanel.tsx` (+ `.module.css`) | Track-record hash-chain head, verify result, the raw day export URL (`/api/journal/chain/{day}`) and a Python snippet to recompute a day's hash |
 | `learn/` | Learn UI: `LessonLayout` (shared lesson frame, JSON-LD, prev/next), `lessons/*Lesson.tsx` (async server bodies), `parts.tsx` (`LiveTag`, `ApiNote`, `RepoRefs`, `Readings`, `Disclaimer`, `VerdictBadge`, `fmtT`; no hooks, also used by `/lab`), `ConfirmatoryBlock.tsx` (OOS verdicts, also used by `/lab`), client widgets `EventStudyExplorer`, `NoiseSimulator`, `ClusterSimulator`, `SurvivorshipSimulator`, `DsrCalculator`, plus `charts.tsx`, `controls.tsx`, `learn.module.css` |
@@ -185,7 +198,7 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
   `backtestReport`, `backtestRuns`, `journal`, `journalSummary`, `journalChain`, `journalChainDay`, `journalVerify`,
   `healthDetails`, `healthHistory(days)`, `subscribe(email, daily)`, `newsletterIssues`, `newsletterIssue`,
   `newsletterHtmlUrl`, `newsletterHtml`, `newsletterPreview`, `ingest`, `paperPortfolio(params)`, `vaultStatus`,
-  `vaultNotes(ticker)`, `vaultExport` (POST, 120 s timeout), plus `streamUrl`. Never call `fetch` from
+  `vaultNotes(ticker)`, `vaultExport` (POST, 120 s timeout), `graph(q)`, plus `streamUrl`. Never call `fetch` from
   components (server components use `server-api.ts`).
 - Batch 2026-10-19 types: `StudyName`, `StudyInfo`, `ConfirmatoryResult` (+ `EventStudy.confirmatory`,
   `confirmatory_testing`, `preregistration`, `config.study`, `StudyResult.t_stat_clustered` / `t_vs_baseline_clustered` /
@@ -198,6 +211,10 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
   `PaperPosition`, `PaperPortfolioParams`) mirroring `PaperPortfolioOut`.
 - Vault types: `VaultStatus` (= `VaultStatusOut`), `VaultExportResult` (= `VaultExportResultOut`), `VaultNotes`
   (= `VaultNotesOut`), `VaultNote` (= `VaultNoteOut`; `excerpt` is plain text).
+- Event graph types: `GraphResponse` (= `GraphOut`), `GraphNode`, `GraphEdge`, `GraphCluster` (`evidence: Evidence |
+  null`), `GraphSignalMix` (= `GraphSignalCount`), `GraphTimeline`, `GraphTimelineBucket`, `GraphParams` (=
+  `GraphParamsOut`), `GraphMethod`, plus `GraphNodeKind`, `GraphEdgeType`, `GraphSource` and the request type
+  `GraphQuery` (`days`, `max_nodes`, `ticker`, `source`).
 - Newsletter types (`NewsletterIssue`, `NewsletterIssueSummary`, `NewsletterFiling`, ...) mirror the dict built by
   `backend/app/newsletter/service.py` `build_issue` (not a pydantic model). `SitemapTicker` (in server-api.ts) mirrors
   `GET /api/tickers/sitemap`.
@@ -260,7 +277,9 @@ sends `retry: 5000` and keepalives; `onopen`/`onerror` drive the LIVE/OFFLINE ba
 - Feature sections are appended under their own `/* --- Name --- */` header, e.g. `/* --- Ticker SEO --- */` (summary,
   related links, `.skel*` loading skeletons), `/* --- Newsletter (/newsletter) --- */` (`.nl*`) and `/* --- Learn --- */`
   (`--learn-hist`, `--learn-hypo` label colors, dark default + light override). New components prefer CSS modules
-  (`learn.module.css`, `SubscribeForm.module.css`, `SealPanel.module.css`, `status.module.css`) over more globals.
+  (`learn.module.css`, `SubscribeForm.module.css`, `SealPanel.module.css`, `status.module.css`, `graph.module.css`) over more globals.
+  The event graph's categorical cluster palette (`--g-c0..--g-c9`, `PALETTE_SIZE` in `components/graph/util.ts`) lives in
+  `graph.module.css`, not globals; keep the two in sync.
 - Size labels/filters: `SIZE_LABELS`, `SIZE_FILTERS` in format.ts must match backend `BUCKETS`.
 
 ## Verify

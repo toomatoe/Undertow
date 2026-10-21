@@ -1,0 +1,370 @@
+/* Event graph (/graph). Categorical cluster palette: 10 hues + neutral "other", separate values for the dark
+   default and the light theme (both picked for contrast against --bg/--panel and hue separation under common
+   colour-vision deficiencies; shapes and the legend carry the same information). Read in JS via getComputedStyle. */
+.root {
+  --g-c0: #5aa9ff;
+  --g-c1: #ff9f43;
+  --g-c2: #3ccf91;
+  --g-c3: #ff6b81;
+  --g-c4: #b58cff;
+  --g-c5: #f5d547;
+  --g-c6: #3fd0d4;
+  --g-c7: #ff8fd8;
+  --g-c8: #c8a27a;
+  --g-c9: #9bd36a;
+  --g-other: #6b7280;
+  --g-edge: #9aa3b2;
+  --g-canvas: #0e1218;
+
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (prefers-color-scheme: light) {
+  .root {
+    --g-c0: #1f6fd1;
+    --g-c1: #d9670b;
+    --g-c2: #13875b;
+    --g-c3: #d0344f;
+    --g-c4: #7c4dd6;
+    --g-c5: #a68300;
+    --g-c6: #0f8a91;
+    --g-c7: #c2409a;
+    --g-c8: #8a5a2e;
+    --g-c9: #4f8a1e;
+    --g-other: #9ca3af;
+    --g-edge: #5f6878;
+    --g-canvas: #fbfcfd;
+  }
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  align-items: flex-end;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.tickerForm {
+  display: flex;
+  gap: 6px;
+}
+
+.tickerForm input {
+  width: 110px;
+  text-transform: uppercase;
+}
+
+.note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  height: min(70vh, 640px);
+  background: var(--g-canvas);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+@media (max-width: 600px) {
+  .stage {
+    height: 420px;
+  }
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+}
+
+.canvas:active {
+  cursor: grabbing;
+}
+
+.overlay {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  gap: 6px;
+}
+
+.overlay button {
+  padding: 3px 8px;
+  font-size: 12px;
+  background: var(--panel);
+}
+
+.status {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 2;
+  max-width: min(320px, calc(100% - 16px));
+  padding: 8px 10px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 12px;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.25);
+}
+
+.tooltip strong {
+  display: block;
+  margin-bottom: 2px;
+  overflow-wrap: anywhere;
+}
+
+.edgeToggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  font-size: 12px;
+  align-items: center;
+}
+
+.edgeToggles label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  cursor: pointer;
+}
+
+.edgeToggles input {
+  padding: 0;
+}
+
+.edgeSample {
+  width: 26px;
+  height: 0;
+  border-top: 2px solid var(--g-edge);
+  display: inline-block;
+}
+
+.shapeKey {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+}
+
+.dotCircle,
+.dotSquare {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  background: var(--muted);
+}
+
+.dotCircle {
+  border-radius: 50%;
+}
+
+.timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.spark {
+  display: block;
+  width: 100%;
+  height: 48px;
+}
+
+.scrubRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.scrubRow input[type="range"] {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.scrubRow time {
+  font-size: 12px;
+  font-family: var(--font-geist-mono), monospace;
+  white-space: nowrap;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (max-width: 760px) {
+  .panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.legend {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.legendItem {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid transparent;
+}
+
+.legendItem[aria-pressed="true"] {
+  border-color: var(--accent);
+}
+
+.swatch {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  margin-top: 3px;
+}
+
+.legendBody {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.legendName {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.aiBadge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 5px;
+  font-size: 10px;
+  font-weight: 500;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  vertical-align: middle;
+}
+
+.evidence {
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.evidence b {
+  color: var(--warn);
+  font-weight: 500;
+}
+
+.detail dl {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 4px 12px;
+  font-size: 13px;
+}
+
+.detail dt {
+  color: var(--muted);
+}
+
+.detail dd {
+  overflow-wrap: anywhere;
+}
+
+.detailTitle {
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.how {
+  font-size: 13px;
+}
+
+.how summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.how > div {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  max-width: 780px;
+}
+
+.how ul {
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.how a {
+  color: var(--accent);
+}
+
+.skeleton {
+  width: 100%;
+  height: min(70vh, 640px);
+}
+
+@media (max-width: 600px) {
+  .skeleton {
+    height: 420px;
+  }
+}
+
+.center {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 24px;
+}
