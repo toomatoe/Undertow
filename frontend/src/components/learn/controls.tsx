@@ -25,6 +25,8 @@ export function NumberField({
   // Local text so a half-typed value ("-", "0.") is not clamped away; valid in-range values apply at once.
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
+  const typed = Number(text);
+  const outOfRange = text !== "" && Number.isFinite(typed) && (typed < min || typed > max);
   return (
     <label htmlFor={id} title={hint}>
       {label}
@@ -39,7 +41,8 @@ export function NumberField({
         onChange={(e) => {
           setText(e.target.value);
           const v = Number(e.target.value);
-          if (e.target.value !== "" && Number.isFinite(v) && v >= min && v <= max) onChange(v);
+          // Out-of-range values apply clamped at once; the text stays as typed, with a note below.
+          if (e.target.value !== "" && Number.isFinite(v)) onChange(Math.min(max, Math.max(min, v)));
         }}
         onBlur={() => {
           const v = Number(text);
@@ -47,7 +50,13 @@ export function NumberField({
           setText(String(next));
           if (next !== value) onChange(next);
         }}
+        aria-invalid={outOfRange || undefined}
       />
+      {outOfRange && (
+        <span className="muted small" role="status" style={{ display: "block" }}>
+          Allowed {min} to {max}; using {Math.min(max, Math.max(min, typed))}.
+        </span>
+      )}
     </label>
   );
 }

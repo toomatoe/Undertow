@@ -86,7 +86,8 @@ class Settings(AdminSettings):
     public_base_url: str = "http://localhost:3000"
 
     # Per-client sliding-window rate limits (app/security.py). 0 disables that tier.
-    rate_limit_per_minute: int = Field(120, ge=0)  # every request except /api/stream and /api/health
+    rate_limit_per_minute: int = Field(600, ge=0)  # every request except /api/stream and /api/health. Local default is
+    # generous because every server-rendered page reaches the API from the one web container; prod compose pins 120.
     rate_limit_write_per_minute: int = Field(10, ge=0)  # POST/PUT/DELETE (incl. newsletter preview, subscribe)
     # Use X-Forwarded-For (right-most untrusted hop) only behind a reverse proxy you control
     # (not needed for local use).
