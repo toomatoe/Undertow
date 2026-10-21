@@ -32,10 +32,14 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://quantdesk:quantdesk@db:5432/quantdesk
       DATA_DIR: /app/data
+      VAULT_DIR: /app/vault  # Obsidian vault export (backend/app/vault); writes only under <vault>/Undertow/
     ports:
       - "127.0.0.1:8000:8000"  # local only
     volumes:
       - apidata:/app/data
+      # Obsidian vault folder on the host (open it in Obsidian). Set VAULT_HOST_DIR in .env to use an existing vault;
+      # Undertow only writes inside its Undertow/ subfolder and never deletes anything.
+      - ${VAULT_HOST_DIR:-./vault}:/app/vault
     depends_on:
       db:
         condition: service_healthy

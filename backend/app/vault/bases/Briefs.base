@@ -1,0 +1,20 @@
+# Undertow: daily briefs (Undertow/Briefs). Paper portfolio numbers are hypothetical. Static file shipped by Undertow.
+filters:
+  and:
+    - 'type == "brief"'
+    - 'file.inFolder("Undertow/Briefs")'
+views:
+  - type: table
+    name: Daily briefs
+    order:
+      - file.name
+      - date
+      - signals_count
+      - tickers
+      - forward_test_signals
+      - paper_portfolio_value
+      - paper_portfolio_return
+    sort:
+      - property: date
+        direction: DESC
+    limit: 120

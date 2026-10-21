@@ -1,0 +1,24 @@
+# Undertow: forward signal journal (Undertow/Journal). Outcomes are hypothetical. Static file shipped by Undertow.
+filters:
+  and:
+    - 'type == "journal"'
+    - 'file.inFolder("Undertow/Journal")'
+views:
+  - type: table
+    name: Journal
+    order:
+      - file.name
+      - ticker
+      - signal
+      - direction
+      - horizon_days
+      - expected
+      - day
+      - sealed_day
+      - outcome_status
+      - outcome_abn_5
+      - outcome_abn_20
+    sort:
+      - property: entry_id
+        direction: DESC
+    limit: 500

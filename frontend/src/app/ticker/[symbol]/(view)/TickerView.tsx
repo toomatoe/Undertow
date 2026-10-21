@@ -9,6 +9,8 @@ import HaltsPanel from "@/components/HaltsPanel";
 import { api, isAdminApiError, type Fundamentals, type Halt, type TickerDetail } from "@/lib/api";
 import { formatMoney, formatScore, sentimentClass, SIZE_LABELS } from "@/lib/format";
 
+import VaultNotes from "./VaultNotes";
+
 interface Props {
   initial: TickerDetail;
   initialDays: number;
@@ -137,6 +139,7 @@ export default function TickerView({ initial, initialDays, fundamentals, fundame
       {fundamentalsMode === "server" && fundamentals && <DilutionPanel symbol={data.symbol} initialData={fundamentals} />}
       {fundamentalsMode === "client" && <DilutionPanel symbol={data.symbol} />}
       <HaltsPanel symbol={data.symbol} initialData={halts ?? undefined} />
+      <VaultNotes symbol={data.symbol} />
 
       {data.daily.length > 0 && (
         <section className="panel">

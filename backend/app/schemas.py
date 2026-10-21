@@ -349,3 +349,41 @@ class PaperPortfolioOut(BaseModel):
     by_signal: list[PaperSignalRow]
     positions: list[PaperPosition]  # most recent 50
     empty_reason: str | None = None
+
+
+# --- Obsidian vault export (app/vault/AGENTS.md) -------------------------------------------------------------------
+
+
+class VaultExportResultOut(BaseModel):
+    created: int
+    updated: int
+    unchanged: int
+    conflicts: int
+    errors: int
+    counts: dict[str, int]  # folder -> notes touched (created, updated, unchanged or conflict)
+    started_at: str  # ISO UTC
+    finished_at: str  # ISO UTC
+
+
+class VaultStatusOut(BaseModel):
+    enabled: bool
+    dir: str  # settings.vault_dir (the folder that holds Undertow/)
+    last_export_at: str | None  # ISO UTC; null before the first export
+    last_result: VaultExportResultOut | None
+    conflicts: int  # conflict files waiting in Undertow/_conflicts/
+    running: bool
+
+
+class VaultNoteOut(BaseModel):
+    title: str
+    path: str  # relative to the vault root, forward slashes
+    ticker: str | None
+    updated: str | None  # ISO date or timestamp
+    tags: list[str]
+    excerpt: str
+
+
+class VaultNotesOut(BaseModel):
+    enabled: bool
+    ticker: str
+    notes: list[VaultNoteOut]

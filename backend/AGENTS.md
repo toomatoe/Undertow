@@ -28,6 +28,7 @@ Pinned versions in `requirements.txt`; `requirements-dev.txt` adds pytest.
 | `app/alerts/` | Discord alerts, halt storage, alert log ([AGENTS.md](app/alerts/AGENTS.md)) |
 | `app/fundamentals/` | Cash runway, dilution, short interest ([AGENTS.md](app/fundamentals/AGENTS.md)) |
 | `app/newsletter/` | Weekly newsletter: `service.py` (build, render, archive), `build.py` (CLI) ([AGENTS.md](app/newsletter/AGENTS.md)) |
+| `app/vault/` | Obsidian vault export (Markdown only under `<VAULT_DIR>/Undertow/`, never deletes, fence/hash conflicts to `_conflicts/`), thesis-note read-back (`read_theses`), Bases files, in-vault `AGENTS.md`/`CLAUDE.md`, `working_paper.md` copy. Never imports `app.main`, never reads `Settings` ([AGENTS.md](app/vault/AGENTS.md)) |
 | `tests/` | pytest; `pytest.ini` sets `pythonpath = .`, `testpaths = tests`; `tests/fixtures/form4/` = insider-study fixtures, `tests/fixtures/form4_live/` = live forward-test fixtures |
 
 ## Startup (`lifespan` in main.py)
@@ -39,7 +40,8 @@ Pinned versions in `requirements.txt`; `requirements-dev.txt` adds pytest.
 `state.forward_evidence`; never from `event_study.json`) ->
 `Enricher` if `ANTHROPIC_API_KEY` set -> `Alerter` hook -> `scheduler()` task (every `INGEST_INTERVAL_SECONDS`, each step
 in a thread with its own try/except: `run_ingest`, IBKR borrow snapshot, `journal_cycle()`, `seal_cycle()`,
-`newsletter_cycle()`, `digest_cycle()`, then the `last_slow_cycle` heartbeat and `uptime_cycle()`) and,
+`vault_cycle()`, `newsletter_cycle()`, `digest_cycle()`, then the `last_slow_cycle` heartbeat and `uptime_cycle()`), a
+one-off forced `vault_cycle(True)` in a background thread (never blocks startup) and,
 when `EDGAR_POLL_SECONDS` > 0, `edgar_poller()` (fast EDGAR poll + Nasdaq halts; heartbeats `last_edgar_poll`,
 `last_halts_poll`). The fast poll (`pipeline.ingest.poll_edgar`) also runs the **live Form 4 insider-cluster forward
 test** (`_poll_form4` -> `app.insiders.live.poll_form4`, own try/except, gated on `EDGAR_ENABLED` and
@@ -48,7 +50,12 @@ week (ending Sunday, ET) once and is a no-op afterwards; issues are files under 
 A newly built issue is emailed with `delivery.send_newsletter` when delivery is enabled. `seal_cycle()` seals the
 journal hash chain through yesterday (UTC) once per day and drops the verify cache. `digest_cycle()` sends the daily
 email digest for yesterday (ET) once per ET day after `EMAIL_DAILY_DIGEST_HOUR_ET` (only when delivery is enabled).
-`uptime_cycle()` appends one health snapshot to `{data_dir}/uptime.jsonl`. `to_out()` attaches `size_bucket` to tickers and `EvidenceOut` per (signal, bucket):
+`uptime_cycle()` appends one health snapshot to `{data_dir}/uptime.jsonl`. `vault_cycle(force=False)` runs
+`vault.export_vault` (app/vault/AGENTS.md) when `VAULT_ENABLED`, at most every `VAULT_EXPORT_MINUTES` unless forced or
+`seal_cycle()` sealed new days (`state.vault_due`), under the non-blocking `vault.EXPORT_LOCK` (never overlaps; skipped
+when busy); it passes `vault_evidence` (main-study evidence for `ALL_SIGNALS`, `forward_evidence()` for
+`FORWARD_TEST_SIGNALS`), `cached_paper_summary` (the cached paper portfolio only, never a recompute) and `STUDY_FILES`,
+logs and swallows errors (returns None), and clears `state.vault_notes_cache`. `to_out()` attaches `size_bucket` to tickers and `EvidenceOut` per (signal, bucket):
 main-study evidence for `ALL_SIGNALS` codes, forward-test evidence (`study="insider_purchases"`, `forward_test=true`) for
 `FORWARD_TEST_SIGNALS` codes, and sets `ArticleOut.forward_test`.
 
@@ -66,6 +73,20 @@ All additive and optional, so older clients keep working:
   read-only, rate-limited by the middleware, cache-only prices (no network), cached in `state.paper_cache` per (ET
   date, hedge, max_concurrent) for `PAPER_TTL_SECONDS` (600) under `paper_lock`. Rules in app/paper/AGENTS.md.
 
+## Vault endpoints (Obsidian export, app/vault/AGENTS.md)
+
+- `GET /api/vault/status` -> `VaultStatusOut` (`enabled`, `dir`, `last_export_at`, `last_result: VaultExportResultOut |
+  null` from `{data_dir}/vault_state.json`, live `conflicts` count of `Undertow/_conflicts/`, `running` = lock held).
+  Works before the vault folder exists; a malformed state file gives `last_result: null`, never an error.
+- `GET /api/vault/notes?ticker=` (required, `TICKER_PATTERN`, max 16; uppercased) -> `VaultNotesOut` (`enabled`,
+  `ticker`, `notes: VaultNoteOut[]`): the user's thesis notes outside `Undertow/` via `vault.read_theses`. Read-only,
+  cached per (vault_dir, ticker) for `VAULT_NOTES_TTL_SECONDS` (60) in `state.vault_notes_cache`; disabled -> empty
+  list with `enabled: false`; read errors -> empty list (logged).
+- `POST /api/vault/export` (admin policy, scope `mutations`; write-tier rate limit) -> `VaultStatusOut` after a forced
+  export. 409 when `VAULT_ENABLED=false` or an export is already running; 500 when the export crashed. The admin
+  check runs before the 409 checks.
+- Tests: `tests/test_vault_api.py` (status/notes/export, throttle, lock, seal flag, admin policy, no lifespan).
+
 Middleware: `RateLimitMiddleware` (limiter looked up per request via the module-level `rate_limiter`, so tests can
 swap it), then `CORSMiddleware` added last (outermost, so 429s carry CORS headers). `app.include_router(delivery_router)`
 mounts `/api/subscribe`, `/api/subscribe/confirm`, `/api/unsubscribe` (GET page + POST one-click),
@@ -79,7 +100,7 @@ mounts `/api/subscribe`, `/api/subscribe/confirm`, `/api/unsubscribe` (GET page 
   `RESEARCH_JOBS_ENABLED`, falling back to `MUTATIONS_ENABLED`; `mutations`: `MUTATIONS_ENABLED`); off -> 403. Without
   either, allowed only when `PUBLIC_BASE_URL` is a local origin (localhost, 127.0.0.1, ::1, `*.localhost`).
   Protected routes: `POST /api/research/jobs/{kind}` (scope `research`), `POST /api/ingest`, `POST /api/alerts/test`,
-  `PUT`/`DELETE /api/watchlist/{symbol}` (scope `mutations`). `GET /api/status` returns `admin: {protected,
+  `POST /api/vault/export`, `PUT`/`DELETE /api/watchlist/{symbol}` (scope `mutations`). `GET /api/status` returns `admin: {protected,
   mutations_enabled}`; `GET /api/research/jobs` returns `enabled`, `requires_token`. The token is never returned.
 - **Rate limits** (`RateLimiter`): in-memory sliding 60 s window per client key, two tiers: every request
   (`RATE_LIMIT_PER_MINUTE`) and writes POST/PUT/PATCH/DELETE (`RATE_LIMIT_WRITE_PER_MINUTE`); 0 disables a tier.
@@ -99,7 +120,9 @@ mounts `/api/subscribe`, `/api/subscribe/confirm`, `/api/unsubscribe` (GET page 
 `journal_chain.jsonl` (hash chain, append-only), `uptime.jsonl`, `delivery/token_key` (when `EMAIL_TOKEN_SECRET` is
 unset), `event_study_oos.json`, `event_study_insider_purchases.json`, `insider_datasets/`, `insider_xml/`,
 `submissions/pages/`, `snapshots/` (hash-only manifests and replay outputs); v1.0 adds `insider_live_seen.json` (Form 4
-accession seen-set) and `insider_live_purchases.jsonl` (qualifying live purchases). All live in the `apidata` volume, never in git.
+accession seen-set) and `insider_live_purchases.jsonl` (qualifying live purchases); the vault export adds
+`vault_state.json` (last export result). All live in the `apidata` volume, never in git. The vault itself is not under
+`DATA_DIR`: it is `VAULT_DIR` (host folder `VAULT_HOST_DIR`, default `./vault`, git-ignored).
 
 ## Config / env (`app/config.py`)
 
@@ -129,6 +152,10 @@ a blank `NAME=` line counts as unset.
 | `RATE_LIMIT_PER_MINUTE` / `RATE_LIMIT_WRITE_PER_MINUTE` | 120 / 10 | per client, sliding 60 s; 0 disables that tier |
 | `TRUST_PROXY_HEADERS` | false | use `X-Forwarded-For` (right-most hop outside private/loopback ranges) when the peer is a private/loopback proxy |
 | `INSIDER_LIVE_ENABLED` | `true` | live insider-cluster forward test in the fast EDGAR poller (also needs `EDGAR_ENABLED`); read by `app/insiders/settings.py` `InsiderLiveSettings` (not `Settings`, yet). `false` stops all Form 4 requests |
+| `VAULT_ENABLED` | `true` | Obsidian vault export on/off (scheduler, startup export, `POST /api/vault/export`, thesis read-back) |
+| `VAULT_DIR` | `./vault` | folder that holds `Undertow/`; compose sets `/app/vault`, bind-mounted from the host's `VAULT_HOST_DIR` (compose-only variable, default `./vault`) |
+| `VAULT_LOOKBACK_DAYS` | 30 | signal filings newer than this get Signal notes (and their tickers Ticker notes) |
+| `VAULT_EXPORT_MINUTES` | 15 | export interval in the slow scheduler (bypassed after new journal seals and by the manual export) |
 | `SMTP_*`, `EMAIL_*` | none | optional, off by default: email delivery; read by `app/delivery/settings.py` `DeliverySettings` (not `Settings`, yet). Full table in [delivery/AGENTS.md](app/delivery/AGENTS.md) |
 
 Not settings: `GIT_SHA` (read by `app.research.snapshot` for manifests; `unknown` when unset), `UNDERTOW_REPO_ROOT`
@@ -198,6 +225,9 @@ in multi-agent runs only the Verify step uses it (docs/AGENT_PROCESS.md).
   in `tests/fixtures/form4_live/`), `test_paper_numbers.py` (paper vs `docs/results`, frontend copy identical; needs
   `/repo`), `test_config_local.py` (zero-config local defaults: localhost site origin, integrations off, open local
   admin). `test_api.py` adds the forward-test signal/evidence path; `test_journal.py` the evaluation horizons.
+- Vault test files: `test_vault.py` (export package: note rendering, confinement, idempotence, conflicts, no deletes,
+  no secrets, working-paper copy identical to `docs/paper/WORKING_PAPER.md`, which needs `/repo`) and
+  `test_vault_api.py` (endpoints and `vault_cycle` wiring); `test_config_local.py` covers the `VAULT_*` defaults.
 
 - `tests/conftest.py` sets `DATABASE_URL=sqlite:///:memory:` and removes `ANTHROPIC_API_KEY` before imports.
   `_make_engine` uses `StaticPool` for `:memory:` so every session shares one DB.
@@ -215,7 +245,8 @@ in multi-agent runs only the Verify step uses it (docs/AGENT_PROCESS.md).
 
 - `Dockerfile`: `python:3.12-slim`, installs `requirements-dev.txt`, copies the code, runs
   `uvicorn app.main:app --host 0.0.0.0 --port 8000`. `.dockerignore` excludes `data/` and `.env`.
-- Compose `api` gets `.env` via `env_file` (optional) and overrides `DATABASE_URL` and `DATA_DIR`. The `web` service
+- Compose `api` gets `.env` via `env_file` (optional) and overrides `DATABASE_URL`, `DATA_DIR` and `VAULT_DIR`
+  (`/app/vault`, bind mount `${VAULT_HOST_DIR:-./vault}`; `docker compose up -d api` remounts after a change). The `web` service
   (frontend image) sits behind the `web` profile: `docker compose --profile web up -d --build` (or `scripts/start.ps1`).
 - `docker-compose.prod.yml` (repo root) is **optional, for later**, not used by the local-only setup (never deploy
   publicly with Yahoo prices): `db` (password from `POSTGRES_PASSWORD`, never published), `api` (requires

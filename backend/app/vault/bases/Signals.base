@@ -1,0 +1,23 @@
+# Undertow: signal filings (machine-generated notes in Undertow/Signals). Static file shipped by Undertow.
+filters:
+  and:
+    - 'type == "signal"'
+    - 'file.inFolder("Undertow/Signals")'
+views:
+  - type: table
+    name: Recent signal filings
+    order:
+      - file.name
+      - ticker
+      - form
+      - signals
+      - severity
+      - size_bucket
+      - filed_at
+      - mean_abnormal
+      - significant
+      - forward_test
+    sort:
+      - property: filed_at
+        direction: DESC
+    limit: 200

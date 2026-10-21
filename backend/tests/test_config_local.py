@@ -94,3 +94,23 @@ def test_non_local_site_closes_admin_policy(clean_env, monkeypatch):
     s = make_settings()
     assert not is_local_origin(s.public_base_url)
     assert admin_policy(s, s.public_base_url, "mutations").enabled is False
+
+
+def test_vault_export_defaults(clean_env, monkeypatch):
+    # Obsidian vault export: on by default, writes under ./vault (/app/vault in compose), 30-day window, every 15 min.
+    for name in ("VAULT_ENABLED", "VAULT_DIR", "VAULT_LOOKBACK_DAYS", "VAULT_EXPORT_MINUTES"):
+        monkeypatch.delenv(name, raising=False)
+        monkeypatch.delenv(name.lower(), raising=False)
+    s = make_settings()
+    assert s.vault_enabled is True
+    assert s.vault_dir == "./vault"
+    assert s.vault_lookback_days == 30
+    assert s.vault_export_minutes == 15
+
+
+def test_vault_settings_from_env(clean_env, monkeypatch):
+    monkeypatch.setenv("VAULT_ENABLED", "false")
+    monkeypatch.setenv("VAULT_DIR", "/app/vault")
+    s = make_settings()
+    assert s.vault_enabled is False
+    assert s.vault_dir == "/app/vault"

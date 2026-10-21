@@ -28,3 +28,14 @@
 .token input { min-width: 0; flex: 1 1 14rem; max-width: 24rem; padding: .45rem .6rem; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); background: var(--panel-2); }
 .token button { padding: .45rem .8rem; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); background: var(--panel-2); cursor: pointer; }
 .token input:focus-visible, .token button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.warn { color: var(--warn); overflow-wrap: anywhere; }
+.vaultList { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: .35rem 1rem; margin: 0; font-size: .875rem; }
+.vaultList dt { color: var(--muted); }
+.vaultList dd { margin: 0; min-width: 0; }
+.vaultPath { overflow-wrap: anywhere; }
+.vaultFolders { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .25rem .9rem; }
+.vaultActions { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-top: .6rem; }
+.vaultActions button { padding: .45rem .8rem; border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); background: var(--panel-2); cursor: pointer; font-size: .875rem; }
+.vaultActions button:disabled { opacity: .6; cursor: not-allowed; }
+.vaultActions button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }

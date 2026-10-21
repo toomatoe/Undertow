@@ -1,0 +1,21 @@
+# Undertow: tickers with recent signal filings or on the watchlist (Undertow/Tickers). Static file shipped by Undertow.
+filters:
+  and:
+    - 'type == "ticker"'
+    - 'file.inFolder("Undertow/Tickers")'
+views:
+  - type: table
+    name: Tickers
+    order:
+      - file.name
+      - company
+      - size_bucket
+      - public_float_usd
+      - last_filing
+      - active_signals
+      - journal_open
+      - watchlist
+    sort:
+      - property: last_filing
+        direction: DESC
+    limit: 500

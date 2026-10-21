@@ -9,6 +9,11 @@ __pycache__/
 .venv/
 backend/data/
 
+# Obsidian vault export (default VAULT_HOST_DIR ./vault; backend/vault when the API runs without Docker).
+# Anchored on purpose: a bare `vault/` would also ignore the backend/app/vault/ package.
+/vault/
+backend/vault/
+
 # Node
 node_modules/
 frontend/.next/
