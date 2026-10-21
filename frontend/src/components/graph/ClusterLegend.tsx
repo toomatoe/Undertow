@@ -71,11 +71,8 @@ export default function ClusterLegend({ clusters, colorIndex, otherCount, highli
                     Mood: {mood}
                     {mood !== "n/a" && ` (${formatScore(c.mean_sentiment)}, n=${c.sentiment_n})`}
                   </span>
-                  {c.evidence ? (
-                    <EvidenceText ev={c.evidence} signalLabel={sigLabel} note={c.evidence_note} />
-                  ) : (
-                    c.evidence_note && <span className={styles.evidence}>{c.evidence_note}</span>
-                  )}
+                  {/* The note is the disclaimer for an evidence line; without evidence it would stand alone. */}
+                  {c.evidence && <EvidenceText ev={c.evidence} signalLabel={sigLabel} note={c.evidence_note} />}
                 </span>
               </button>
             </li>

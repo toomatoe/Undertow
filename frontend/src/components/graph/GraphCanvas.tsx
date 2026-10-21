@@ -344,7 +344,13 @@ export default function GraphCanvas(props: Props) {
     };
 
     const onDown = (e: PointerEvent) => {
-      canvas.setPointerCapture(e.pointerId);
+      // Capture keeps a drag going outside the canvas. It can throw (NotFoundError) when the browser does not
+      // consider the pointer active, e.g. some automation/accessibility clicks; selection must still work then.
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* drag simply ends at the canvas edge */
+      }
       const pt = local(e);
       pointers.set(e.pointerId, pt);
       if (pointers.size === 1) {
