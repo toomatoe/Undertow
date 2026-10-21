@@ -1243,6 +1243,9 @@ table.data td.bt-wraptext {
     min-width: 0;
     overflow-x: auto;
     scrollbar-width: none;
+    /* Fade the right edge so it is visible that more tabs scroll into view. */
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+    padding-right: 24px;
   }
 
   .tab {

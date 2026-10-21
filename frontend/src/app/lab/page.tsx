@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import ConfirmatoryBlock from "@/components/learn/ConfirmatoryBlock";
@@ -193,6 +194,7 @@ function Comparison({ main, oos }: { main: LabStudy; oos: LabStudy }) {
 }
 
 export default function LabPage() {
+  const router = useRouter();
   const [infos, setInfos] = useState<StudyInfo[] | null>(null);
   const [selected, setSelected] = useState<StudyName>("main");
   const [studies, setStudies] = useState<Partial<Record<StudyName, LabStudy>>>({});
@@ -234,10 +236,16 @@ export default function LabPage() {
   }, [refreshInfos, load]);
 
   // Deep links from /research: /lab?study=oos or /lab?study=insider_purchases preselect a study.
+  // Also re-read on back/forward (popstate) so the selection follows the URL.
   useEffect(() => {
-    const wanted = new URLSearchParams(window.location.search).get("study");
-    const match = STUDIES.find((s) => s.key === wanted);
-    if (match) setSelected(match.key);
+    const sync = () => {
+      const wanted = new URLSearchParams(window.location.search).get("study");
+      const match = STUDIES.find((s) => s.key === wanted);
+      setSelected(match ? match.key : "main");
+    };
+    sync();
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
   }, []);
 
   const requested = useRef(new Set<StudyName>());
@@ -290,7 +298,10 @@ export default function LabPage() {
               aria-pressed={s.key === selected}
               disabled={!ok && s.key !== selected}
               title={ok ? `${s.about}${info?.generated_at ? `, generated ${dateLabel(info.generated_at)}` : ""}` : `${s.about}: not run yet`}
-              onClick={() => setSelected(s.key)}
+              onClick={() => {
+                setSelected(s.key);
+                router.replace(`/lab?study=${s.key}`, { scroll: false });
+              }}
             >
               {s.label}
               {!ok && infos && " (not run yet)"}

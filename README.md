@@ -33,6 +33,8 @@ The [working paper](docs/paper/WORKING_PAPER.md) is also rendered in the app at 
   pre-registered finding", and the track record judges them at 5 trading days.
 - **Paper portfolio** (`/paper`): a hypothetical, simulated portfolio built from the forward signal journal with
   estimated costs and borrow. It is paper-only: there is no broker connection and no code path that places orders.
+- **Event graph** (`/graph`): recent filings and news clustered by wording, company and timing, with a replayable
+  timeline, adapted from University of Louisville disaster social-media research. Links show association, not cause.
 - **Local only:** everything binds to `127.0.0.1`. There is no paid tier, no accounts and no public deployment.
 
 ## Key findings
@@ -109,7 +111,7 @@ Everything works without these. Each one turns on only when its keys are set in 
 | Email delivery (weekly newsletter, daily digest, double opt-in list) | `SMTP_HOST`, `EMAIL_FROM`, `EMAIL_POSTAL_ADDRESS` (+ other `SMTP_*` / `EMAIL_*`) | The subscribe form says email is not set up and stores nothing; newsletters are still built and archived locally |
 | Discord alerts for new signal filings and halts | `DISCORD_WEBHOOK_URL` | Alerts are still evaluated and logged at `/api/alerts`, just not sent |
 | Alpaca (Benzinga) news | `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY` (paper keys, news only) | The feed uses EDGAR and free RSS sources |
-| Claude enrichment (summaries, sentiment, filing red flags) | `ANTHROPIC_API_KEY` (`ENRICH_MODEL`, `ENRICH_MAX_PER_CYCLE`) | Articles and filings show without AI summaries |
+| Claude enrichment (summaries, sentiment, filing red flags) and short Claude-suggested cluster names on `/graph` | `ANTHROPIC_API_KEY` (`ENRICH_MODEL`, `ENRICH_MAX_PER_CYCLE`) | Articles and filings show without AI summaries; graph clusters are named from their top terms |
 
 The live insider forward test is on by default (`INSIDER_LIVE_ENABLED=true`) and needs no key; set it to `false` to stop
 all Form 4 requests. The Obsidian vault export (next section) is also on by default (`VAULT_ENABLED=true`) and only writes
@@ -263,6 +265,21 @@ when a study has not been run on this machine), and links to every section.
 - Unknown symbols return a real HTTP 404. While the site origin is localhost, `/robots.txt` asks crawlers to stay out.
 - A "Your notes (Obsidian)" panel lists your own thesis notes for that ticker from the vault (read-only; see [Using Undertow with Obsidian](#using-undertow-with-obsidian)).
 
+**Event graph** (`/graph`, `backend/app/graph/`, see its [AGENTS.md](backend/app/graph/AGENTS.md))
+- Recent filings and news (1 to 30 days, up to 1,000 items, signal filings kept first) drawn as a network you can pan,
+  zoom and click: filings are circles, news items squares, coloured by cluster. Filter by ticker, window and source
+  (filings, news or both); the filters are kept in the URL (`/graph?ticker=ABCD&days=14`), and every ticker page links to
+  its own view.
+- Items are linked three ways: similar wording (TF-IDF over headline and summary, smoothed over each item's nearest
+  neighbours: GNN-style smoothing with fixed rules, not a trained network), the same company or size bucket, and close
+  publication times. Deterministic Louvain community detection groups them into clusters, named from their most
+  distinctive terms, signal type and tickers (or, with `ANTHROPIC_API_KEY`, a short neutral name suggested by Claude).
+- A time scrubber replays the window so you can watch clusters form. Each cluster shows its tickers, signal mix, mean
+  sentiment and, where it exists, the historical event-study row for its dominant signal (hypothetical, not a forecast).
+- **Links show association, not cause.** The approach is adapted from University of Louisville research on social-media
+  posts during natural disasters (Hoang, Nguyen & Nguyen, [arXiv 2408.11133](https://arxiv.org/abs/2408.11133); Duong,
+  Nguyen, Levin & Gary, CaST, [arXiv 2602.02601](https://arxiv.org/abs/2602.02601)); `/methodology` explains it.
+
 **Obsidian vault export** (`backend/app/vault/`)
 - Tickers, signal filings, journal entries, daily briefs, study summaries, newsletter issues and the working paper as plain Markdown notes under `Undertow/` in a local vault folder, with Bases tables and an `AGENTS.md` for agents working in the vault. Write-if-changed, never deletes, hand edits inside generated blocks go to `_conflicts/`.
 
@@ -296,6 +313,7 @@ sources (EDGAR 8-K/424B/S-1/13D + Form 4, RSS, Alpaca) → dedupe → ticker tag
 | `backend/app/backtest/`, `journal/`, `paper/` | Backtester; forward journal + hash chain; hypothetical paper portfolio |
 | `backend/app/alerts/`, `fundamentals/`, `newsletter/`, `delivery/` | Alerts, dilution/runway, weekly newsletter, optional email delivery |
 | `backend/app/vault/` | Obsidian vault export (Markdown notes under `<vault>/Undertow/`) and thesis-note read-back |
+| `backend/app/graph/` | Event graph engine (text similarity, smoothing, edges, clusters, names, timeline) behind `/api/graph` |
 | `backend/app/main.py` | API, background scheduler and the fast EDGAR/Form 4/halts poller |
 | `frontend/src/` | Next.js App Router UI |
 | `docs/` | Feasibility and product research, published results, working paper, agent graph |
@@ -359,6 +377,7 @@ lint and build, and builds both images on every push and pull request.
 | `GET /api/health` · `GET /api/health/details` · `GET /api/health/history?days=7` | Liveness · per-component health · uptime history |
 | `GET /api/vault/status` · `POST /api/vault/export` | Vault export state (last run, counts, conflicts) · run the export now (admin-protected; 409 when disabled or already running) |
 | `GET /api/vault/notes?ticker=` | Your thesis notes for one ticker, read from the vault (read-only, cached 60 s) |
+| `GET /api/graph?days=7&max_nodes=400&ticker=&source=all\|filings\|news` | Event graph: nodes, edges (`contextual`, `spatial`, `temporal`; associations, not causes), clusters, timeline, method (read-only; `days` 1-30, `max_nodes` 20-1000) |
 
 ## What's next (research)
 

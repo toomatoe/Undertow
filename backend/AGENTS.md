@@ -29,6 +29,7 @@ Pinned versions in `requirements.txt`; `requirements-dev.txt` adds pytest.
 | `app/fundamentals/` | Cash runway, dilution, short interest ([AGENTS.md](app/fundamentals/AGENTS.md)) |
 | `app/newsletter/` | Weekly newsletter: `service.py` (build, render, archive), `build.py` (CLI) ([AGENTS.md](app/newsletter/AGENTS.md)) |
 | `app/vault/` | Obsidian vault export (Markdown only under `<VAULT_DIR>/Undertow/`, never deletes, fence/hash conflicts to `_conflicts/`), thesis-note read-back (`read_theses`), Bases files, in-vault `AGENTS.md`/`CLAUDE.md`, `working_paper.md` copy. Never imports `app.main`, never reads `Settings` ([AGENTS.md](app/vault/AGENTS.md)) |
+| `app/graph/` | Event graph engine (`build_graph`, `GraphParams`, `clear_cache`): TF-IDF -> GNN-style neighbourhood smoothing (not a trained GNN) -> contextual / spatial / temporal edges -> deterministic Louvain clusters -> c-TF-IDF names (optional cached Claude names) -> timeline. Edges are associations, not causes. Stdlib + SQLAlchemy only, never imports `app.main` ([AGENTS.md](app/graph/AGENTS.md)) |
 | `tests/` | pytest; `pytest.ini` sets `pythonpath = .`, `testpaths = tests`; `tests/fixtures/form4/` = insider-study fixtures, `tests/fixtures/form4_live/` = live forward-test fixtures |
 
 ## Startup (`lifespan` in main.py)
@@ -87,6 +88,25 @@ All additive and optional, so older clients keep working:
   check runs before the 409 checks.
 - Tests: `tests/test_vault_api.py` (status/notes/export, throttle, lock, seal flag, admin policy, no lifespan).
 
+## Event graph endpoint (app/graph/AGENTS.md)
+
+- `GET /api/graph?days=7&max_nodes=400&ticker=&source=all` -> `GraphOut` (`nodes: GraphNodeOut[]`, `edges:
+  GraphEdgeOut[]`, `clusters: GraphClusterOut[]` (with `GraphSignalCount` mix and optional `EvidenceOut`),
+  `timeline: GraphTimelineOut` (`GraphTimelineBucket`), `params: GraphParamsOut`, `generated_at`, `method:
+  GraphMethodOut`). Query: `days` 1..30 (default 7), `max_nodes` 20..1000 (default 400), `ticker` 1..12 chars of
+  `[A-Za-z0-9.-]` (uppercased), `source` `all|filings|news`; anything else -> 422. Datetimes go through `UtcDatetime`
+  (naive SQLite values get UTC re-attached).
+- Public and read-only (rate-limited by the middleware), a plain `def` so FastAPI runs it in the threadpool. It calls
+  `app.graph.build_graph`. Once `load_study` / `load_forward_evidence` have run (`state.evidence` non-empty or
+  `state.forward_evidence` set) it passes `vault_evidence`, the same main-study / forward-test evidence `to_out` uses;
+  before that (no lifespan, as in tests) it passes nothing and `build_graph` falls back to
+  `app.vault.make_evidence_fn(settings.data_dir)`. Note: `build_graph`'s 300 s TTL cache applies only when no
+  `evidence_fn` is injected, so with the study loaded every request recomputes the graph (~0.2 s for 400 nodes; LLM
+  names stay cached on disk in `{data_dir}/graph_names.json`).
+- Edges are associations / proximity, not causes; `method.note` is the only place "cause" wording appears (a negation).
+- Tests: `tests/test_graph_api.py` (contract, evidence reuse, timeline granularity, ticker/source filters, 422 cases,
+  wording, empty DB, fallback evidence without loaded state; network and `LLMNamer` patched to fail, no lifespan).
+
 Middleware: `RateLimitMiddleware` (limiter looked up per request via the module-level `rate_limiter`, so tests can
 swap it), then `CORSMiddleware` added last (outermost, so 429s carry CORS headers). `app.include_router(delivery_router)`
 mounts `/api/subscribe`, `/api/subscribe/confirm`, `/api/unsubscribe` (GET page + POST one-click),
@@ -121,7 +141,8 @@ mounts `/api/subscribe`, `/api/subscribe/confirm`, `/api/unsubscribe` (GET page 
 unset), `event_study_oos.json`, `event_study_insider_purchases.json`, `insider_datasets/`, `insider_xml/`,
 `submissions/pages/`, `snapshots/` (hash-only manifests and replay outputs); v1.0 adds `insider_live_seen.json` (Form 4
 accession seen-set) and `insider_live_purchases.jsonl` (qualifying live purchases); the vault export adds
-`vault_state.json` (last export result). All live in the `apidata` volume, never in git. The vault itself is not under
+`vault_state.json` (last export result); the event graph adds `graph_names.json` (cached Claude cluster names, only
+written when `ANTHROPIC_API_KEY` is set, bounded at 2000 entries). All live in the `apidata` volume, never in git. The vault itself is not under
 `DATA_DIR`: it is `VAULT_DIR` (host folder `VAULT_HOST_DIR`, default `./vault`, git-ignored).
 
 ## Config / env (`app/config.py`)
@@ -137,8 +158,8 @@ a blank `NAME=` line counts as unset.
 | `RSS_FEEDS` | `DEFAULT_RSS_FEEDS` | JSON object name -> url |
 | `EDGAR_ENABLED` | `true` | |
 | `ALPACA_API_KEY_ID`, `ALPACA_API_SECRET_KEY` | none | both set -> `alpaca_enabled`. Paper keys only |
-| `ANTHROPIC_API_KEY` | none | set -> `enrich_enabled` |
-| `ENRICH_MODEL` | `claude-opus-5-5` | |
+| `ANTHROPIC_API_KEY` | none | set -> `enrich_enabled` (enrichment, and optional Claude cluster names in `app/graph/llm.py`) |
+| `ENRICH_MODEL` | `claude-opus-5-5` | also the graph namer's model |
 | `ENRICH_MAX_PER_CYCLE` / `FILING_TEXT_MAX_PER_CYCLE` | 25 / 40 | per-cycle caps |
 | `INGEST_INTERVAL_SECONDS` / `INGEST_ON_STARTUP` | 300 / true | |
 | `EDGAR_POLL_SECONDS` | 30 | fast EDGAR + halts loop; 0 disables it (EDGAR joins the slow cycle) |
@@ -228,6 +249,9 @@ in multi-agent runs only the Verify step uses it (docs/AGENT_PROCESS.md).
 - Vault test files: `test_vault.py` (export package: note rendering, confinement, idempotence, conflicts, no deletes,
   no secrets, working-paper copy identical to `docs/paper/WORKING_PAPER.md`, which needs `/repo`) and
   `test_vault_api.py` (endpoints and `vault_cycle` wiring); `test_config_local.py` covers the `VAULT_*` defaults.
+- Event graph test files: `test_graph.py` (engine: TF-IDF, smoothing, Louvain determinism, edges, naming with fake
+  namers, LLM cache with a fake client, timeline, cache TTL, 400-node timing, no-heavy-deps greps) and
+  `test_graph_api.py` (the endpoint, see "Event graph endpoint").
 
 - `tests/conftest.py` sets `DATABASE_URL=sqlite:///:memory:` and removes `ANTHROPIC_API_KEY` before imports.
   `_make_engine` uses `StaticPool` for `:memory:` so every session shares one DB.

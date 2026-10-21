@@ -100,6 +100,29 @@ export default function MethodologyPage() {
         whether historical patterns keep working. Entries whose stock stops trading are marked, not deleted.
       </p>
 
+      <h2>Event graph</h2>
+      <p>
+        The <Link href="/graph">Event graph</Link> draws recent filings and news (up to 30 days) as a network. Each item&apos;s headline and
+        summary become a TF-IDF vector (single words and two-word phrases, with SEC boilerplate removed). Each vector is then blended with
+        those of its most similar neighbours for up to two hops. This is GNN-style neighbourhood smoothing with fixed rules, not a trained
+        neural network. Items are linked in three ways: similar wording (contextual), the same company or size bucket (spatial), and close
+        publication times (temporal). A deterministic community-detection step (Louvain) groups tightly linked items into clusters, so the
+        same data always gives the same graph. Clusters are named from their most distinctive terms, signal type and tickers; when a Claude
+        API key is configured, Claude may suggest a short neutral name instead, with the term-based name as the fallback.
+      </p>
+      <p>
+        The approach is adapted from research at the University of Louisville (Long Nguyen&apos;s group, J.B. Speed School of Engineering)
+        on social-media posts during natural disasters: Hoang, Nguyen &amp; Nguyen on Hurricane Harvey posts, emotional health and life
+        incidents (<a href="https://arxiv.org/abs/2408.11133" rel="noopener noreferrer">arXiv 2408.11133</a>), and Duong, Nguyen, Levin
+        &amp; Gary on CaST, contextual, spatial and temporal links (<a href="https://arxiv.org/abs/2602.02601" rel="noopener noreferrer">arXiv
+        2602.02601</a>). Here &quot;spatial&quot; means the same company or size bucket, not geography.
+      </p>
+      <p>
+        <strong>Links show association, not cause.</strong> A link means two items are worded alike, share a company, or appeared close
+        together in time. It never means one item caused another. Evidence lines on clusters are historical event-study results
+        (hypothetical, before real-world frictions), not forecasts.
+      </p>
+
       <h2>Cash runway and dilution</h2>
       <p>
         Runway is cash plus short-term investments, divided by trailing-12-month operating cash burn, both from XBRL as reported, as of the

@@ -5,7 +5,9 @@ companies under $2B public float, each shown next to an event-study result on ho
 It also has a landing page with the key findings, a live market news feed (EDGAR, RSS, optional Alpaca/Benzinga) with
 optional Claude enrichment, a hash-sealed track record, a live forward test of the insider-cluster finding, a
 hypothetical paper portfolio, a working paper, a weekly newsletter with optional email delivery, a Learn section, a
-`/status` page and an Obsidian vault export (Markdown notes, plus the user's thesis notes read back onto ticker pages). It runs on the owner's machine via Docker (ports on 127.0.0.1): no paid tier, no accounts, no hosting.
+`/status` page, an Obsidian vault export (Markdown notes, plus the user's thesis notes read back onto ticker pages) and an
+event graph (`/graph`: recent filings and news clustered by wording, company and timing; links are associations, not
+causes). It runs on the owner's machine via Docker (ports on 127.0.0.1): no paid tier, no accounts, no hosting.
 Research and education only; it never places orders.
 
 Read this file, then only the AGENTS.md of the folder you are working in.
@@ -33,12 +35,14 @@ Read this file, then only the AGENTS.md of the folder you are working in.
 | `backend/app/newsletter/` | Weekly "Small-Cap Filing Radar": build, Markdown/HTML render, immutable archive, CLI | [newsletter/AGENTS.md](backend/app/newsletter/AGENTS.md) |
 | `backend/app/delivery/` | Email delivery (off unless SMTP is configured): double opt-in list, newsletter fan-out, daily digest, `/api/subscribe` router | [delivery/AGENTS.md](backend/app/delivery/AGENTS.md) |
 | `backend/app/vault/` | Obsidian vault export: Markdown notes only under `<VAULT_DIR>/Undertow/` (never deletes, write-if-changed, fence/hash conflicts), Bases files, in-vault `AGENTS.md`, thesis-note read-back (`read_theses`), byte-identical `working_paper.md` copy | [vault/AGENTS.md](backend/app/vault/AGENTS.md) |
+| `backend/app/graph/` | Event graph engine behind `GET /api/graph`: TF-IDF, GNN-style neighbourhood smoothing (not a trained GNN), contextual / spatial / temporal edges, deterministic Louvain clusters, c-TF-IDF names (optional cached Claude names), timeline. Stdlib + SQLAlchemy only; adapted from University of Louisville disaster social-media research | [graph/AGENTS.md](backend/app/graph/AGENTS.md) |
 | `backend/app/security.py`, `backend/app/health.py` | Admin policy for mutating endpoints + per-client rate limiter; deep health check + uptime history | covered in backend/AGENTS.md |
 | `backend/tests/` | pytest suite (in-memory SQLite, no network); `fixtures/form4/` (insider study) and `fixtures/form4_live/` (live forward test) | covered in backend/AGENTS.md |
 | `frontend/` | Next.js 15 App Router UI; `Dockerfile` = standalone image used by the compose `web` profile | [frontend/AGENTS.md](frontend/AGENTS.md) |
 | `frontend/src/app/page.tsx`, `frontend/src/components/home/` | Landing page `/` with the key findings read from the study endpoints | frontend/AGENTS.md |
 | `frontend/src/app/news/` | `/news`: the live news feed (moved from `/`) | frontend/AGENTS.md |
 | `frontend/src/app/paper/`, `frontend/src/components/portfolio/` | `/paper`: hypothetical paper portfolio (`/trading` redirects here) | frontend/AGENTS.md |
+| `frontend/src/app/graph/`, `frontend/src/components/graph/` | `/graph`: event graph explorer (canvas force layout, cluster legend, time scrubber, method note with research credits) | frontend/AGENTS.md |
 | `frontend/src/content/`, `frontend/src/components/markdown/` | `working-paper.md` (byte-identical copy of the paper) and the safe Markdown renderer behind `/research/paper` | frontend/AGENTS.md |
 | `docs/` | Feasibility and product research (background), published results, the working paper, batch plans, agent graph + process | [docs/AGENTS.md](docs/AGENTS.md) |
 | `docs/paper/` | `WORKING_PAPER.md`: write-up of all three studies and the backtest; numbers checked by `paper_numbers.py` | [research/AGENTS.md](backend/app/research/AGENTS.md) |
@@ -100,7 +104,8 @@ Every default is local and needs no change.
   `app.config.Settings`): the live insider-cluster forward test runs in the fast EDGAR poller when this and
   `EDGAR_ENABLED` are true. `false` stops all Form 4 requests.
 - Optional integrations, all off while unset: Alpaca news (`ALPACA_API_KEY_ID` + `ALPACA_API_SECRET_KEY`), Claude
-  enrichment (`ANTHROPIC_API_KEY`), Discord alerts (`DISCORD_WEBHOOK_URL`), email delivery (`DeliverySettings` in
+  enrichment (`ANTHROPIC_API_KEY`; the same key also enables optional Claude cluster names on `/graph`, cached in
+  `{DATA_DIR}/graph_names.json`), Discord alerts (`DISCORD_WEBHOOK_URL`), email delivery (`DeliverySettings` in
   `app/delivery/settings.py`: `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_STARTTLS`,
   `SMTP_TIMEOUT_SECONDS`, `EMAIL_FROM`, `EMAIL_REPLY_TO`, `EMAIL_POSTAL_ADDRESS`, `EMAIL_DAILY_DIGEST_HOUR_ET`,
   `EMAIL_MAX_PER_RUN`, `EMAIL_LINK_BASE_URL`, `EMAIL_TOKEN_SECRET`; on only when `SMTP_HOST`, `EMAIL_FROM` and
@@ -145,6 +150,9 @@ Every default is local and needs no change.
   `PUT`/`DELETE /api/watchlist/{symbol}`.
 - **The vault export only writes under `<VAULT_DIR>/Undertow/` and never deletes** (backend/app/vault/AGENTS.md); it
   never reads `Settings`, so no key, token or contact string can reach the vault.
+- **Event graph links are associations, never causes** (backend/app/graph/AGENTS.md): no wording in code, `method`
+  strings or the UI that presents one item as producing another; `app/graph/` adds no heavy deps (no numpy, sklearn,
+  networkx; a test greps for them) and never imports `app.main`.
 - **Email:** only double opt-in via `POST /api/subscribe`; never bulk-insert subscribers or send from tests (delivery/AGENTS.md).
 - UI shows headlines and links out; never republish full article text. Content rules (no buy/sell language,
   label hypothetical results) are in frontend/AGENTS.md and apply to docs too.
@@ -205,6 +213,7 @@ Every default is local and needs no change.
 | Out-of-sample study, offline replay | `backend/app/research/oos.py`, `snapshot.py`, `scripts/reproduce.sh` |
 | Insider-purchase (Form 4) study | `backend/app/insiders/` (its own AGENTS.md and PREREGISTRATION.md) |
 | Obsidian vault export, thesis notes on ticker pages | `backend/app/vault/` (its own AGENTS.md; `exporter.py`, `writer.py`, `fs.py`, `readback.py`, `static/vault_agents.md`), `vault_cycle()` and `/api/vault/*` in `main.py`, `VaultNotes.tsx` in `frontend/src/app/ticker/[symbol]/(view)/`, `VaultCard` in `frontend/src/app/status/page.tsx`, README "Using Undertow with Obsidian" |
+| Event graph (clusters of related filings/news) | `backend/app/graph/` (its own AGENTS.md; `service.py` `build_graph`), `/api/graph` in `main.py`, `Graph*` models in `schemas.py`, `api.graph` in `frontend/src/lib/api.ts`, `frontend/src/app/graph/`, `frontend/src/components/graph/`, "Event graph" section of `/methodology` |
 | Learn lessons and simulators | `frontend/src/app/learn/`, `frontend/src/components/learn/`, `frontend/src/lib/learn/` |
 | CI; server deploy (optional, for later) | `.github/workflows/ci.yml`; `docker-compose.prod.yml`, `frontend/Dockerfile` |
 | Feasibility / product docs (background) | `docs/` |

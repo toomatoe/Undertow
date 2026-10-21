@@ -11,11 +11,11 @@
   "modules": [
     {
       "id": "api",
-      "paths": ["backend/app/main.py", "backend/app/schemas.py", "backend/app/research_jobs.py", "backend/tests/test_api.py", "backend/tests/test_research_jobs.py", "backend/tests/test_vault_api.py"],
+      "paths": ["backend/app/main.py", "backend/app/schemas.py", "backend/app/research_jobs.py", "backend/tests/test_api.py", "backend/tests/test_research_jobs.py", "backend/tests/test_vault_api.py", "backend/tests/test_graph_api.py"],
       "agents_md": "backend/AGENTS.md",
-      "summary": "FastAPI routes (incl. /api/paper-portfolio (hypothetical, cached 10 min), /api/newsletter/*, /api/tickers/sitemap, /api/research/studies, /api/journal/chain|verify, /api/health/details|history, /api/vault/status|notes (thesis read-back, cached 60 s) and admin POST /api/vault/export; mounts the delivery router), rate-limit middleware + admin dependency wiring, lifespan (load_study + load_forward_evidence), to_out (main vs forward-test EvidenceOut), scheduler loops (slow: ingest, borrow snapshot, journal, seal_cycle, vault_cycle (throttled to VAULT_EXPORT_MINUTES, forced after new seals and once at startup, EXPORT_LOCK), newsletter_cycle (+ email), digest_cycle, uptime_cycle; fast: EDGAR + live Form 4 forward-test poller + halts), AppState (incl. paper_cache, forward_evidence, vault_last_run/vault_due/vault_notes_cache). Vault* schema models. Optional schema fields: SignalOut/ArticleOut.forward_test, EvidenceOut, Paper* models. research_jobs.MODULES: backtest, event_study, event_study_oos, insider_study.",
-      "depends_on": ["config_db", "platform", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter", "delivery", "insiders", "paper", "vault"],
-      "tests": ["backend/tests/test_api.py", "backend/tests/test_research_jobs.py", "backend/tests/test_vault_api.py"],
+      "summary": "FastAPI routes (incl. /api/paper-portfolio (hypothetical, cached 10 min), /api/newsletter/*, /api/tickers/sitemap, /api/research/studies, /api/journal/chain|verify, /api/health/details|history, /api/vault/status|notes (thesis read-back, cached 60 s) and admin POST /api/vault/export, public read-only GET /api/graph (event graph via app.graph.build_graph, vault evidence fn when the study is loaded); mounts the delivery router), rate-limit middleware + admin dependency wiring, lifespan (load_study + load_forward_evidence), to_out (main vs forward-test EvidenceOut), scheduler loops (slow: ingest, borrow snapshot, journal, seal_cycle, vault_cycle (throttled to VAULT_EXPORT_MINUTES, forced after new seals and once at startup, EXPORT_LOCK), newsletter_cycle (+ email), digest_cycle, uptime_cycle; fast: EDGAR + live Form 4 forward-test poller + halts), AppState (incl. paper_cache, forward_evidence, vault_last_run/vault_due/vault_notes_cache). Vault* and Graph* schema models. Optional schema fields: SignalOut/ArticleOut.forward_test, EvidenceOut, Paper* models. research_jobs.MODULES: backtest, event_study, event_study_oos, insider_study.",
+      "depends_on": ["config_db", "platform", "pipeline", "sources", "research", "backtest", "journal", "alerts", "fundamentals", "newsletter", "delivery", "insiders", "paper", "vault", "graph"],
+      "tests": ["backend/tests/test_api.py", "backend/tests/test_research_jobs.py", "backend/tests/test_vault_api.py", "backend/tests/test_graph_api.py"],
       "hotspot": true
     },
     {
@@ -124,6 +124,14 @@
       "tests": ["backend/tests/test_insiders.py", "backend/tests/test_insider_live.py"]
     },
     {
+      "id": "graph",
+      "paths": ["backend/app/graph/", "backend/tests/test_graph.py"],
+      "agents_md": "backend/app/graph/AGENTS.md",
+      "summary": "Event graph engine (build_graph, GraphParams, clear_cache): recent Article rows -> TF-IDF (1-2 grams) -> GNN-style neighbourhood smoothing (not a trained GNN) -> contextual / spatial (same ticker, same size bucket) / temporal edges -> deterministic Louvain clusters -> c-TF-IDF names (optional cached Claude names when ANTHROPIC_API_KEY is set, {data_dir}/graph_names.json), cluster stats, evidence, timeline, 300 s TTL cache. Edges are associations / proximity, not causes. Stdlib + SQLAlchemy only (no numpy/sklearn/networkx; test greps), never imports app.main. Adapted from University of Louisville work (arXiv 2408.11133, 2602.02601). Served by GET /api/graph in main.py.",
+      "depends_on": ["config_db", "pipeline", "newsletter", "vault"],
+      "tests": ["backend/tests/test_graph.py"]
+    },
+    {
       "id": "platform",
       "paths": ["backend/app/security.py", "backend/app/health.py", "backend/tests/test_security.py", "backend/tests/test_health.py"],
       "agents_md": "backend/AGENTS.md",
@@ -135,7 +143,7 @@
       "id": "fe_core",
       "paths": ["frontend/src/lib/api.ts", "frontend/src/lib/format.ts", "frontend/src/components/Nav.tsx", "frontend/src/components/Footer.tsx", "frontend/src/app/layout.tsx", "frontend/src/app/globals.css", "frontend/src/app/favicon.ico", "frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig.json", "frontend/next.config.ts", "frontend/eslint.config.mjs", "frontend/.gitignore"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Browser API client + types (mirror backend; ApiError, admin token helpers, send() for writes), formatting helpers, nav (News at /news, Paper, Learn, Research tabs; isActive()), footer (Subscribe/Status links, admin-error notice), layout, global styles/tokens. next.config.ts sets output: standalone. server-api.ts belongs to fe_ticker.",
+      "summary": "Browser API client + types (mirror backend, incl. Graph* types + api.graph; ApiError, admin token helpers, send() for writes), formatting helpers, nav (News at /news, Graph, Paper, Learn, Research tabs; isActive()), footer (Working paper/Paper portfolio/Event graph/Methodology/Subscribe/Status links, admin-error notice), layout, global styles/tokens. next.config.ts sets output: standalone. server-api.ts belongs to fe_ticker.",
       "depends_on": ["api"],
       "tests": ["frontend: npx tsc --noEmit"],
       "hotspot": true
@@ -152,7 +160,7 @@
       "id": "fe_ticker",
       "paths": ["frontend/src/app/ticker/", "frontend/src/components/DilutionPanel.tsx", "frontend/src/lib/server-api.ts", "frontend/src/app/sitemap.ts", "frontend/src/app/robots.ts"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Server-rendered SEO ticker pages ((view)/ route group, 404 gate, summary.ts, client VaultNotes panel with the user's Obsidian thesis notes via api.vaultNotes, plain text), server-side fetch helpers + SITE_URL (server-api.ts, also used by the newsletter and Learn pages: getEventStudy, getBacktestReport), sitemap.xml (incl. /learn pages from lib/learn/lessons.ts), robots.txt.",
+      "summary": "Server-rendered SEO ticker pages ((view)/ route group, 404 gate, summary.ts, TickerView \"View in event graph\" link to /graph?ticker=, client VaultNotes panel with the user's Obsidian thesis notes via api.vaultNotes, plain text), server-side fetch helpers + SITE_URL (server-api.ts, also used by the newsletter and Learn pages: getEventStudy, getBacktestReport), sitemap.xml (incl. /learn pages from lib/learn/lessons.ts), robots.txt.",
       "depends_on": ["fe_core", "fe_content", "fe_learn", "api"],
       "tests": ["frontend: npx tsc --noEmit", "curl raw HTML of /ticker/OCGN", "curl /ticker/NOPE123 -> 404", "curl /sitemap.xml and /robots.txt"]
     },
@@ -176,7 +184,7 @@
       "id": "fe_content",
       "paths": ["frontend/src/app/methodology/", "frontend/src/app/legal/", "frontend/src/components/DraftNotice.tsx", "frontend/src/app/newsletter/", "frontend/src/components/newsletter/", "frontend/src/app/research/", "frontend/src/app/trading/", "frontend/src/components/SubscribeForm.tsx", "frontend/src/components/SubscribeForm.module.css", "frontend/src/content/", "frontend/src/components/markdown/"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Methodology, legal drafts, server-rendered newsletter archive and issue pages (/newsletter, /newsletter/[issue]) with the SubscribeForm client island, /research index, /research/paper (working paper from src/content/working-paper.md, a byte-identical copy of docs/paper/WORKING_PAPER.md, rendered by the safe components/markdown/ renderer; no dangerouslySetInnerHTML), /trading -> /paper redirect.",
+      "summary": "Methodology (incl. the Event graph section: method, UofL credits, association-not-cause), legal drafts, server-rendered newsletter archive and issue pages (/newsletter, /newsletter/[issue]) with the SubscribeForm client island, /research index, /research/paper (working paper from src/content/working-paper.md, a byte-identical copy of docs/paper/WORKING_PAPER.md, rendered by the safe components/markdown/ renderer; no dangerouslySetInnerHTML), /trading -> /paper redirect.",
       "depends_on": ["fe_core", "fe_ticker"],
       "tests": ["frontend: npx tsc --noEmit"]
     },
@@ -187,6 +195,14 @@
       "summary": "Server-rendered Learn section: /learn index, /learn/[slug] (6 lessons, static params, ISR 1 h, live numbers via server-api), /learn/curriculum (8 weeks); client widgets/simulators with seeded PRNG (lib/learn/stats.ts, simulations.ts), lesson registry (lessons.ts), live-number helpers (live.ts). ConfirmatoryBlock/parts are also used by the Edge Lab.",
       "depends_on": ["fe_core", "fe_ticker"],
       "tests": ["frontend: npx tsc --noEmit", "curl /learn, /learn/event-study, /learn/curriculum; /learn/nope -> 404"]
+    },
+    {
+      "id": "fe_graph",
+      "paths": ["frontend/src/app/graph/", "frontend/src/components/graph/"],
+      "agents_md": "frontend/AGENTS.md",
+      "summary": "/graph: server wrapper (metadata) + client GraphExplorer (?ticker=&days=&source=&max_nodes=): canvas force layout (force.ts, GraphCanvas; honours prefers-reduced-motion), ClusterLegend, NodeDetail, TimeScrubber replay, HowItWorks (method + UofL credit, association-not-causation note), graph.module.css. Reads api.graph.",
+      "depends_on": ["fe_core", "api"],
+      "tests": ["frontend: npx tsc --noEmit"]
     },
     {
       "id": "fe_status",
