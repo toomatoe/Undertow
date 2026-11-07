@@ -1,0 +1,34 @@
+{
+  "goal": "Research repository improvements and implement a verified feed reliability slice",
+  "date": "2026-11-06",
+  "items": [
+    {
+      "id": "feed",
+      "modules": ["fe_news_signals"],
+      "owned_paths": ["frontend/src/components/NewsFeed.tsx", "frontend/src/app/signals/page.tsx", "frontend/src/components/feed/"],
+      "depends_on": [],
+      "acceptance": [
+        "Obsolete requests cannot replace current filters or append older pages",
+        "Pagination prevents duplicate concurrent requests and rows and supports retry",
+        "SSE events respect authoritative server filters and do not mutate an obsolete view",
+        "Deterministic offline regression tests cover request ordering and failure paths"
+      ]
+    },
+    {
+      "id": "verification",
+      "modules": ["fe_core", "tooling"],
+      "owned_paths": ["frontend/package.json", ".github/workflows/ci.yml"],
+      "depends_on": ["feed"],
+      "acceptance": ["Regression command is available locally and in CI", "Run tests, TypeScript, lint, and an exclusive production build"]
+    },
+    {
+      "id": "docs",
+      "modules": ["docs"],
+      "owned_paths": ["docs/", "frontend/AGENTS.md"],
+      "depends_on": ["feed", "verification"],
+      "acceptance": ["Record findings, source references, prioritized backlog, and actual validation results", "Map new files to the repository graph"]
+    }
+  ],
+  "review": ["Independent correctness review", "Independent contract review", "Exclusive verification", "Final critic"],
+  "notes": ["No research-design changes, external publication, new integrations or dependencies", "Docker daemon unavailable at initial inspection; selected work is frontend-only"]
+}

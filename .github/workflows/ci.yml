@@ -1,4 +1,4 @@
-# CI: backend tests, frontend type check / lint / build, and both Docker images (built, never pushed).
+# CI: backend tests, frontend regressions / type check / lint / build, and both Docker images (built, never pushed).
 # Needs no secrets: tests use in-memory SQLite and never touch the network or an LLM.
 name: CI
 
@@ -35,7 +35,7 @@ jobs:
         run: pytest -q
 
   frontend:
-    name: Frontend (tsc, lint, build)
+    name: Frontend (tests, tsc, lint, build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -51,6 +51,8 @@ jobs:
         run: npm ci
       - name: Type check
         run: npx tsc --noEmit
+      - name: Feed regression tests
+        run: npm test
       - name: Lint
         run: npm run lint
       - name: Build

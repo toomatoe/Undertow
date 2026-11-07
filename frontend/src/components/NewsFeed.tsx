@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import ArticleCard from "@/components/ArticleCard";
+import { useFeed } from "@/components/feed/useFeed";
 import Sidebar from "@/components/Sidebar";
-import { api, type Article, type ArticleFilters } from "@/lib/api";
+import { api, type ArticleFilters } from "@/lib/api";
 import { SIZE_FILTERS } from "@/lib/format";
 
 const EVENT_TYPES = [
@@ -14,78 +15,15 @@ const EVENT_TYPES = [
 ];
 
 export default function NewsFeed() {
-  const [filters, setFilters] = useState<ArticleFilters>({});
+  const [filters, setFilters] = useState<ArticleFilters>({ size: "all" });
   const [search, setSearch] = useState("");
-  const [items, setItems] = useState<Article[]>([]);
-  const [nextBefore, setNextBefore] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(0);
-  const [freshIds, setFreshIds] = useState<Set<number>>(new Set());
-  const [live, setLive] = useState(false);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const itemsRef = useRef(items);
-  itemsRef.current = items;
-
-  const load = useCallback(async (f: ArticleFilters) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const page = await api.articles({ ...f, limit: 50 });
-      setItems(page.items);
-      setNextBefore(page.next_before);
-      setPending(0);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load(filters);
-  }, [filters, load]);
+  const { items, nextBefore, loading, loadingMore, error, pending, live, refresh, loadMore, retry } = useFeed(api.articles, filters);
 
   // Debounce the search box into filters.q
   useEffect(() => {
-    const t = setTimeout(() => setFilters((f) => (f.q === search ? f : { ...f, q: search || undefined })), 300);
+    const t = setTimeout(() => setFilters((f) => ((f.q ?? "") === search ? f : { ...f, q: search || undefined })), 300);
     return () => clearTimeout(t);
   }, [search]);
-
-  const unfiltered = !filters.q && !filters.ticker && !filters.source && !filters.sentiment && !filters.event_type && !filters.size;
-
-  // Live updates over server-sent events
-  useEffect(() => {
-    const es = new EventSource(api.streamUrl);
-    es.onopen = () => setLive(true);
-    es.onerror = () => setLive(false);
-    es.addEventListener("article", async (ev) => {
-      const { id } = JSON.parse((ev as MessageEvent).data);
-      if (!unfiltered) {
-        setPending((n) => n + 1);
-        return;
-      }
-      const article = await api.article(id).catch(() => null);
-      if (!article || itemsRef.current.some((a) => a.id === id)) return;
-      setItems((prev) => [article, ...prev].sort((a, b) => b.published_at.localeCompare(a.published_at)));
-      setFreshIds((s) => new Set(s).add(id));
-      setRefreshKey((k) => k + 1);
-    });
-    es.addEventListener("article_updated", async (ev) => {
-      const { id } = JSON.parse((ev as MessageEvent).data);
-      if (!itemsRef.current.some((a) => a.id === id)) return;
-      const article = await api.article(id).catch(() => null);
-      if (article) setItems((prev) => prev.map((a) => (a.id === id ? article : a)));
-    });
-    return () => es.close();
-  }, [unfiltered]);
-
-  const loadMore = async () => {
-    if (!nextBefore) return;
-    const page = await api.articles({ ...filters, before: nextBefore, limit: 50 });
-    setItems((prev) => [...prev, ...page.items]);
-    setNextBefore(page.next_before);
-  };
 
   const set = (patch: Partial<ArticleFilters>) => setFilters((f) => ({ ...f, ...patch }));
 
@@ -95,6 +33,7 @@ export default function NewsFeed() {
         <div className="toolbar">
           <input
             type="search"
+            aria-label="Search headlines"
             placeholder="Search headlines…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -102,6 +41,7 @@ export default function NewsFeed() {
           />
           <input
             placeholder="Ticker"
+            aria-label="Ticker"
             value={filters.ticker ?? ""}
             onChange={(e) => set({ ticker: e.target.value.toUpperCase() || undefined })}
             className="ticker-input"
@@ -113,13 +53,14 @@ export default function NewsFeed() {
               </option>
             ))}
           </select>
-          <select value={filters.source ?? ""} onChange={(e) => set({ source: e.target.value || undefined })}>
+          <select aria-label="Source" value={filters.source ?? ""} onChange={(e) => set({ source: e.target.value || undefined })}>
             <option value="">All sources</option>
             <option value="rss">News</option>
             <option value="edgar">SEC filings</option>
             <option value="alpaca">Benzinga</option>
           </select>
           <select
+            aria-label="Sentiment"
             value={filters.sentiment ?? ""}
             onChange={(e) => set({ sentiment: (e.target.value || undefined) as ArticleFilters["sentiment"] })}
           >
@@ -128,7 +69,7 @@ export default function NewsFeed() {
             <option value="neutral">Neutral</option>
             <option value="negative">Negative</option>
           </select>
-          <select value={filters.event_type ?? ""} onChange={(e) => set({ event_type: e.target.value || undefined })}>
+          <select aria-label="Event type" value={filters.event_type ?? ""} onChange={(e) => set({ event_type: e.target.value || undefined })}>
             <option value="">Any event</option>
             {EVENT_TYPES.map((t) => (
               <option key={t} value={t}>
@@ -141,26 +82,26 @@ export default function NewsFeed() {
           </span>
         </div>
 
-        {pending > 0 && (
-          <button className="pending" onClick={() => load(filters)}>
-            {pending} new article{pending > 1 ? "s" : ""}. Refresh
+        {pending && (
+          <button className="pending" onClick={refresh} disabled={loading || loadingMore}>
+            Feed updates available. Refresh
           </button>
         )}
-        {error && <p className="error">Could not load articles: {error}. Is the backend running on :8000?</p>}
-        {loading && items.length === 0 && <p className="muted">Loading…</p>}
+        {error && <p className="error" role="alert">Could not load articles: {error}. <button className="btn" onClick={retry} disabled={loading || loadingMore}>Retry</button></p>}
+        {loading && <p className="muted" role="status">Loading articles...</p>}
         {!loading && !error && items.length === 0 && <p className="empty-state">No articles match these filters yet. New filings and headlines appear here as each ingest cycle runs.</p>}
 
         {items.map((a) => (
-          <ArticleCard key={a.id} article={a} fresh={freshIds.has(a.id)} />
+          <ArticleCard key={a.id} article={a} />
         ))}
 
         {nextBefore && (
-          <button className="btn more" onClick={loadMore}>
-            Load older
+          <button className="btn more" onClick={loadMore} disabled={loading || loadingMore}>
+            {loadingMore ? "Loading older..." : "Load older"}
           </button>
         )}
       </main>
-      <Sidebar refreshKey={refreshKey} />
+      <Sidebar refreshKey={pending ? 1 : 0} />
     </div>
   );
 }

@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "node --test src/components/feed/controller.test.cjs src/components/feed/stream.test.cjs"
   },
   "dependencies": {
     "react": "19.1.0",

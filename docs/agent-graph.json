@@ -141,7 +141,7 @@
     },
     {
       "id": "fe_core",
-      "paths": ["frontend/src/lib/api.ts", "frontend/src/lib/format.ts", "frontend/src/components/Nav.tsx", "frontend/src/components/Footer.tsx", "frontend/src/app/layout.tsx", "frontend/src/app/globals.css", "frontend/src/app/favicon.ico", "frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig.json", "frontend/next.config.ts", "frontend/eslint.config.mjs", "frontend/.gitignore"],
+      "paths": ["frontend/src/lib/api.ts", "frontend/src/lib/format.ts", "frontend/src/components/Nav.tsx", "frontend/src/components/Footer.tsx", "frontend/src/app/layout.tsx", "frontend/src/app/error.tsx", "frontend/src/app/not-found.tsx", "frontend/src/app/globals.css", "frontend/src/app/favicon.ico", "frontend/package.json", "frontend/package-lock.json", "frontend/tsconfig.json", "frontend/next.config.ts", "frontend/eslint.config.mjs", "frontend/.gitignore"],
       "agents_md": "frontend/AGENTS.md",
       "summary": "Browser API client + types (mirror backend, incl. Graph* types + api.graph; ApiError, admin token helpers, send() for writes), formatting helpers, nav (News at /news, Graph, Paper, Learn, Research tabs; isActive()), footer (Working paper/Paper portfolio/Event graph/Methodology/Subscribe/Status links, admin-error notice), layout, global styles/tokens. next.config.ts sets output: standalone. server-api.ts belongs to fe_ticker.",
       "depends_on": ["api"],
@@ -150,11 +150,11 @@
     },
     {
       "id": "fe_news_signals",
-      "paths": ["frontend/src/app/page.tsx", "frontend/src/app/signals/", "frontend/src/components/NewsFeed.tsx", "frontend/src/components/Sidebar.tsx", "frontend/src/components/ArticleCard.tsx", "frontend/src/components/WatchlistPanel.tsx", "frontend/src/components/HaltsPanel.tsx", "frontend/src/app/news/", "frontend/src/components/home/"],
+      "paths": ["frontend/src/app/page.tsx", "frontend/src/app/signals/", "frontend/src/components/NewsFeed.tsx", "frontend/src/components/feed/", "frontend/src/components/Sidebar.tsx", "frontend/src/components/ArticleCard.tsx", "frontend/src/components/WatchlistPanel.tsx", "frontend/src/components/HaltsPanel.tsx", "frontend/src/app/news/", "frontend/src/components/home/"],
       "agents_md": "frontend/AGENTS.md",
-      "summary": "Landing page / (server component; Key findings cards from the three study endpoints via components/home/findings.ts, KeyFindings.tsx), /news (NewsFeed, moved from /), Signals page and its cards (forward-test badge + in-sample hypothetical evidence line).",
+      "summary": "Landing page / (server component; Key findings cards from the three study endpoints via components/home/findings.ts, KeyFindings.tsx), /news and Signals page with shared feed controller/hook, guarded pagination, SSE refresh notices, and offline regression tests; cards retain forward-test and hypothetical evidence labels.",
       "depends_on": ["fe_core", "fe_ticker"],
-      "tests": ["frontend: npx tsc --noEmit"]
+      "tests": ["frontend: npm test", "frontend: npx tsc --noEmit"]
     },
     {
       "id": "fe_ticker",

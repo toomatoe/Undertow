@@ -111,10 +111,13 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
   hypothetical) and `HowItWorks`. Every text says links are associations, not causes. Ticker pages link here with
   `?ticker=`; Nav tab "Graph" and a Footer link "Event graph" point here.
 - `/news` `NewsFeed`: filters (search debounced 300 ms, ticker, size, source, sentiment, event type),
-  `before`-cursor pagination ("Load older"), live SSE inserts, `Sidebar` (trending tickers, source status,
+  `before`-cursor pagination ("Load older"), SSE refresh notices, `Sidebar` (trending tickers, source status,
   "ingest now").
 - `/signals`: `api.signals()` with size / min_severity / signal (from `api.signalCatalog()`) / watchlist
-  filters, `WatchlistPanel`, legend. SSE `article` events trigger a reload debounced by 3 s.
+  filters, `WatchlistPanel`, legend. SSE events offer a refresh without replacing loaded pages.
+- Both feeds use `components/feed/useFeed.ts` and its framework-independent `FeedController`: filter changes
+  create a fresh controller, obsolete requests are ignored, pagination is guarded and deduplicated by article ID,
+  and failed refreshes/pagination keep current rows with a Retry action. News defaults to All sizes; Signals to small caps.
 - `/lab`: `api.studies()` + `api.eventStudy(name)` per study; a study selector (`main` = in-sample live evidence,
   `oos` = pre-registered out-of-sample 2020-23, `insider_purchases` = Form 4 study); the `ResearchRunPanel` uses the
   selected study's kind (`event_study`, `event_study_oos`, `insider_study`). Tiles, "what survived", per-bucket `DivergingChart` of
@@ -165,7 +168,7 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
 | `home/` | Landing page: `findings.ts` (pure Finding builders + `pct`), `KeyFindings.tsx`, `home.module.css` |
 | `markdown/Markdown.tsx` (+ `.module.css`) | Tiny server-side Markdown renderer for docs we own (`parseMarkdown`, `headings`, `plainText`): headings with ids, lists, GFM tables, code, quotes, links (http(s)/relative only) |
 | `portfolio/` | `/paper`: `PaperPortfolioView.tsx` (client), `EquityChart.tsx`, `portfolio.module.css` |
-| `NewsFeed.tsx` | News tab body; owns the SSE subscription for `/`. Has its own `EVENT_TYPES` list for the filter |
+| `NewsFeed.tsx` | News tab body at `/news`; uses `feed/useFeed` for requests and SSE. Has its own `EVENT_TYPES` list for the filter |
 | `ArticleCard.tsx` | One article/filing: badges, sentiment, signals, AI flags, tickers with size, `EvidenceLine`; forward-test signals get a "Forward test of pre-registered finding" badge and an "(in-sample, hypothetical)" evidence line |
 | `Sidebar.tsx` | Trending tickers (`api.trending(hours)`), `api.status()`, manual `api.ingest()` |
 | `Footer.tsx` | Site-wide footer (client component, in layout.tsx): disclaimer line, Working paper / Paper portfolio / Event graph / Methodology / Subscribe (`/newsletter#subscribe`) / Status / legal links; also shows a dismissible notice for any unhandled admin `ApiError` (401/403/429) with a link to `/status` |
@@ -261,8 +264,10 @@ results after completion. Job state belongs to the backend so navigation does no
 Failures leave prior results visible and expose a retry action. Research settings remain fixed.
 
 `new EventSource(api.streamUrl)`; events `article` (new row) and `article_updated` (enriched row), payload
-`{"id": number}`. Refetch with `api.article(id)`. Always `es.close()` in the effect cleanup. The server
-sends `retry: 5000` and keepalives; `onopen`/`onerror` drive the LIVE/OFFLINE badge in `NewsFeed`.
+`{"id": number}`. News and Signals coalesce both event types into one refresh notice; a reconnect also marks
+the feed for refresh. The filtered list endpoint remains authoritative, including after enrichment changes
+filter eligibility. Events arriving during a refresh retain the notice. Always `es.close()` in effect cleanup.
+The server sends `retry: 5000` and keepalives; `onopen`/`onerror` drive the LIVE/OFFLINE badge in `NewsFeed`.
 
 ## Styling (`src/app/globals.css`)
 
@@ -286,6 +291,7 @@ sends `retry: 5000` and keepalives; `onopen`/`onerror` drive the LIVE/OFFLINE ba
 
 ```bash
 npm --prefix frontend install
+npm --prefix frontend test                # deterministic offline feed request regressions (Node test runner)
 cd frontend && npx tsc --noEmit          # type check
 npm --prefix frontend run lint
 npm --prefix frontend run build          # only when the dev server is NOT running

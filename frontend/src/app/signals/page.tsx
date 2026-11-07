@@ -1,67 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
+import { useFeed } from "@/components/feed/useFeed";
 import ArticleCard from "@/components/ArticleCard";
 import HaltsPanel from "@/components/HaltsPanel";
 import WatchlistPanel from "@/components/WatchlistPanel";
-import { api, type Article, type ArticleFilters, type Signal } from "@/lib/api";
+import { api, type ArticleFilters, type Signal } from "@/lib/api";
 import { SIZE_FILTERS } from "@/lib/format";
 
 export default function SignalsPage() {
   const [filters, setFilters] = useState<ArticleFilters>({ size: "nano,micro,small", min_severity: 1 });
-  const [items, setItems] = useState<Article[]>([]);
-  const [nextBefore, setNextBefore] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<Signal[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async (f: ArticleFilters) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const page = await api.signals({ ...f, limit: 50 });
-      setItems(page.items);
-      setNextBefore(page.next_before);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load(filters);
-  }, [filters, load]);
+  const { items, nextBefore, loading, loadingMore, error, pending, refresh, loadMore, retry } = useFeed(api.signals, filters);
 
   useEffect(() => {
     api.signalCatalog().then(setCatalog).catch(() => setCatalog([]));
   }, []);
 
-  // New filings arrive through the same SSE stream as news
-  useEffect(() => {
-    const es = new EventSource(api.streamUrl);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    // Batch bursts of new items (an ingest cycle inserts many at once) into one reload
-    es.addEventListener("article", () => {
-      clearTimeout(timer);
-      timer = setTimeout(() => load(filters), 3000);
-    });
-    return () => {
-      clearTimeout(timer);
-      es.close();
-    };
-  }, [filters, load]);
-
   const set = (patch: Partial<ArticleFilters>) => setFilters((f) => ({ ...f, ...patch }));
-
-  const loadMore = async () => {
-    if (!nextBefore) return;
-    const page = await api.signals({ ...filters, before: nextBefore, limit: 50 });
-    setItems((prev) => [...prev, ...page.items]);
-    setNextBefore(page.next_before);
-  };
 
   return (
     <div className="layout">
@@ -105,8 +63,9 @@ export default function SignalsPage() {
           </label>
         </div>
 
-        {error && <p className="error">Could not load signals: {error}. Is the backend running on :8000?</p>}
-        {loading && items.length === 0 && <p className="muted">Loading…</p>}
+        {pending && <button className="pending" onClick={refresh} disabled={loading || loadingMore}>Feed updates available. Refresh</button>}
+        {error && <p className="error" role="alert">Could not load signals: {error}. <button className="btn" onClick={retry} disabled={loading || loadingMore}>Retry</button></p>}
+        {loading && <p className="muted" role="status">Loading signals...</p>}
         {!loading && !error && items.length === 0 && (
           <p className="empty-state">
             No signals match yet: the poller adds them as new filings arrive on EDGAR. Filings older than the app&apos;s first run are not loaded.
@@ -116,13 +75,13 @@ export default function SignalsPage() {
           <ArticleCard key={a.id} article={a} />
         ))}
         {nextBefore && (
-          <button className="btn more" onClick={loadMore}>
-            Load older
+          <button className="btn more" onClick={loadMore} disabled={loading || loadingMore}>
+            {loadingMore ? "Loading older..." : "Load older"}
           </button>
         )}
       </main>
       <aside className="sidebar">
-        <WatchlistPanel onChange={() => filters.watchlist && load(filters)} />
+        <WatchlistPanel onChange={() => filters.watchlist && refresh()} />
         <HaltsPanel />
         <section className="panel">
           <h2>Legend</h2>
