@@ -22,6 +22,7 @@ const STATIC_PAGES: { path: string; changeFrequency: "hourly" | "daily" | "weekl
   { path: "/methodology", changeFrequency: "monthly", priority: 0.6 },
   { path: "/newsletter", changeFrequency: "weekly", priority: 0.6 },
   { path: "/learn", changeFrequency: "weekly", priority: 0.7 },
+  { path: "/tutorial.html", changeFrequency: "monthly", priority: 0.8 },
   ...LESSONS.map((l) => ({ path: lessonPath(l.slug), changeFrequency: "monthly" as const, priority: 0.6 })),
   { path: CURRICULUM_PATH, changeFrequency: "monthly", priority: 0.6 },
   { path: "/legal/disclaimer", changeFrequency: "monthly", priority: 0.2 },

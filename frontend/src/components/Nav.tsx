@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
+  { href: "/tutorial.html", label: "Start here" },
   { href: "/news", label: "News" },
   { href: "/signals", label: "Signals" },
   { href: "/graph", label: "Graph" },
@@ -40,6 +41,7 @@ export default function Nav() {
       <nav aria-label="Main">
         {TABS.map((t) => {
           const on = isActive(path, t.href);
+          if (t.href.endsWith(".html")) return <a key={t.href} href={t.href} className="tab">{t.label}</a>;
           return (
             <Link key={t.href} href={t.href} className={on ? "tab active" : "tab"} aria-current={on ? "page" : undefined}>
               {t.label}

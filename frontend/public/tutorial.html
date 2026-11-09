@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Three short exercises to understand company filings, historical comparisons, and what the evidence cannot tell us. No finance background needed.">
+  <title>Start here: your first filing · Undertow</title>
+  <style>
+    /* This tutorial uses only HTML and CSS. Edit the text directly below. */
+    :root { color-scheme: dark light; --bg: #0b0e13; --panel: #12161d; --panel-2: #181d26; --border: #232a35; --text: #e6e9ef; --muted: #8a93a3; --accent: #4f9cff; --radius: 8px; }
+    @media (prefers-color-scheme: light) {
+      :root { --bg: #f5f6f8; --panel: #ffffff; --panel-2: #f0f2f5; --border: #dfe3ea; --text: #12161d; --muted: #5f6878; --accent: #1d6fe0; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.6 system-ui, sans-serif; }
+    a { color: var(--accent); text-underline-offset: 4px; }
+    a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 5px; }
+    h1, h2, h3, p { margin: 0; }
+    h1 { font-size: clamp(30px, 5vw, 44px); line-height: 1.15; letter-spacing: -0.035em; }
+    h2 { font-size: clamp(23px, 4vw, 29px); line-height: 1.25; letter-spacing: -0.02em; }
+    h3 { font-size: 18px; line-height: 1.4; }
+    .skip { position: absolute; top: -100px; padding: 12px; background: var(--panel); }
+    .skip:focus { top: 8px; left: 8px; }
+    .site-header { background: var(--panel); border-bottom: 1px solid var(--border); }
+    .header-inner { max-width: 980px; margin: auto; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 16px 24px; flex-wrap: wrap; }
+    .brand { font-size: 19px; color: var(--text); font-weight: 750; text-decoration: none; }
+    .brand span { color: var(--accent); }
+    .header-links { display: flex; gap: 20px; flex-wrap: wrap; }
+    .header-links a { font-size: 14px; }
+    main { max-width: 920px; padding: 40px 24px; margin: auto; display: grid; gap: 28px; }
+    .intro { display: grid; gap: 16px; max-width: 720px; }
+    .intro > p:not(.eyebrow) { font-size: 18px; }
+    .eyebrow { font-size: 13px; color: var(--muted); font-weight: 650; }
+    .note { font-size: 13px; color: var(--muted); }
+    .overview { padding: 20px 24px; background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius); }
+    .overview ol { display: flex; gap: 14px 36px; padding-left: 20px; margin: 8px 0 0; flex-wrap: wrap; }
+    .lesson { scroll-margin-top: 20px; display: grid; gap: 20px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); padding: 28px; }
+    .lesson:target { border-color: var(--accent); }
+    .example { display: grid; gap: 12px; border: 1px solid var(--border); background: var(--panel-2); border-radius: var(--radius); padding: 20px; }
+    .example details { border-top: 1px solid var(--border); padding-top: 10px; }
+    summary { cursor: pointer; padding: 10px 0; }
+    details p { padding: 0 0 10px; }
+    .practice { display: grid; gap: 10px; }
+    .answer { border: 1px solid var(--border); border-radius: 6px; }
+    .answer summary { padding: 14px 18px; min-height: 48px; }
+    .answer[open] { border-color: var(--accent); }
+    .answer[open] summary { background: var(--panel-2); }
+    .answer p { padding: 16px 18px; }
+    .feedback-title { display: block; margin-bottom: 6px; }
+    .comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 0; }
+    dt { font-size: 14px; color: var(--muted); }
+    dd { font-size: 34px; font-weight: 650; margin: 4px 0 0; }
+    .step-links { border-top: 1px solid var(--border); padding-top: 20px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 14px; }
+    .button { display: inline-block; text-decoration: none; color: var(--text); background: var(--panel-2); border: 1px solid var(--accent); border-radius: 6px; padding: 11px 18px; min-height: 44px; font-weight: 600; }
+    .button:hover { box-shadow: inset 0 0 0 1px var(--accent); }
+    .checklist { display: grid; gap: 16px; padding-left: 24px; margin: 0; }
+    .checklist span { display: block; margin-top: 4px; }
+    .next-actions { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+    footer { border-top: 1px solid var(--border); padding-top: 20px; }
+    @media (max-width: 600px) {
+      main { padding: 28px 12px; gap: 20px; }
+      .header-inner { padding: 14px 16px; gap: 12px; }
+      .header-links { gap: 16px; }
+      .lesson { padding: 22px 16px; }
+      .example { padding: 16px; }
+      .overview { padding: 16px; }
+      .overview ol { flex-direction: column; gap: 8px; }
+      .comparison { gap: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to tutorial</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <a class="brand" href="/">Under<span>tow</span></a>
+      <nav class="header-links" aria-label="Main">
+        <a href="/">Home</a>
+        <a href="/learn">Learn</a>
+        <a href="/signals">Live signals</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main">
+    <header class="intro" id="start">
+      <p class="eyebrow">Start here · About 5 minutes · No finance background needed</p>
+      <h1>Make sense of your first filing.</h1>
+      <p>Companies publish updates. Undertow helps you read those updates and compare them with what happened in the past. Try three small exercises to see how.</p>
+      <p class="note">This is practice, not a test. Open an answer to reveal its explanation, then move on at your own pace. You can skip or revisit any step.</p>
+    </header>
+    <nav class="overview" aria-label="Tutorial steps">
+      <strong>Your three steps</strong>
+      <ol>
+        <li><a href="#read-update">Read the update</a></li>
+        <li><a href="#compare-fairly">Compare fairly</a></li>
+        <li><a href="#know-limits">Know the limits</a></li>
+      </ol>
+    </nav>
+
+    <!-- STEP 1: Reading an example company update. -->
+    <section class="lesson" id="read-update" aria-labelledby="read-heading">
+      <p class="eyebrow">Step 1 of 3 · Read the update</p>
+      <h2 id="read-heading">First, what actually happened?</h2>
+      <p>A <strong>filing</strong> is a document a company sends to the SEC, the US agency that oversees securities markets. A <strong>signal</strong> in Undertow is a label for an event worth researching.</p>
+      <div class="example">
+        <p class="eyebrow">Fictional filing · Practice only</p>
+        <h3>Example Company plans a new share offering</h3>
+        <p>The company plans to issue additional shares to raise money for its operations.</p>
+        <details>
+          <summary>What is a share?</summary>
+          <p>A share represents a small ownership stake in a company. If more shares are issued, the same number of existing shares represents a smaller percentage of the company.</p>
+        </details>
+      </div>
+      <div class="practice">
+        <h3>What does this update tell us?</h3>
+        <p class="note">Open an answer to see the explanation. You can explore all three.</p>
+        <details class="answer">
+          <summary>The company plans to issue new shares.</summary>
+          <p><strong class="feedback-title">That's right.</strong>New shares can raise money for the company and reduce existing shareholders' percentage ownership. That is called <strong>dilution</strong>. The filing alone does not tell us what the stock price will do.</p>
+        </details>
+        <details class="answer">
+          <summary>The stock price will definitely fall.</summary>
+          <p><strong class="feedback-title">The direction is still unknown.</strong>The update says the company plans to issue shares. More shares can dilute existing ownership, but a filing is not a price forecast.</p>
+        </details>
+        <details class="answer">
+          <summary>The company has reported a profit.</summary>
+          <p><strong class="feedback-title">An offering is different from a profit announcement.</strong>An offering is a plan to raise money by issuing shares. This update does not report a profit.</p>
+        </details>
+      </div>
+      <nav class="step-links" aria-label="Step 1 navigation">
+        <a href="#start">Back to introduction</a>
+        <a class="button" href="#compare-fairly">Next: Compare fairly</a>
+      </nav>
+    </section>
+
+    <!-- STEP 2: These invented numbers teach comparison, not investment performance. -->
+    <section class="lesson" id="compare-fairly" aria-labelledby="compare-heading">
+      <p class="eyebrow">Step 2 of 3 · Compare fairly</p>
+      <h2 id="compare-heading">A positive number needs context.</h2>
+      <p>Undertow looks at groups of similar past events. Comparing their average move with a <strong>benchmark</strong> (a reference for comparison) helps put that move in context.</p>
+      <div class="example">
+        <p class="eyebrow">Hypothetical numbers · Invented for practice</p>
+        <dl class="comparison">
+          <div><dt>Example group average</dt><dd>+2%</dd></div>
+          <div><dt>Benchmark over the same period</dt><dd>+3%</dd></div>
+        </dl>
+        <p class="note">These are group averages before costs. Individual companies may lose value. This is not a measured Undertow result or a simulated portfolio return.</p>
+      </div>
+      <div class="practice">
+        <h3>How did the example group compare with its benchmark?</h3>
+        <p class="note">Open an answer to check your thinking.</p>
+        <details class="answer">
+          <summary>It did better because it rose 2%.</summary>
+          <p><strong class="feedback-title">It rose, but the benchmark rose more.</strong>Subtract 3% from 2%: the group lagged by 1 percentage point. A positive move is not automatically a better result.</p>
+        </details>
+        <details class="answer">
+          <summary>It lagged by 1 percentage point.</summary>
+          <p><strong class="feedback-title">That's right: 2% − 3% = −1 percentage point.</strong>This is a comparison of averages, not a prediction or a result for every company. Costs would also matter in a simulated portfolio.</p>
+        </details>
+        <details class="answer">
+          <summary>Every company in the group rose 2%.</summary>
+          <p><strong class="feedback-title">An average combines different outcomes.</strong>Some companies can fall even when the average rises. Here the group average also lagged the benchmark by 1 percentage point.</p>
+        </details>
+      </div>
+      <nav class="step-links" aria-label="Step 2 navigation">
+        <a href="#read-update">Back: Read the update</a>
+        <a class="button" href="#know-limits">Next: Know the limits</a>
+      </nav>
+    </section>
+
+    <!-- STEP 3: Uncertainty is part of reading the evidence. -->
+    <section class="lesson" id="know-limits" aria-labelledby="limits-heading">
+      <p class="eyebrow">Step 3 of 3 · Know the limits</p>
+      <h2 id="limits-heading">Evidence is a starting point.</h2>
+      <p>Past results help frame questions. They cannot establish what happens next, or prove that a filing caused a price move. Other news, costs, and missing data can change the picture.</p>
+      <div class="example">
+        <p class="eyebrow">A useful distinction</p>
+        <p><strong>“What happened before?”</strong> is a research question.<br><strong>“What will happen next?”</strong> remains uncertain.</p>
+        <details>
+          <summary>What if there is no evidence beside a signal?</summary>
+          <p>The relevant study may not have been run, the sample may be too small, or the local service may be unavailable. Missing evidence is not a positive or negative finding.</p>
+        </details>
+      </div>
+      <div class="practice">
+        <h3>What is a useful next step when reading a live signal?</h3>
+        <p class="note">Open an answer to explore the reasoning.</p>
+        <details class="answer">
+          <summary>Assume this company will match the average.</summary>
+          <p><strong class="feedback-title">A single company can behave very differently.</strong>An average describes a group of past events. Reading the original filing and the study's limits gives the result needed context.</p>
+        </details>
+        <details class="answer">
+          <summary>Treat a missing result as proof of no risk.</summary>
+          <p><strong class="feedback-title">Missing evidence does not mean no risk.</strong>It means we do not have a result to assess. The original filing, sample size, time period, and limitations are useful places to look next.</p>
+        </details>
+        <details class="answer">
+          <summary>Read the filing and check how the comparison was made.</summary>
+          <p><strong class="feedback-title">That's right.</strong>Look at the original source, the number of events, the time period, and the study's limits. A signal invites research; it does not prescribe an action.</p>
+        </details>
+      </div>
+      <nav class="step-links" aria-label="Step 3 navigation">
+        <a href="#compare-fairly">Back: Compare fairly</a>
+        <a class="button" href="#next">Next: Try it in Undertow</a>
+      </nav>
+    </section>
+
+    <section class="lesson" id="next" aria-labelledby="next-heading">
+      <p class="eyebrow">Take it into Undertow</p>
+      <h2 id="next-heading">Keep these three questions close.</h2>
+      <p>A filing, a comparison, and an uncertainty check: that is enough for a first look. You can revisit any exercise whenever you need it.</p>
+      <ol class="checklist">
+        <li><strong>What happened?</strong><span>On Signals, open the source link and read the original filing.</span></li>
+        <li><strong>Compared with what?</strong><span>Check the study's number of events, time window, and comparison. An average can hide losses.</span></li>
+        <li><strong>What is still unknown?</strong><span>Review limitations and missing evidence. Past patterns do not promise future results.</span></li>
+      </ol>
+      <div class="next-actions">
+        <a class="button" href="/signals">Explore live signals</a>
+        <a href="/learn/event-study">Learn how comparisons work</a>
+      </div>
+      <p class="note">If the live feed is empty, there may be no matching filings yet or the local data service may be offline. The lessons remain available.</p>
+      <nav class="step-links" aria-label="Tutorial review">
+        <a href="#know-limits">Back: Know the limits</a>
+        <a href="#start">Return to the beginning</a>
+      </nav>
+    </section>
+    <footer class="note">
+      <p>For learning only. The company and numbers in this tutorial are fictional, not live signals or research findings. Nothing here is investment advice. Undertow runs locally and never places orders.</p>
+    </footer>
+  </main>
+</body>
+</html>

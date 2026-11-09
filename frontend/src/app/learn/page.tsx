@@ -2,15 +2,16 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import styles from "@/components/learn/learn.module.css";
+import homeStyles from "@/components/home/home.module.css";
 import { Disclaimer, JsonLd } from "@/components/learn/parts";
 import { CURRICULUM } from "@/lib/learn/curriculum";
 import { CURRICULUM_PATH, LESSONS, lessonPath, LESSONS_REVISED } from "@/lib/learn/lessons";
 import { SITE_URL } from "@/lib/server-api";
 
 // Static server component (no API calls): the lesson list and curriculum, crawlable.
-const TITLE = "Learn quant research with real small-cap data · Undertow";
+const TITLE = "Learn to read company filings and research · Undertow";
 const DESCRIPTION =
-  "Free lessons on event studies, baselines, multiple testing, clustered errors, survivorship bias and the deflated Sharpe ratio, each tied to Undertow's own code and data.";
+  "Start with a hands-on beginner tutorial, then explore lessons on company filings, historical comparisons and research pitfalls.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -48,14 +49,21 @@ export default function LearnIndex() {
       <header className={styles.section}>
         <h1>Learn</h1>
         <p className={styles.lede}>
-          How to tell a real pattern in market data from a lucky one. Each lesson explains one idea, lets you run a small simulation in your
-          browser, shows Undertow&apos;s own live numbers with their dates, and points to the exact file and function in this project that
-          implements it.
+          Start with the basics, then go deeper at your own pace. No finance or coding background is needed for the beginner tutorial.
         </p>
       </header>
 
+      <section className={homeStyles.paper} aria-labelledby="beginner-tutorial">
+        <div>
+          <span className="muted small">NEW HERE? · ABOUT 5 MINUTES</span>
+          <h2 id="beginner-tutorial">Your first filing, step by step</h2>
+          <p>Explore a fictional company report, try a simple comparison, and learn what the numbers can and cannot tell you. Works without live data.</p>
+        </div>
+        <a href="/tutorial.html" className={homeStyles.secondary}>Start the interactive tutorial</a>
+      </section>
+
       <section className={styles.section} aria-labelledby="lessons">
-        <h2 id="lessons">Lessons</h2>
+        <h2 id="lessons">Go deeper: research lessons</h2>
         <div className={styles.cards}>
           {LESSONS.map((l, i) => (
             <Link key={l.slug} href={lessonPath(l.slug)} className={styles.card}>

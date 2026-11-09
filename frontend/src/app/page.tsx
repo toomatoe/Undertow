@@ -41,27 +41,26 @@ export default async function Home() {
     <main className={styles.page}>
       <section className={styles.hero} aria-labelledby="hero-title">
         <span className={styles.eyebrow}>Runs locally · research only</span>
-        <h1 id="hero-title">SEC filings from small US companies, each shown next to the evidence on what happened after similar ones.</h1>
+        <h1 id="hero-title">Understand company news. Explore the evidence.</h1>
         <p className={styles.lead}>
-          Undertow is a personal research platform that runs on your own machine. It watches EDGAR for filings by companies under $2B of
-          public float and puts every live signal beside an event study of how comparable stocks moved afterwards, including the results
-          that did not hold up.
+          Public companies file reports with the SEC, the US securities regulator. Undertow helps you explore those reports
+          and see what happened after similar events in the past. New to this? Try a short, hands-on example first.
         </p>
         <ul className={styles.points}>
           <li>
             <strong>Local and personal.</strong> No accounts, no hosting; your data stays on this computer.
           </li>
           <li>
-            <strong>Evidence first.</strong> Bonferroni-corrected, baseline-adjusted, judged after costs.
+            <strong>Evidence with context.</strong> See past patterns, comparisons, costs, and what remains uncertain.
           </li>
           <li>
             <strong>Does not trade.</strong> No broker connection; the paper portfolio is hypothetical.
           </li>
         </ul>
         <div className={styles.actions}>
-          <Link href="/research/paper" className={styles.primary}>
-            Read the working paper
-          </Link>
+          <a href="/tutorial.html" className={styles.primary}>
+            Start here: interactive tutorial
+          </a>
           <Link href="/signals" className={styles.secondary}>
             Browse live signals
           </Link>

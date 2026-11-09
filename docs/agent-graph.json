@@ -190,7 +190,7 @@
     },
     {
       "id": "fe_learn",
-      "paths": ["frontend/src/app/learn/", "frontend/src/components/learn/", "frontend/src/lib/learn/"],
+      "paths": ["frontend/src/app/learn/", "frontend/src/components/learn/", "frontend/src/lib/learn/", "frontend/public/"],
       "agents_md": "frontend/AGENTS.md",
       "summary": "Server-rendered Learn section: /learn index, /learn/[slug] (6 lessons, static params, ISR 1 h, live numbers via server-api), /learn/curriculum (8 weeks); client widgets/simulators with seeded PRNG (lib/learn/stats.ts, simulations.ts), lesson registry (lessons.ts), live-number helpers (live.ts). ConfirmatoryBlock/parts are also used by the Edge Lab.",
       "depends_on": ["fe_core", "fe_ticker"],

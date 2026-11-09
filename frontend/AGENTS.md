@@ -94,6 +94,8 @@ crawlable pages (`/`, `/research`, `/research/paper`, `/ticker/[symbol]`, `/news
 
 ## Pages
 
+- `/tutorial.html`: standalone `public/tutorial.html`, plain HTML and CSS with no JavaScript or API calls. Three beginner exercises use native details/summary answer reveals and anchor navigation, followed by a checklist. Home, Learn and Nav link here. No saved progress. Preserve keyboard access, fictional/hypothetical labels and links back to the app.
+
 - `/` landing page: `getEventStudy("main" | "oos" | "insider_purchases")` in parallel; `components/home/findings.ts`
   (pure, no React/fetch) turns each `Result` into a `Finding` card with Historical/Hypothetical labels and a fallback
   sentence when a study is missing (404) or the API is down (status 0). `KeyFindings.tsx` renders them. No tab is active on `/`.

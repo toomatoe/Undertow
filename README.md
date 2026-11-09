@@ -289,6 +289,7 @@ when a study has not been run on this machine), and links to every section.
 - Email delivery is optional (see [Optional features](#optional-features-off-by-default)); details in [delivery/AGENTS.md](backend/app/delivery/AGENTS.md).
 
 **Learn tab** (`/learn`)
+- New here? Open **Start here** (`/tutorial.html`) for a short interactive tutorial: read a fictional filing, compare hypothetical outcomes, and recognize uncertainty. Plain HTML and CSS, with expandable answers and no JavaScript, account or live data needed. [Research and design plan](docs/BEGINNER_EXPERIENCE.md).
 - Six server-rendered lessons (event studies, baselines, multiple testing, clustered errors, survivorship bias, Sharpe / Deflated Sharpe and backtest pitfalls) plus an 8-week curriculum, using Undertow's own numbers (labelled historical) and seeded in-browser simulators (labelled hypothetical).
 
 **Status page and platform** (`/status`, `backend/app/health.py`, `backend/app/security.py`)
